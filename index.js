@@ -48,9 +48,16 @@ app.use(express.static(path.join(__dirname, "public")));
 app.use("/api/files",   fileUploadRoutes);
 app.use("/api/folders", folderRoutes);
 
-// ── SPA fallback ───────────────────────────────────────────────────────────
+// ── Pages ──────────────────────────────────────────────────────────────────
+// Two-page site: "/" is the marketing homepage, "/app" is the actual file
+// manager. express.static above already serves /css/*, /js/*, and would even
+// serve /app.html directly — these two routes just give clean URLs for the
+// pages people actually type/bookmark/link to.
 app.get("/", (req, res) => {
   res.sendFile(path.join(__dirname, "public", "index.html"));
+});
+app.get("/app", (req, res) => {
+  res.sendFile(path.join(__dirname, "public", "app.html"));
 });
 
 app.listen(PORT, () => {
