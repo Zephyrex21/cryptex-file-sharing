@@ -1,0 +1,57 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1600" height="500" viewBox="0 0 1600 500">
+<defs>
+  <linearGradient id="bg" x1="0" y1="0" x2="1" y2="1"><stop offset="0%" stop-color="#0B1020"/><stop offset="52%" stop-color="#11192B"/><stop offset="100%" stop-color="#14253A"/></linearGradient>
+  <linearGradient id="accent" x1="0" y1="0" x2="1" y2="1"><stop offset="0%" stop-color="#5EEAD4"/><stop offset="100%" stop-color="#60A5FA"/></linearGradient>
+  <radialGradient id="g1"><stop offset="0%" stop-color="#5EEAD4" stop-opacity=".20"/><stop offset="100%" stop-color="#5EEAD4" stop-opacity="0"/></radialGradient>
+  <radialGradient id="g2"><stop offset="0%" stop-color="#60A5FA" stop-opacity=".18"/><stop offset="100%" stop-color="#60A5FA" stop-opacity="0"/></radialGradient>
+  <filter id="shadow" x="-30%" y="-30%" width="160%" height="160%"><feDropShadow dx="0" dy="18" stdDeviation="26" flood-color="#000" flood-opacity=".45"/></filter>
+  <style>
+    .micro{font:700 13px "Plus Jakarta Sans",Arial,sans-serif;letter-spacing:3px;fill:#69E9D6}
+    .title{font:700 72px "Plus Jakarta Sans",Arial,sans-serif;fill:#F4F8FF}
+    .sub{font:500 23px "Plus Jakarta Sans",Arial,sans-serif;fill:#A7B7CC}
+    .pill{font:700 12px "Plus Jakarta Sans",Arial,sans-serif;letter-spacing:1px;fill:#C9D7E8}
+    .ui{font:600 11px "JetBrains Mono",Consolas,monospace;fill:#B9C8D9}
+  </style>
+</defs>
+<rect width="1600" height="500" rx="28" fill="url(#bg)"/>
+<circle cx="1330" cy="65" r="340" fill="url(#g1)"/><circle cx="1510" cy="420" r="330" fill="url(#g2)"/>
+<g opacity=".07" stroke="#A8C0D5" stroke-width="1"><path d="M0 100H1600M0 200H1600M0 300H1600M0 400H1600"/><path d="M120 0V500M240 0V500M360 0V500M480 0V500M600 0V500M720 0V500M840 0V500M960 0V500M1080 0V500M1200 0V500M1320 0V500M1440 0V500"/></g>
+<g transform="translate(88,86)">
+  <text x="0" y="0" class="micro">TOKEN-BASED FILE SHARING</text>
+  <text x="0" y="88" class="title">CRYPtex</text>
+  <text x="0" y="130" class="sub">Upload. Organize. Share with controlled access.</text>
+  <text x="0" y="164" class="sub">MongoDB metadata + Supabase object storage + Express API.</text>
+  <g transform="translate(0,208)">
+    <rect x="0" y="0" width="108" height="34" rx="17" fill="#111E30" stroke="#2D4255"/><text x="54" y="22" text-anchor="middle" class="pill">NODE.JS</text>
+    <rect x="120" y="0" width="108" height="34" rx="17" fill="#111E30" stroke="#2D4255"/><text x="174" y="22" text-anchor="middle" class="pill">EXPRESS</text>
+    <rect x="240" y="0" width="120" height="34" rx="17" fill="#111E30" stroke="#2D4255"/><text x="300" y="22" text-anchor="middle" class="pill">MONGODB</text>
+    <rect x="372" y="0" width="125" height="34" rx="17" fill="#111E30" stroke="#2D4255"/><text x="434" y="22" text-anchor="middle" class="pill">SUPABASE</text>
+  </g>
+</g>
+<g transform="translate(1010,66)" filter="url(#shadow)">
+  <rect x="0" y="0" width="488" height="370" rx="32" fill="#0D1422" stroke="#26384D" stroke-width="2"/>
+  <rect x="22" y="22" width="444" height="326" rx="24" fill="#0A111B" stroke="#1A2A3B"/>
+  <text x="48" y="55" class="ui">SHARED FILE FLOW</text>
+  <circle cx="420" cy="51" r="6" fill="#5EEAD4"/>
+  <g transform="translate(48,82)">
+    <rect width="150" height="72" rx="16" fill="#122437" stroke="#2B5262"/>
+    <text x="18" y="24" class="ui">UPLOAD</text><text x="18" y="47" class="ui">file → storage</text>
+    <path d="M150 36H188" stroke="url(#accent)" stroke-width="3"/><circle cx="188" cy="36" r="5" fill="#5EEAD4"/>
+    <rect x="188" y="0" width="180" height="72" rx="16" fill="#10202F" stroke="#2B5262"/>
+    <text x="206" y="24" class="ui">SUPABASE STORAGE</text><text x="206" y="47" class="ui">binary object</text>
+  </g>
+  <g transform="translate(48,176)">
+    <rect width="150" height="72" rx="16" fill="#142331" stroke="#2B4D61"/>
+    <text x="18" y="24" class="ui">METADATA</text><text x="18" y="47" class="ui">MongoDB record</text>
+    <path d="M150 36H188" stroke="url(#accent)" stroke-width="3"/>
+    <rect x="188" y="0" width="180" height="72" rx="16" fill="#101D2C" stroke="#2B4D61"/>
+    <text x="206" y="24" class="ui">TOKEN ACCESS</text><text x="206" y="47" class="ui">public / private</text>
+  </g>
+  <g transform="translate(48,270)">
+    <rect width="368" height="48" rx="15" fill="#0F2E2A" stroke="#286A60"/>
+    <text x="184" y="29" text-anchor="middle" class="ui" fill="#BDF6EC">SHARED LINK → CONTROLLED DOWNLOAD / PREVIEW</text>
+  </g>
+</g>
+<text x="88" y="448" class="micro" opacity=".70">FILES • FOLDERS • TOKENS • VISIBILITY • PREVIEW • DOWNLOAD</text>
+<text x="1498" y="448" text-anchor="end" class="ui" opacity=".52">CRYPtex FILE SHARING</text>
+</svg>
