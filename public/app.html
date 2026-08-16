@@ -15,7 +15,7 @@
 </head>
 <body>
 <div class="orbs"><div class="cgrid"></div><div class="cglow cg1"></div><div class="cglow cg2"></div></div>
-<input type="file" id="fInput" accept="image/jpeg,image/png,image/gif,image/webp,video/mp4,video/webm,video/ogg,video/quicktime,video/x-msvideo,application/pdf,application/zip,application/x-zip-compressed" multiple/>
+<input type="file" id="fInput" accept="image/jpeg,image/png,image/gif,image/webp,video/mp4,video/webm,video/ogg,video/quicktime,video/x-msvideo,application/pdf,application/zip,application/x-zip-compressed,text/plain,text/csv,application/msword,application/vnd.openxmlformats-officedocument.wordprocessingml.document,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet,application/vnd.openxmlformats-officedocument.presentationml.presentation,.txt,.csv,.doc,.docx,.xlsx,.pptx" multiple/>
 <nav>
   <a class="nav-logo" href="/">
     <div class="lmark"><svg viewBox="0 0 28 28" fill="none"><path d="M14 3L25 10.5L22 25H6L3 10.5L14 3Z" fill="rgba(255,255,255,0.93)"/><path d="M3 10.5H25" stroke="rgba(255,255,255,0.25)" stroke-width=".7"/><path d="M3 10.5L9 3L14 10.5" fill="rgba(255,255,255,0.22)"/><path d="M10 17L14 13L18 17" stroke="rgba(92,86,232,0.7)" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg></div>
@@ -44,6 +44,7 @@
       <span class="tc tc-vid"><svg viewBox="0 0 24 24"><polygon points="23 7 16 12 23 17 23 7"/><rect x="1" y="5" width="15" height="14" rx="2"/></svg>Videos</span>
       <span class="tc tc-pdf"><svg viewBox="0 0 24 24"><path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>PDFs</span>
       <span class="tc tc-zip"><svg viewBox="0 0 24 24"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>ZIP</span>
+      <span class="tc tc-doc"><svg viewBox="0 0 24 24"><path d="M13 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V9z"/><polyline points="13 2 13 9 20 9"/><line x1="8" y1="13" x2="16" y2="13"/><line x1="8" y1="17" x2="16" y2="17"/></svg>Docs</span>
     </div>
     <div class="tbar">
       <svg viewBox="0 0 24 24"><path d="M10 13a5 5 0 007.54.54l3-3a5 5 0 00-7.07-7.07l-1.72 1.71"/><path d="M14 11a5 5 0 00-7.54-.54l-3 3a5 5 0 007.07 7.07l1.71-1.71"/></svg>
@@ -54,9 +55,9 @@
   <div class="uzone" id="uzone">
     <div class="uico"><svg viewBox="0 0 24 24"><polyline points="16 16 12 12 8 16"/><line x1="12" y1="12" x2="12" y2="21"/><path d="M20.39 18.39A5 5 0 0018 9h-1.26A8 8 0 103 16.3"/></svg></div>
     <h2>Drop your files here</h2>
-    <p class="usub">Images, videos, PDFs, ZIP — multiple files at once</p>
+    <p class="usub">Images, videos, PDFs, ZIP, docs — multiple files at once</p>
     <button class="btn-pick" id="pickBtn"><svg viewBox="0 0 24 24"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>Choose Files</button>
-    <p class="uhint">Images · Videos · PDFs · ZIP — up to 50MB per file</p>
+    <p class="uhint">Images · Videos · PDFs · ZIP · Docs — up to 50MB per file</p>
     <div class="prog" id="prog"><span class="prog-name" id="pName">Uploading…</span><div class="prog-track"><div class="prog-fill" id="pFill"></div></div><span class="prog-pct" id="pPct">0%</span></div>
   </div>
 
@@ -72,6 +73,7 @@
       <button class="tab" data-f="video">Videos</button>
       <button class="tab" data-f="pdf">PDFs</button>
       <button class="tab" data-f="zip">ZIP</button>
+      <button class="tab" data-f="doc">Docs</button>
     </div>
     <div class="swrp">
       <button class="sbtn" id="sortBtn">

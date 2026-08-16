@@ -15,6 +15,21 @@ const generateToken = () => randomUUID().replace(/-/g, "").slice(0, 16);
 // checks the file's actual leading bytes against its claimed type so a
 // content/type mismatch is rejected before it ever reaches storage.
 // Verified against real sample files of every type in ALLOWED — see test run.
+//
+// Document types don't fit the simple "check the first few bytes" pattern:
+//   - Plain text (.txt/.csv) has no magic bytes at all — anything can start
+//     with any byte. Verified instead by confirming the content looks like
+//     text (no null bytes, valid UTF-8) rather than a binary blob wearing a
+//     text extension.
+//   - Legacy .doc uses the OLE2 Compound File signature — a fixed byte match
+//     like everything else above.
+//   - .docx/.xlsx/.pptx are secretly ZIP files (same magic bytes as .zip
+//     itself), so a plain .zip renamed to .docx would pass a bytes-only
+//     check. Verified by requiring BOTH the ZIP signature AND the presence
+//     of that format's specific internal path (e.g. word/document.xml) —
+//     ZIP local file headers store entry names uncompressed, so this is a
+//     cheap, dependency-free way to confirm which kind of OOXML file it is.
+const ZIP_SIGNATURES = [[0x50,0x4B,0x03,0x04],[0x50,0x4B,0x05,0x06],[0x50,0x4B,0x07,0x08]];
 const MAGIC_BYTES = {
   "image/jpeg": [[0xFF, 0xD8, 0xFF]],
   "image/png":  [[0x89, 0x50, 0x4E, 0x47]],
@@ -26,13 +41,28 @@ const MAGIC_BYTES = {
   "video/mp4":       "ftyp",
   "video/quicktime": "ftyp",
   "application/pdf": [[0x25, 0x50, 0x44, 0x46]],
-  "application/zip":             [[0x50,0x4B,0x03,0x04],[0x50,0x4B,0x05,0x06],[0x50,0x4B,0x07,0x08]],
-  "application/x-zip-compressed":[[0x50,0x4B,0x03,0x04],[0x50,0x4B,0x05,0x06],[0x50,0x4B,0x07,0x08]],
+  "application/zip":             ZIP_SIGNATURES,
+  "application/x-zip-compressed": ZIP_SIGNATURES,
+  "text/plain": "text",
+  "text/csv":   "text",
+  "application/msword": [[0xD0, 0xCF, 0x11, 0xE0, 0xA1, 0xB1, 0x1A, 0xE1]],
+  "application/vnd.openxmlformats-officedocument.wordprocessingml.document": "ooxml:word/document.xml",
+  "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet":       "ooxml:xl/workbook.xml",
+  "application/vnd.openxmlformats-officedocument.presentationml.presentation": "ooxml:ppt/presentation.xml",
 };
 const bufferStartsWith = (buffer, bytes) => {
   if (buffer.length < bytes.length) return false;
   for (let i = 0; i < bytes.length; i++) if (buffer[i] !== bytes[i]) return false;
   return true;
+};
+const isZipSignature = (buffer) => ZIP_SIGNATURES.some(bytes => bufferStartsWith(buffer, bytes));
+// No null bytes + valid UTF-8 in a leading sample = looks like real text.
+// A renamed binary (exe, image, etc.) will almost always contain a null
+// byte or invalid UTF-8 sequences within the first few KB.
+const looksLikeText = (buffer) => {
+  const sample = buffer.subarray(0, 8000);
+  if (sample.includes(0x00)) return false;
+  return !sample.toString("utf8").includes("\uFFFD");
 };
 const verifyMagicBytes = (buffer, mimetype) => {
   const sig = MAGIC_BYTES[mimetype];
@@ -40,6 +70,11 @@ const verifyMagicBytes = (buffer, mimetype) => {
   if (sig === "webp") return bufferStartsWith(buffer, [0x52,0x49,0x46,0x46]) && buffer.slice(8,12).toString("ascii") === "WEBP";
   if (sig === "avi")  return bufferStartsWith(buffer, [0x52,0x49,0x46,0x46]) && buffer.slice(8,12).toString("ascii") === "AVI ";
   if (sig === "ftyp") return buffer.length >= 8 && buffer.slice(4,8).toString("ascii") === "ftyp";
+  if (sig === "text") return looksLikeText(buffer);
+  if (typeof sig === "string" && sig.startsWith("ooxml:")) {
+    const internalPath = sig.slice(6);
+    return isZipSignature(buffer) && buffer.includes(Buffer.from(internalPath));
+  }
   return sig.some(bytes => bufferStartsWith(buffer, bytes));
 };
 

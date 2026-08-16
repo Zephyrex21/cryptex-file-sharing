@@ -42,6 +42,11 @@ const ALLOWED = [
   "video/mp4","video/webm","video/ogg","video/quicktime","video/x-msvideo",
   "application/pdf",
   "application/zip","application/x-zip-compressed",
+  "text/plain","text/csv",
+  "application/msword",
+  "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+  "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+  "application/vnd.openxmlformats-officedocument.presentationml.presentation",
 ];
 
 const upload = multer({

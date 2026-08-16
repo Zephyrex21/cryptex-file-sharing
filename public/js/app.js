@@ -54,7 +54,7 @@ uzone.addEventListener('dragleave',e=>{if(!uzone.contains(e.relatedTarget))uzone
 uzone.addEventListener('drop',e=>{e.preventDefault();uzone.classList.remove('drag-over');[...e.dataTransfer.files].forEach(doUpload);});
 
 function getLimit(m){return 50;} // flat 50MB cap for every file type
-const ALLOWED=['image/jpeg','image/png','image/gif','image/webp','video/mp4','video/webm','video/ogg','video/quicktime','video/x-msvideo','application/pdf','application/zip','application/x-zip-compressed'];
+const ALLOWED=['image/jpeg','image/png','image/gif','image/webp','video/mp4','video/webm','video/ogg','video/quicktime','video/x-msvideo','application/pdf','application/zip','application/x-zip-compressed','text/plain','text/csv','application/msword','application/vnd.openxmlformats-officedocument.wordprocessingml.document','application/vnd.openxmlformats-officedocument.spreadsheetml.sheet','application/vnd.openxmlformats-officedocument.presentationml.presentation'];
 let queue=[],busy=false,batchTotal=0;
 function doUpload(f){
   if(!ALLOWED.includes(f.type))return toast(`"${f.type}" not supported`,'error');
@@ -105,6 +105,7 @@ function getDisplay(){
   else if(curF==='video')f=f.filter(x=>x.fileType?.startsWith('video/'));
   else if(curF==='pdf')f=f.filter(x=>x.fileType==='application/pdf');
   else if(curF==='zip')f=f.filter(x=>x.fileType?.includes('zip'));
+  else if(curF==='doc')f=f.filter(x=>isDoc(x.fileType)||isSheet(x.fileType)||isSlide(x.fileType));
   if(searchQ){const q=searchQ.toLowerCase();f=f.filter(x=>x.originalName.toLowerCase().includes(q));}
   switch(curS){
     case 'newest':f.sort((a,b)=>new Date(b.createdAt)-new Date(a.createdAt));break;
@@ -130,26 +131,36 @@ const isImg=m=>m?.startsWith('image/');
 const isVid=m=>m?.startsWith('video/');
 const isPdf=m=>m==='application/pdf';
 const isZip=m=>m?.includes('zip');
-function tc(m){if(isImg(m))return'img';if(isVid(m))return'vid';if(isPdf(m))return'pdf';if(isZip(m))return'zip';return'file';}
+const isDoc=m=>m==='text/plain'||m==='application/msword'||m==='application/vnd.openxmlformats-officedocument.wordprocessingml.document';
+const isSheet=m=>m==='text/csv'||m==='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet';
+const isSlide=m=>m==='application/vnd.openxmlformats-officedocument.presentationml.presentation';
+function tc(m){if(isImg(m))return'img';if(isVid(m))return'vid';if(isPdf(m))return'pdf';if(isZip(m))return'zip';if(isDoc(m))return'doc';if(isSheet(m))return'sheet';if(isSlide(m))return'slide';return'file';}
 function tl(m){
   if(isImg(m)){const map={'image/jpeg':'JPG','image/png':'PNG','image/gif':'GIF','image/webp':'WEBP'};return map[m]||'IMG';}
   if(isVid(m)){const map={'video/mp4':'MP4','video/webm':'WEBM','video/ogg':'OGV','video/quicktime':'MOV','video/x-msvideo':'AVI'};return map[m]||'VID';}
-  if(isPdf(m))return'PDF';if(isZip(m))return'ZIP';return'FILE';
+  if(isPdf(m))return'PDF';if(isZip(m))return'ZIP';
+  if(isDoc(m)){const map={'text/plain':'TXT','application/msword':'DOC','application/vnd.openxmlformats-officedocument.wordprocessingml.document':'DOCX'};return map[m]||'DOC';}
+  if(isSheet(m)){const map={'text/csv':'CSV','application/vnd.openxmlformats-officedocument.spreadsheetml.sheet':'XLSX'};return map[m]||'SHEET';}
+  if(isSlide(m))return'PPTX';
+  return'FILE';
 }
-function typeHuman(m){if(isImg(m))return tl(m)+' Image';if(isVid(m))return tl(m)+' Video';if(isPdf(m))return'PDF Document';if(isZip(m))return'ZIP Archive';return'File';}
+function typeHuman(m){if(isImg(m))return tl(m)+' Image';if(isVid(m))return tl(m)+' Video';if(isPdf(m))return'PDF Document';if(isZip(m))return'ZIP Archive';if(isDoc(m))return tl(m)==='TXT'?'Text File':'Word Document';if(isSheet(m))return tl(m)==='CSV'?'CSV Spreadsheet':'Excel Spreadsheet';if(isSlide(m))return'PowerPoint Presentation';return'File';}
 function mkThumb(f){
   if(isImg(f.fileType))return`<img src="${f.fileUrl||f.cloudinaryUrl}" alt="" loading="lazy">`;
   if(isVid(f.fileType))return`<div class="fph fph-vid"><div class="play-ring"><svg viewBox="0 0 16 16"><polygon points="4,2 14,8 4,14" fill="white"/></svg></div><span class="fph-lbl">${tl(f.fileType)}</span></div>`;
   if(isPdf(f.fileType))return`<div class="fph fph-pdf"><div class="fph-icon"><svg viewBox="0 0 56 56" fill="none"><rect x="8" y="4" width="30" height="40" rx="4" fill="white" fill-opacity=".92"/><rect x="28" y="4" width="10" height="12" rx="2" fill="#E84040" fill-opacity=".7"/><rect x="12" y="20" width="20" height="2.5" rx="1.25" fill="#E84040" fill-opacity=".5"/><rect x="12" y="26" width="16" height="2.5" rx="1.25" fill="#E84040" fill-opacity=".4"/><rect x="12" y="32" width="18" height="2.5" rx="1.25" fill="#E84040" fill-opacity=".3"/><rect x="30" y="38" width="18" height="14" rx="3" fill="#E84040"/><text x="39" y="48" font-family="Inter,Arial" font-size="7" font-weight="800" fill="white" text-anchor="middle">PDF</text></svg></div><span class="fph-lbl">PDF</span></div>`;
   if(isZip(f.fileType))return`<div class="fph fph-zip"><div class="fph-icon"><svg viewBox="0 0 56 56" fill="none"><rect x="6" y="18" width="44" height="30" rx="4" fill="white" fill-opacity=".9"/><rect x="6" y="18" width="44" height="11" rx="4" fill="#E8A020" fill-opacity=".85"/><rect x="22" y="10" width="12" height="16" rx="3" fill="#E8A020" fill-opacity=".7"/><rect x="24" y="29" width="8" height="3" rx="1.5" fill="#E8A020" fill-opacity=".55"/><rect x="24" y="34" width="8" height="3" rx="1.5" fill="#E8A020" fill-opacity=".45"/><rect x="24" y="39" width="8" height="3" rx="1.5" fill="#E8A020" fill-opacity=".35"/></svg></div><span class="fph-lbl">ZIP</span></div>`;
+  if(isDoc(f.fileType))return`<div class="fph fph-doc"><div class="fph-icon"><svg viewBox="0 0 56 56" fill="none"><rect x="10" y="4" width="36" height="48" rx="4" fill="white" fill-opacity=".92"/><rect x="16" y="14" width="24" height="3" rx="1.5" fill="#0EA5D4" fill-opacity=".6"/><rect x="16" y="22" width="24" height="3" rx="1.5" fill="#0EA5D4" fill-opacity=".5"/><rect x="16" y="30" width="18" height="3" rx="1.5" fill="#0EA5D4" fill-opacity=".4"/><rect x="16" y="38" width="20" height="3" rx="1.5" fill="#0EA5D4" fill-opacity=".3"/></svg></div><span class="fph-lbl">${tl(f.fileType)}</span></div>`;
+  if(isSheet(f.fileType))return`<div class="fph fph-sheet"><div class="fph-icon"><svg viewBox="0 0 56 56" fill="none"><rect x="8" y="8" width="40" height="40" rx="4" fill="white" fill-opacity=".92"/><rect x="8" y="8" width="40" height="10" rx="4" fill="#0D9488" fill-opacity=".8"/><line x1="21" y1="18" x2="21" y2="48" stroke="#0D9488" stroke-opacity=".35" stroke-width="2"/><line x1="35" y1="18" x2="35" y2="48" stroke="#0D9488" stroke-opacity=".35" stroke-width="2"/><line x1="8" y1="28" x2="48" y2="28" stroke="#0D9488" stroke-opacity=".35" stroke-width="2"/><line x1="8" y1="38" x2="48" y2="38" stroke="#0D9488" stroke-opacity=".35" stroke-width="2"/></svg></div><span class="fph-lbl">${tl(f.fileType)}</span></div>`;
+  if(isSlide(f.fileType))return`<div class="fph fph-slide"><div class="fph-icon"><svg viewBox="0 0 56 56" fill="none"><rect x="4" y="12" width="48" height="32" rx="4" fill="white" fill-opacity=".92"/><rect x="10" y="30" width="6" height="8" rx="1.5" fill="#E8642D" fill-opacity=".6"/><rect x="19" y="24" width="6" height="14" rx="1.5" fill="#E8642D" fill-opacity=".75"/><rect x="28" y="18" width="6" height="20" rx="1.5" fill="#E8642D" fill-opacity=".9"/><circle cx="42" cy="22" r="5" fill="#E8642D" fill-opacity=".4"/></svg></div><span class="fph-lbl">PPTX</span></div>`;
   return`<div class="fph fph-file"><div class="fph-icon"><svg viewBox="0 0 48 48" fill="none"><path d="M10 8h20l10 10v22a2 2 0 01-2 2H10a2 2 0 01-2-2V10a2 2 0 012-2z" fill="white" fill-opacity=".6"/></svg></div><span class="fph-lbl">${tl(f.fileType)}</span></div>`;
 }
 function mkLThumb(f){
   if(isImg(f.fileType))return`<img src="${f.fileUrl||f.cloudinaryUrl}" alt="" loading="lazy">`;
-  const col=isVid(f.fileType)?'lph-vid':isPdf(f.fileType)?'lph-pdf':isZip(f.fileType)?'lph-zip':'lph-file';
-  const sc=isVid(f.fileType)?'rgba(255,255,255,.7)':isPdf(f.fileType)?'var(--red)':isZip(f.fileType)?'var(--ylw)':'var(--t3)';
-  const icons={vid:`<polygon points="4,3 13,8 4,13" fill="${sc}"/>`,pdf:`<path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z" stroke="${sc}" fill="none"/><polyline points="14 2 14 8 20 8" stroke="${sc}" fill="none"/>`,zip:`<path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4" stroke="${sc}" fill="none"/><polyline points="7 10 12 15 17 10" stroke="${sc}" fill="none"/><line x1="12" y1="15" x2="12" y2="3" stroke="${sc}"/>`,file:`<path d="M13 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V9z" stroke="${sc}" fill="none"/><polyline points="13 2 13 9 20 9" stroke="${sc}" fill="none"/>`};
-  const k=isVid(f.fileType)?'vid':isPdf(f.fileType)?'pdf':isZip(f.fileType)?'zip':'file';
+  const col=isVid(f.fileType)?'lph-vid':isPdf(f.fileType)?'lph-pdf':isZip(f.fileType)?'lph-zip':isDoc(f.fileType)?'lph-doc':isSheet(f.fileType)?'lph-sheet':isSlide(f.fileType)?'lph-slide':'lph-file';
+  const sc=isVid(f.fileType)?'rgba(255,255,255,.7)':isPdf(f.fileType)?'var(--red)':isZip(f.fileType)?'var(--ylw)':isDoc(f.fileType)?'var(--cyn)':isSheet(f.fileType)?'var(--tel)':isSlide(f.fileType)?'var(--org)':'var(--t3)';
+  const icons={vid:`<polygon points="4,3 13,8 4,13" fill="${sc}"/>`,pdf:`<path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z" stroke="${sc}" fill="none"/><polyline points="14 2 14 8 20 8" stroke="${sc}" fill="none"/>`,zip:`<path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4" stroke="${sc}" fill="none"/><polyline points="7 10 12 15 17 10" stroke="${sc}" fill="none"/><line x1="12" y1="15" x2="12" y2="3" stroke="${sc}"/>`,doc:`<path d="M13 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V9z" stroke="${sc}" fill="none"/><polyline points="13 2 13 9 20 9" stroke="${sc}" fill="none"/><line x1="8" y1="13" x2="16" y2="13" stroke="${sc}"/><line x1="8" y1="17" x2="16" y2="17" stroke="${sc}"/>`,sheet:`<rect x="3" y="4" width="18" height="16" rx="2" stroke="${sc}" fill="none"/><line x1="3" y1="10" x2="21" y2="10" stroke="${sc}"/><line x1="9" y1="10" x2="9" y2="20" stroke="${sc}"/><line x1="15" y1="10" x2="15" y2="20" stroke="${sc}"/>`,slide:`<rect x="2" y="5" width="20" height="13" rx="2" stroke="${sc}" fill="none"/><line x1="8" y1="21" x2="16" y2="21" stroke="${sc}"/><line x1="12" y1="18" x2="12" y2="21" stroke="${sc}"/>`,file:`<path d="M13 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V9z" stroke="${sc}" fill="none"/><polyline points="13 2 13 9 20 9" stroke="${sc}" fill="none"/>`};
+  const k=isVid(f.fileType)?'vid':isPdf(f.fileType)?'pdf':isZip(f.fileType)?'zip':isDoc(f.fileType)?'doc':isSheet(f.fileType)?'sheet':isSlide(f.fileType)?'slide':'file';
   return`<div class="lfph ${col}"><svg viewBox="0 0 24 24" stroke-linecap="round" stroke-linejoin="round" stroke-width="1.8">${icons[k]}</svg></div>`;
 }
 
@@ -387,13 +398,16 @@ function openTokenModal(data,kind){
     const f=data;
     const t=tc(f.fileType);
     const canP=isImg(f.fileType)||isVid(f.fileType)||isPdf(f.fileType);
-    const bgMap={img:'var(--blus)',vid:'rgba(0,0,0,.07)',pdf:'var(--reds)',zip:'var(--ylws)',file:'var(--bg2)'};
-    const stMap={img:'var(--blu)',vid:'var(--t2)',pdf:'var(--red)',zip:'var(--ylw)',file:'var(--t3)'};
+    const bgMap={img:'var(--blus)',vid:'rgba(0,0,0,.07)',pdf:'var(--reds)',zip:'var(--ylws)',doc:'var(--cyns)',sheet:'var(--tels)',slide:'var(--orgs)',file:'var(--bg2)'};
+    const stMap={img:'var(--blu)',vid:'var(--t2)',pdf:'var(--red)',zip:'var(--ylw)',doc:'var(--cyn)',sheet:'var(--tel)',slide:'var(--org)',file:'var(--t3)'};
     const svgMap={
       img:`<svg viewBox="0 0 24 24" fill="none" stroke="${stMap[t]}" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="8.5" cy="8.5" r="1.5"/><polyline points="21 15 16 10 5 21"/></svg>`,
       vid:`<svg viewBox="0 0 24 24" fill="none" stroke="${stMap[t]}" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><polygon points="23 7 16 12 23 17 23 7"/><rect x="1" y="5" width="15" height="14" rx="2"/></svg>`,
       pdf:`<svg viewBox="0 0 24 24" fill="none" stroke="${stMap[t]}" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>`,
       zip:`<svg viewBox="0 0 24 24" fill="none" stroke="${stMap[t]}" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>`,
+      doc:`<svg viewBox="0 0 24 24" fill="none" stroke="${stMap[t]}" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M13 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V9z"/><polyline points="13 2 13 9 20 9"/><line x1="8" y1="13" x2="16" y2="13"/><line x1="8" y1="17" x2="16" y2="17"/></svg>`,
+      sheet:`<svg viewBox="0 0 24 24" fill="none" stroke="${stMap[t]}" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="16" rx="2"/><line x1="3" y1="10" x2="21" y2="10"/><line x1="9" y1="10" x2="9" y2="20"/><line x1="15" y1="10" x2="15" y2="20"/></svg>`,
+      slide:`<svg viewBox="0 0 24 24" fill="none" stroke="${stMap[t]}" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="5" width="20" height="13" rx="2"/><line x1="8" y1="21" x2="16" y2="21"/><line x1="12" y1="18" x2="12" y2="21"/></svg>`,
       file:`<svg viewBox="0 0 24 24" fill="none" stroke="${stMap[t]}" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M13 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V9z"/><polyline points="13 2 13 9 20 9"/></svg>`
     };
     const v=f.visibility||'public';
