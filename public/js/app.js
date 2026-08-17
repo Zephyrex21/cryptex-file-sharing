@@ -54,7 +54,7 @@ uzone.addEventListener('dragleave',e=>{if(!uzone.contains(e.relatedTarget))uzone
 uzone.addEventListener('drop',e=>{e.preventDefault();uzone.classList.remove('drag-over');[...e.dataTransfer.files].forEach(doUpload);});
 
 function getLimit(m){return 50;} // flat 50MB cap for every file type
-const ALLOWED=['image/jpeg','image/png','image/gif','image/webp','video/mp4','video/webm','video/ogg','video/quicktime','video/x-msvideo','application/pdf','application/zip','application/x-zip-compressed','text/plain','text/csv','application/msword','application/vnd.openxmlformats-officedocument.wordprocessingml.document','application/vnd.openxmlformats-officedocument.spreadsheetml.sheet','application/vnd.openxmlformats-officedocument.presentationml.presentation'];
+const ALLOWED=['image/jpeg','image/png','image/gif','image/webp','video/mp4','video/webm','video/ogg','video/quicktime','video/x-msvideo','application/pdf','application/zip','application/x-zip-compressed','text/plain','text/csv','application/xml','text/xml','application/msword','application/vnd.ms-powerpoint','application/vnd.openxmlformats-officedocument.wordprocessingml.document','application/vnd.openxmlformats-officedocument.spreadsheetml.sheet','application/vnd.openxmlformats-officedocument.presentationml.presentation'];
 let queue=[],busy=false,batchTotal=0;
 function doUpload(f){
   if(!ALLOWED.includes(f.type))return toast(`"${f.type}" not supported`,'error');
@@ -86,6 +86,41 @@ function proc(){
   xhr.open('POST',`${API}/upload`);xhr.send(fd);
 }
 
+// ── Add Link ─────────────────────────────────────────────────────────────────
+// Fetching the preview (title/image) server-side takes a couple seconds, so
+// this gives clear "in progress" feedback rather than leaving the button
+// looking clickable while a request is in flight.
+async function addLink(){
+  const input=document.getElementById('linkInput'),btn=document.getElementById('linkAddBtn');
+  const url=input.value.trim();
+  if(!url)return;
+  let parsed;
+  try{parsed=new URL(url);}catch{return toast('That doesn\'t look like a valid URL','error');}
+  if(!['http:','https:'].includes(parsed.protocol))return toast('Only http and https links are supported','error');
+
+  const origLabel=btn.innerHTML;
+  btn.disabled=true;input.disabled=true;
+  btn.innerHTML='<svg viewBox="0 0 24 24" style="animation:spin .8s linear infinite"><path d="M21 12a9 9 0 11-6.219-8.56"/></svg>Adding…';
+  try{
+    const res=await fetch(`${API}/link`,{
+      method:'POST',
+      headers:{'Content-Type':'application/json'},
+      body:JSON.stringify({url:parsed.toString()}),
+    });
+    const data=await res.json().catch(()=>({}));
+    if(!res.ok)throw new Error(data.message||'Could not add that link');
+    toast('Link added!','success');
+    input.value='';
+    loadFiles();
+  }catch(err){
+    toast(err.message||'Could not add that link','error');
+  }finally{
+    btn.disabled=false;input.disabled=false;btn.innerHTML=origLabel;
+  }
+}
+document.getElementById('linkAddBtn').addEventListener('click',addLink);
+document.getElementById('linkInput').addEventListener('keydown',e=>{if(e.key==='Enter')addLink();});
+
 // ── Load ───────────────────────────────────────────────────────────────────
 async function loadFiles(){
   const btn=document.getElementById('rfBtn');btn.classList.add('spin');
@@ -106,6 +141,7 @@ function getDisplay(){
   else if(curF==='pdf')f=f.filter(x=>x.fileType==='application/pdf');
   else if(curF==='zip')f=f.filter(x=>x.fileType?.includes('zip'));
   else if(curF==='doc')f=f.filter(x=>isDoc(x.fileType)||isSheet(x.fileType)||isSlide(x.fileType));
+  else if(curF==='link')f=f.filter(x=>x.fileType==='text/x-url');
   if(searchQ){const q=searchQ.toLowerCase();f=f.filter(x=>x.originalName.toLowerCase().includes(q));}
   switch(curS){
     case 'newest':f.sort((a,b)=>new Date(b.createdAt)-new Date(a.createdAt));break;
@@ -131,20 +167,21 @@ const isImg=m=>m?.startsWith('image/');
 const isVid=m=>m?.startsWith('video/');
 const isPdf=m=>m==='application/pdf';
 const isZip=m=>m?.includes('zip');
-const isDoc=m=>m==='text/plain'||m==='application/msword'||m==='application/vnd.openxmlformats-officedocument.wordprocessingml.document';
+const isDoc=m=>m==='text/plain'||m==='application/xml'||m==='text/xml'||m==='application/msword'||m==='application/vnd.openxmlformats-officedocument.wordprocessingml.document';
 const isSheet=m=>m==='text/csv'||m==='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet';
-const isSlide=m=>m==='application/vnd.openxmlformats-officedocument.presentationml.presentation';
-function tc(m){if(isImg(m))return'img';if(isVid(m))return'vid';if(isPdf(m))return'pdf';if(isZip(m))return'zip';if(isDoc(m))return'doc';if(isSheet(m))return'sheet';if(isSlide(m))return'slide';return'file';}
+const isSlide=m=>m==='application/vnd.ms-powerpoint'||m==='application/vnd.openxmlformats-officedocument.presentationml.presentation';
+function tc(m){if(isImg(m))return'img';if(isVid(m))return'vid';if(isPdf(m))return'pdf';if(isZip(m))return'zip';if(isDoc(m))return'doc';if(isSheet(m))return'sheet';if(isSlide(m))return'slide';if(isLink(m))return'link';return'file';}
 function tl(m){
   if(isImg(m)){const map={'image/jpeg':'JPG','image/png':'PNG','image/gif':'GIF','image/webp':'WEBP'};return map[m]||'IMG';}
   if(isVid(m)){const map={'video/mp4':'MP4','video/webm':'WEBM','video/ogg':'OGV','video/quicktime':'MOV','video/x-msvideo':'AVI'};return map[m]||'VID';}
   if(isPdf(m))return'PDF';if(isZip(m))return'ZIP';
-  if(isDoc(m)){const map={'text/plain':'TXT','application/msword':'DOC','application/vnd.openxmlformats-officedocument.wordprocessingml.document':'DOCX'};return map[m]||'DOC';}
+  if(isDoc(m)){const map={'text/plain':'TXT','application/xml':'XML','text/xml':'XML','application/msword':'DOC','application/vnd.openxmlformats-officedocument.wordprocessingml.document':'DOCX'};return map[m]||'DOC';}
   if(isSheet(m)){const map={'text/csv':'CSV','application/vnd.openxmlformats-officedocument.spreadsheetml.sheet':'XLSX'};return map[m]||'SHEET';}
-  if(isSlide(m))return'PPTX';
+  if(isSlide(m)){const map={'application/vnd.ms-powerpoint':'PPT','application/vnd.openxmlformats-officedocument.presentationml.presentation':'PPTX'};return map[m]||'PPT';}
+  if(isLink(m))return'LINK';
   return'FILE';
 }
-function typeHuman(m){if(isImg(m))return tl(m)+' Image';if(isVid(m))return tl(m)+' Video';if(isPdf(m))return'PDF Document';if(isZip(m))return'ZIP Archive';if(isDoc(m))return tl(m)==='TXT'?'Text File':'Word Document';if(isSheet(m))return tl(m)==='CSV'?'CSV Spreadsheet':'Excel Spreadsheet';if(isSlide(m))return'PowerPoint Presentation';return'File';}
+function typeHuman(m){if(isImg(m))return tl(m)+' Image';if(isVid(m))return tl(m)+' Video';if(isPdf(m))return'PDF Document';if(isZip(m))return'ZIP Archive';if(isDoc(m))return tl(m)==='TXT'?'Text File':tl(m)==='XML'?'XML File':'Word Document';if(isSheet(m))return tl(m)==='CSV'?'CSV Spreadsheet':'Excel Spreadsheet';if(isSlide(m))return'PowerPoint Presentation';if(isLink(m))return'Link';return'File';}
 function mkThumb(f){
   if(isImg(f.fileType))return`<img src="${f.fileUrl||f.cloudinaryUrl}" alt="" loading="lazy">`;
   if(isVid(f.fileType))return`<div class="fph fph-vid"><div class="play-ring"><svg viewBox="0 0 16 16"><polygon points="4,2 14,8 4,14" fill="white"/></svg></div><span class="fph-lbl">${tl(f.fileType)}</span></div>`;
@@ -164,12 +201,56 @@ function mkLThumb(f){
   return`<div class="lfph ${col}"><svg viewBox="0 0 24 24" stroke-linecap="round" stroke-linejoin="round" stroke-width="1.8">${icons[k]}</svg></div>`;
 }
 
+const isLink=m=>m==='text/x-url';
+function mkActionsGrid(f,v,primaryBtn){
+  return`<div class="cact-row">
+    ${primaryBtn}
+    <button class="cact" title="Copy Token" onclick="copyToken('${f.shareToken||''}')"><svg viewBox="0 0 24 24"><path d="M10 13a5 5 0 007.54.54l3-3a5 5 0 00-7.07-7.07l-1.72 1.71"/><path d="M14 11a5 5 0 00-7.54-.54l-3 3a5 5 0 007.07 7.07l1.71-1.71"/></svg></button>
+    <button class="cact" title="Properties" onclick="showProp('${f._id}')"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg></button>
+    <button class="cact" title="Rename" onclick="renameFilePr('${f._id}','${esc(f.originalName)}')"><svg viewBox="0 0 24 24"><path d="M11 4H4a2 2 0 00-2 2v14a2 2 0 002 2h14a2 2 0 002-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 013 3L12 15l-4 1 1-4 9.5-9.5z"/></svg></button>
+    <div class="cact-sep"></div>
+    <button class="cact cact-vis-${v==='public'?'pub':'priv'}" id="visBtn-${f._id}" title="${v==='public'?'Make private':'Click to make public'}" onclick="toggleVis('${f._id}','${v}')">${v==='public'?'<svg viewBox="0 0 24 24"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>':'<svg viewBox="0 0 24 24"><rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0110 0v4"/></svg>'}</button>
+    <button class="cact" title="${(folderCtx||f.folderId)?'Remove from folder':'Add to folder'}" onclick="${(folderCtx||f.folderId)?`removeFromFolder('${folderCtx||f.folderId}','${f._id}')`:`showAtf('${f._id}')`}"><svg viewBox="0 0 24 24"><path d="M22 19a2 2 0 01-2 2H4a2 2 0 01-2-2V5a2 2 0 012-2h5l2 3h9a2 2 0 012 2z"/></svg></button>
+    <button class="cact cact-del" title="Delete" onclick="delFile('${f._id}','${esc(f.originalName)}')"><svg viewBox="0 0 24 24"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 01-2 2H8a2 2 0 01-2-2L5 6"/></svg></button>
+  </div>`;
+}
+function mkActionsList(f,v,primaryBtn){
+  return`<div class="lacts">
+    ${primaryBtn}
+    <button class="lact la-tok" title="Copy Token" onclick="copyToken('${f.shareToken||''}')"><svg viewBox="0 0 24 24" stroke-linecap="round" stroke-linejoin="round"><path d="M10 13a5 5 0 007.54.54l3-3a5 5 0 00-7.07-7.07l-1.72 1.71"/><path d="M14 11a5 5 0 00-7.54-.54l-3 3a5 5 0 007.07 7.07l1.71-1.71"/></svg></button>
+    <button class="lact" title="Properties" onclick="showProp('${f._id}')"><svg viewBox="0 0 24 24" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg></button>
+    <button class="lact" title="Rename" onclick="renameFilePr('${f._id}','${esc(f.originalName)}')"><svg viewBox="0 0 24 24" stroke-linecap="round" stroke-linejoin="round"><path d="M11 4H4a2 2 0 00-2 2v14a2 2 0 002 2h14a2 2 0 002-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 013 3L12 15l-4 1 1-4 9.5-9.5z"/></svg></button>
+    <button class="lact la-vis-${v==='public'?'pub':'priv'}" id="visBtn-${f._id}" title="${v==='public'?'Public — click to make private':'Private — click to make public'}" onclick="toggleVis('${f._id}','${v}')">${v==='public'?'<svg viewBox="0 0 24 24" stroke-linecap="round" stroke-linejoin="round"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>':'<svg viewBox="0 0 24 24" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0110 0v4"/></svg>'}</button>
+    <button class="lact ${(folderCtx||f.folderId)?'la-rmfolder':'la-folder'}" title="${(folderCtx||f.folderId)?'Remove from folder':'Add to folder'}" onclick="${(folderCtx||f.folderId)?`removeFromFolder('${folderCtx||f.folderId}','${f._id}')`:`showAtf('${f._id}')`}"><svg viewBox="0 0 24 24" stroke-linecap="round" stroke-linejoin="round"><path d="M22 19a2 2 0 01-2 2H4a2 2 0 01-2-2V5a2 2 0 012-2h5l2 3h9a2 2 0 012 2z"/></svg></button>
+    <button class="lact la-del" title="Delete" onclick="delFile('${f._id}','${esc(f.originalName)}')"><svg viewBox="0 0 24 24" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 01-2 2H8a2 2 0 01-2-2L5 6"/></svg></button>
+  </div>`;
+}
+const DL_BTN_GRID=(f)=>`<button class="cact" title="Download" onclick="dlFile('${f._id}','${esc(f.originalName)}')"><svg viewBox="0 0 24 24"><polyline points="8 17 12 21 16 17"/><line x1="12" y1="12" x2="12" y2="21"/><path d="M20.88 18.09A5 5 0 0018 9h-1.26A8 8 0 103 16.29"/></svg></button>`;
+const OPEN_BTN_GRID=(f)=>`<button class="cact" title="Open Link" onclick="window.open('${esc(f.linkUrl)}','_blank','noopener')"><svg viewBox="0 0 24 24"><path d="M18 13v6a2 2 0 01-2 2H5a2 2 0 01-2-2V8a2 2 0 012-2h6"/><polyline points="15 3 21 3 21 9"/><line x1="10" y1="14" x2="21" y2="3"/></svg></button>`;
+const DL_BTN_LIST=(f)=>`<button class="lact la-dl" title="Download" onclick="dlFile('${f._id}','${esc(f.originalName)}')"><svg viewBox="0 0 24 24" stroke-linecap="round" stroke-linejoin="round"><polyline points="8 17 12 21 16 17"/><line x1="12" y1="12" x2="12" y2="21"/></svg></button>`;
+const OPEN_BTN_LIST=(f)=>`<button class="lact la-dl" title="Open Link" onclick="window.open('${esc(f.linkUrl)}','_blank','noopener')"><svg viewBox="0 0 24 24" stroke-linecap="round" stroke-linejoin="round"><path d="M18 13v6a2 2 0 01-2 2H5a2 2 0 01-2-2V8a2 2 0 012-2h6"/><polyline points="15 3 21 3 21 9"/><line x1="10" y1="14" x2="21" y2="3"/></svg></button>`;
+
 function mkGrid(f,i){
   const type=tc(f.fileType),label=tl(f.fileType);
-  const canP=isImg(f.fileType)||isVid(f.fileType)||isPdf(f.fileType);
   const d=document.createElement('div');
   const v=f.visibility||'public';
   d.className='fcard';d.id=`card-${f._id}`;d.style.animationDelay=`${i*.05}s`;
+  if(isLink(f.fileType)){
+    d.innerHTML=`
+      <div class="cthumb clink-thumb" onclick="window.open('${esc(f.linkUrl)}','_blank','noopener')" style="cursor:pointer">
+        ${isRecent(f.createdAt)?'<span class="new-badge">NEW</span>':''}
+        ${f.linkImage?`<img src="${esc(f.linkImage)}" alt="" loading="lazy" onerror="this.style.display='none';this.nextElementSibling.style.display='flex'">`:''}
+        <div class="clink-fallback" style="${f.linkImage?'display:none':'display:flex'}"><svg viewBox="0 0 24 24"><path d="M10 13a5 5 0 007.54.54l3-3a5 5 0 00-7.07-7.07l-1.72 1.71"/><path d="M14 11a5 5 0 00-7.54-.54l-3 3a5 5 0 007.07 7.07l1.71-1.71"/></svg></div>
+        <span class="thbadge tb-link">LINK</span>
+      </div>
+      <div class="cbody">
+        <div class="cname" title="${esc(f.originalName)}">${esc(f.originalName)}</div>
+        <div class="cmeta"><span class="tpill tp-link">LINK</span><span class="dot"></span><span>${esc(f.linkDomain||'')}</span><span class="dot"></span><span>${fmtDt(f.createdAt)}</span><span class="dot"></span><span class="vis-badge vis-${v==='public'?'pub':'priv'}">${v==='public'?'Public':'Private'}</span></div>
+        ${mkActionsGrid(f,v,OPEN_BTN_GRID(f))}
+      </div>`;
+    return d;
+  }
+  const canP=isImg(f.fileType)||isVid(f.fileType)||isPdf(f.fileType);
   d.innerHTML=`
     <div class="cthumb" onclick="${canP?`openPrev('${f._id}')`:''}" style="cursor:${canP?'pointer':'default'}">
       ${isRecent(f.createdAt)?'<span class="new-badge">NEW</span>':''}
@@ -180,25 +261,28 @@ function mkGrid(f,i){
     <div class="cbody">
       <div class="cname" title="${esc(f.originalName)}">${esc(stripExt(f.originalName))}</div>
       <div class="cmeta"><span class="tpill tp-${type}">${label}</span><span class="dot"></span><span>${fmtSz(f.fileSize)}</span><span class="dot"></span><span>${fmtDt(f.createdAt)}</span><span class="dot"></span><span class="vis-badge vis-${v==='public'?'pub':'priv'}">${v==='public'?'Public':'Private'}</span></div>
-      <div class="cact-row">
-        <button class="cact" title="Download" onclick="dlFile('${f._id}','${esc(f.originalName)}')"><svg viewBox="0 0 24 24"><polyline points="8 17 12 21 16 17"/><line x1="12" y1="12" x2="12" y2="21"/><path d="M20.88 18.09A5 5 0 0018 9h-1.26A8 8 0 103 16.29"/></svg></button>
-        <button class="cact" title="Copy Token" onclick="copyToken('${f.shareToken||''}')"><svg viewBox="0 0 24 24"><path d="M10 13a5 5 0 007.54.54l3-3a5 5 0 00-7.07-7.07l-1.72 1.71"/><path d="M14 11a5 5 0 00-7.54-.54l-3 3a5 5 0 007.07 7.07l1.71-1.71"/></svg></button>
-        <button class="cact" title="Properties" onclick="showProp('${f._id}')"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg></button>
-        <button class="cact" title="Rename" onclick="renameFilePr('${f._id}','${esc(f.originalName)}')"><svg viewBox="0 0 24 24"><path d="M11 4H4a2 2 0 00-2 2v14a2 2 0 002 2h14a2 2 0 002-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 013 3L12 15l-4 1 1-4 9.5-9.5z"/></svg></button>
-        <div class="cact-sep"></div>
-        <button class="cact cact-vis-${v==='public'?'pub':'priv'}" id="visBtn-${f._id}" title="${v==='public'?'Make private':'Click to make public'}" onclick="toggleVis('${f._id}','${v}')">${v==='public'?'<svg viewBox="0 0 24 24"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>':'<svg viewBox="0 0 24 24"><rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0110 0v4"/></svg>'}</button>
-        <button class="cact" title="${(folderCtx||f.folderId)?'Remove from folder':'Add to folder'}" onclick="${(folderCtx||f.folderId)?`removeFromFolder('${folderCtx||f.folderId}','${f._id}')`:`showAtf('${f._id}')`}"><svg viewBox="0 0 24 24"><path d="M22 19a2 2 0 01-2 2H4a2 2 0 01-2-2V5a2 2 0 012-2h5l2 3h9a2 2 0 012 2z"/></svg></button>
-        <button class="cact cact-del" title="Delete" onclick="delFile('${f._id}','${esc(f.originalName)}')"><svg viewBox="0 0 24 24"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 01-2 2H8a2 2 0 01-2-2L5 6"/></svg></button>
-      </div>
+      ${mkActionsGrid(f,v,DL_BTN_GRID(f))}
     </div>`;
   return d;
 }
 function mkList(f,i){
   const type=tc(f.fileType),label=tl(f.fileType);
-  const canP=isImg(f.fileType)||isVid(f.fileType)||isPdf(f.fileType);
   const d=document.createElement('div');
   const v=f.visibility||'public';
   d.className='fcard';d.id=`card-${f._id}`;d.style.animationDelay=`${i*.04}s`;
+  if(isLink(f.fileType)){
+    d.innerHTML=`
+      <div class="lrow">
+        <div class="lthumb llink-thumb" onclick="window.open('${esc(f.linkUrl)}','_blank','noopener')" style="cursor:pointer">${f.linkImage?`<img src="${esc(f.linkImage)}" alt="" loading="lazy" onerror="this.style.display='none'">`:`<svg viewBox="0 0 24 24" stroke-linecap="round" stroke-linejoin="round"><path d="M10 13a5 5 0 007.54.54l3-3a5 5 0 00-7.07-7.07l-1.72 1.71"/><path d="M14 11a5 5 0 00-7.54-.54l-3 3a5 5 0 007.07 7.07l1.71-1.71"/></svg>`}</div>
+        <div class="linfo">
+          <div class="lname" title="${esc(f.originalName)}">${esc(f.originalName)}${isRecent(f.createdAt)?'<span class="new-badge-list">NEW</span>':''}</div>
+          <div class="lmeta"><span class="tpill tp-link">LINK</span><span>${esc(f.linkDomain||'')}</span><span>·</span><span>${fmtDt(f.createdAt)}</span><span class="vis-badge vis-${v==='public'?'pub':'priv'}">${v==='public'?'Public':'Private'}</span></div>
+        </div>
+        ${mkActionsList(f,v,OPEN_BTN_LIST(f))}
+      </div>`;
+    return d;
+  }
+  const canP=isImg(f.fileType)||isVid(f.fileType)||isPdf(f.fileType);
   d.innerHTML=`
     <div class="lrow">
       <div class="lthumb" onclick="${canP?`openPrev('${f._id}')`:''}" style="cursor:${canP?'pointer':'default'}">${mkLThumb(f)}</div>
@@ -206,15 +290,7 @@ function mkList(f,i){
         <div class="lname" title="${esc(f.originalName)}">${esc(stripExt(f.originalName))}${isRecent(f.createdAt)?'<span class="new-badge-list">NEW</span>':''}</div>
         <div class="lmeta"><span class="tpill tp-${type}">${label}</span><span>${fmtSz(f.fileSize)}</span><span>·</span><span>${fmtDt(f.createdAt)}</span><span class="vis-badge vis-${v==='public'?'pub':'priv'}">${v==='public'?'Public':'Private'}</span></div>
       </div>
-      <div class="lacts">
-        <button class="lact la-dl" title="Download" onclick="dlFile('${f._id}','${esc(f.originalName)}')"><svg viewBox="0 0 24 24" stroke-linecap="round" stroke-linejoin="round"><polyline points="8 17 12 21 16 17"/><line x1="12" y1="12" x2="12" y2="21"/></svg></button>
-        <button class="lact la-tok" title="Copy Token" onclick="copyToken('${f.shareToken||''}')"><svg viewBox="0 0 24 24" stroke-linecap="round" stroke-linejoin="round"><path d="M10 13a5 5 0 007.54.54l3-3a5 5 0 00-7.07-7.07l-1.72 1.71"/><path d="M14 11a5 5 0 00-7.54-.54l-3 3a5 5 0 007.07 7.07l1.71-1.71"/></svg></button>
-        <button class="lact" title="Properties" onclick="showProp('${f._id}')"><svg viewBox="0 0 24 24" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><line x1="12" y1="8" x2="12" y2="12"/><line x1="12" y1="16" x2="12.01" y2="16"/></svg></button>
-        <button class="lact" title="Rename" onclick="renameFilePr('${f._id}','${esc(f.originalName)}')"><svg viewBox="0 0 24 24" stroke-linecap="round" stroke-linejoin="round"><path d="M11 4H4a2 2 0 00-2 2v14a2 2 0 002 2h14a2 2 0 002-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 013 3L12 15l-4 1 1-4 9.5-9.5z"/></svg></button>
-        <button class="lact la-vis-${v==='public'?'pub':'priv'}" id="visBtn-${f._id}" title="${v==='public'?'Public — click to make private':'Private — click to make public'}" onclick="toggleVis('${f._id}','${v}')">${v==='public'?'<svg viewBox="0 0 24 24" stroke-linecap="round" stroke-linejoin="round"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>':'<svg viewBox="0 0 24 24" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0110 0v4"/></svg>'}</button>
-        <button class="lact ${(folderCtx||f.folderId)?'la-rmfolder':'la-folder'}" title="${(folderCtx||f.folderId)?'Remove from folder':'Add to folder'}" onclick="${(folderCtx||f.folderId)?`removeFromFolder('${folderCtx||f.folderId}','${f._id}')`:`showAtf('${f._id}')`}"><svg viewBox="0 0 24 24" stroke-linecap="round" stroke-linejoin="round"><path d="M22 19a2 2 0 01-2 2H4a2 2 0 01-2-2V5a2 2 0 012-2h5l2 3h9a2 2 0 012 2z"/></svg></button>
-        <button class="lact la-del" title="Delete" onclick="delFile('${f._id}','${esc(f.originalName)}')"><svg viewBox="0 0 24 24" stroke-linecap="round" stroke-linejoin="round"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 01-2 2H8a2 2 0 01-2-2L5 6"/></svg></button>
-      </div>
+      ${mkActionsList(f,v,DL_BTN_LIST(f))}
     </div>`;
   return d;
 }
@@ -318,19 +394,35 @@ function showProp(id){
     vid:`<svg viewBox="0 0 24 24" stroke-linecap="round" stroke-linejoin="round"><polygon points="23 7 16 12 23 17 23 7"/><rect x="1" y="5" width="15" height="14" rx="2"/></svg>`,
     pdf:`<svg viewBox="0 0 24 24" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/></svg>`,
     zip:`<svg viewBox="0 0 24 24" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>`,
+    doc:`<svg viewBox="0 0 24 24" stroke-linecap="round" stroke-linejoin="round"><path d="M13 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V9z"/><polyline points="13 2 13 9 20 9"/><line x1="8" y1="13" x2="16" y2="13"/><line x1="8" y1="17" x2="16" y2="17"/></svg>`,
+    sheet:`<svg viewBox="0 0 24 24" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="16" rx="2"/><line x1="3" y1="10" x2="21" y2="10"/><line x1="9" y1="10" x2="9" y2="20"/><line x1="15" y1="10" x2="15" y2="20"/></svg>`,
+    slide:`<svg viewBox="0 0 24 24" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="5" width="20" height="13" rx="2"/><line x1="8" y1="21" x2="16" y2="21"/><line x1="12" y1="18" x2="12" y2="21"/></svg>`,
+    link:`<svg viewBox="0 0 24 24" stroke-linecap="round" stroke-linejoin="round"><path d="M10 13a5 5 0 007.54.54l3-3a5 5 0 00-7.07-7.07l-1.72 1.71"/><path d="M14 11a5 5 0 00-7.54-.54l-3 3a5 5 0 007.07 7.07l1.71-1.71"/></svg>`,
     file:`<svg viewBox="0 0 24 24" stroke-linecap="round" stroke-linejoin="round"><path d="M13 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V9z"/><polyline points="13 2 13 9 20 9"/></svg>`
   };
   document.getElementById('propIcon').className=`prop-ficon fi-${type}`;
   document.getElementById('propIcon').innerHTML=icons[type]||icons.file;
   document.getElementById('propFname').textContent=f.originalName;
   document.getElementById('propFkind').textContent=typeHuman(f.fileType);
-  // Only show user-relevant info — no Cloudinary internals
-  document.getElementById('propRows').innerHTML=`
-    <div class="prop-row"><span class="prop-key">Type</span><span class="prop-val">${typeHuman(f.fileType)}</span></div>
-    <div class="prop-row"><span class="prop-key">Size</span><span class="prop-val">${fmtSz(f.fileSize)}</span></div>
-    <div class="prop-row"><span class="prop-key">Uploaded</span><span class="prop-val">${f.createdAt?new Date(f.createdAt).toLocaleString('en',{dateStyle:'medium',timeStyle:'short'}):'-'}</span></div>
-  `;
-  document.getElementById('propDl').onclick=()=>{dlFile(f._id,f.originalName);closeProp();};
+  const propDl=document.getElementById('propDl');
+  if(isLink(f.fileType)){
+    document.getElementById('propRows').innerHTML=`
+      <div class="prop-row"><span class="prop-key">Type</span><span class="prop-val">${typeHuman(f.fileType)}</span></div>
+      <div class="prop-row"><span class="prop-key">Domain</span><span class="prop-val">${esc(f.linkDomain||'')}</span></div>
+      <div class="prop-row"><span class="prop-key">Added</span><span class="prop-val">${f.createdAt?new Date(f.createdAt).toLocaleString('en',{dateStyle:'medium',timeStyle:'short'}):'-'}</span></div>
+    `;
+    propDl.textContent='↗ Open Link';
+    propDl.onclick=()=>{window.open(f.linkUrl,'_blank','noopener');closeProp();};
+  }else{
+    // Only show user-relevant info — no Cloudinary internals
+    document.getElementById('propRows').innerHTML=`
+      <div class="prop-row"><span class="prop-key">Type</span><span class="prop-val">${typeHuman(f.fileType)}</span></div>
+      <div class="prop-row"><span class="prop-key">Size</span><span class="prop-val">${fmtSz(f.fileSize)}</span></div>
+      <div class="prop-row"><span class="prop-key">Uploaded</span><span class="prop-val">${f.createdAt?new Date(f.createdAt).toLocaleString('en',{dateStyle:'medium',timeStyle:'short'}):'-'}</span></div>
+    `;
+    propDl.textContent='⬇ Download';
+    propDl.onclick=()=>{dlFile(f._id,f.originalName);closeProp();};
+  }
   document.getElementById('propModal').classList.add('open');
 }
 function closeProp(){document.getElementById('propModal').classList.remove('open');}
@@ -398,8 +490,8 @@ function openTokenModal(data,kind){
     const f=data;
     const t=tc(f.fileType);
     const canP=isImg(f.fileType)||isVid(f.fileType)||isPdf(f.fileType);
-    const bgMap={img:'var(--blus)',vid:'rgba(0,0,0,.07)',pdf:'var(--reds)',zip:'var(--ylws)',doc:'var(--cyns)',sheet:'var(--tels)',slide:'var(--orgs)',file:'var(--bg2)'};
-    const stMap={img:'var(--blu)',vid:'var(--t2)',pdf:'var(--red)',zip:'var(--ylw)',doc:'var(--cyn)',sheet:'var(--tel)',slide:'var(--org)',file:'var(--t3)'};
+    const bgMap={img:'var(--blus)',vid:'rgba(0,0,0,.07)',pdf:'var(--reds)',zip:'var(--ylws)',doc:'var(--cyns)',sheet:'var(--tels)',slide:'var(--orgs)',link:'var(--pnks)',file:'var(--bg2)'};
+    const stMap={img:'var(--blu)',vid:'var(--t2)',pdf:'var(--red)',zip:'var(--ylw)',doc:'var(--cyn)',sheet:'var(--tel)',slide:'var(--org)',link:'var(--pnk)',file:'var(--t3)'};
     const svgMap={
       img:`<svg viewBox="0 0 24 24" fill="none" stroke="${stMap[t]}" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="8.5" cy="8.5" r="1.5"/><polyline points="21 15 16 10 5 21"/></svg>`,
       vid:`<svg viewBox="0 0 24 24" fill="none" stroke="${stMap[t]}" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><polygon points="23 7 16 12 23 17 23 7"/><rect x="1" y="5" width="15" height="14" rx="2"/></svg>`,
@@ -408,12 +500,18 @@ function openTokenModal(data,kind){
       doc:`<svg viewBox="0 0 24 24" fill="none" stroke="${stMap[t]}" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M13 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V9z"/><polyline points="13 2 13 9 20 9"/><line x1="8" y1="13" x2="16" y2="13"/><line x1="8" y1="17" x2="16" y2="17"/></svg>`,
       sheet:`<svg viewBox="0 0 24 24" fill="none" stroke="${stMap[t]}" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="16" rx="2"/><line x1="3" y1="10" x2="21" y2="10"/><line x1="9" y1="10" x2="9" y2="20"/><line x1="15" y1="10" x2="15" y2="20"/></svg>`,
       slide:`<svg viewBox="0 0 24 24" fill="none" stroke="${stMap[t]}" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="5" width="20" height="13" rx="2"/><line x1="8" y1="21" x2="16" y2="21"/><line x1="12" y1="18" x2="12" y2="21"/></svg>`,
+      link:`<svg viewBox="0 0 24 24" fill="none" stroke="${stMap[t]}" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M10 13a5 5 0 007.54.54l3-3a5 5 0 00-7.07-7.07l-1.72 1.71"/><path d="M14 11a5 5 0 00-7.54-.54l-3 3a5 5 0 007.07 7.07l1.71-1.71"/></svg>`,
       file:`<svg viewBox="0 0 24 24" fill="none" stroke="${stMap[t]}" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M13 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V9z"/><polyline points="13 2 13 9 20 9"/></svg>`
     };
     const v=f.visibility||'public';
     hd.innerHTML=`<div class="tmodal-ico" style="background:${bgMap[t]||bgMap.file}">${svgMap[t]||svgMap.file}</div><div class="tmodal-head-info"><div class="tmodal-title" title="${esc(f.originalName)}">${esc(stripExt(f.originalName))}</div><div class="tmodal-sub">${typeHuman(f.fileType)}<span class="vis-badge vis-${v==='public'?'pub':'priv'}">${v==='public'?'Public':'Private'}</span></div></div>`;
-    bd.innerHTML=`<div class="prop-row"><span class="prop-key">Size</span><span class="prop-val">${fmtSz(f.fileSize)}</span></div><div class="prop-row"><span class="prop-key">Type</span><span class="prop-val">${typeHuman(f.fileType)}</span></div><div class="prop-row"><span class="prop-key">Uploaded</span><span class="prop-val">${f.createdAt?new Date(f.createdAt).toLocaleString('en',{dateStyle:'medium',timeStyle:'short'}):'-'}</span></div>`;
-    ft.innerHTML=`<button class="tmod-act tmod-dl" title="Download" onclick="dlFile('${f._id}','${esc(f.originalName)}')"><svg viewBox="0 0 24 24"><polyline points="8 17 12 21 16 17"/><line x1="12" y1="12" x2="12" y2="21"/><path d="M20.88 18.09A5 5 0 0018 9h-1.26A8 8 0 103 16.29"/></svg></button>${f.visibility==='private'?`<button class="tmod-act" title="Manage Sharing" onclick="openSharePanel('file')"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"/><path d="M12 1v6m0 10v6M4.22 4.22l4.24 4.24m7.08 7.08l4.24 4.24M1 12h6m10 0h6M4.22 19.78l4.24-4.24m7.08-7.08l4.24-4.24"/></svg></button><div class="tmod-sep"></div><button class="tmod-act tmod-pub" title="Make Public" onclick="makeFilePublic('${f._id}')"><svg viewBox="0 0 24 24"><rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 019.9-1"/></svg></button><button class="tmod-act tmod-del" title="Delete File" onclick="delFileFromModal('${f._id}')"><svg viewBox="0 0 24 24"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 01-2 2H8a2 2 0 01-2-2L5 6"/></svg></button>`:''}` ;
+    bd.innerHTML=isLink(f.fileType)
+      ?`<div class="prop-row"><span class="prop-key">Domain</span><span class="prop-val">${esc(f.linkDomain||'')}</span></div><div class="prop-row"><span class="prop-key">Type</span><span class="prop-val">${typeHuman(f.fileType)}</span></div><div class="prop-row"><span class="prop-key">Added</span><span class="prop-val">${f.createdAt?new Date(f.createdAt).toLocaleString('en',{dateStyle:'medium',timeStyle:'short'}):'-'}</span></div>`
+      :`<div class="prop-row"><span class="prop-key">Size</span><span class="prop-val">${fmtSz(f.fileSize)}</span></div><div class="prop-row"><span class="prop-key">Type</span><span class="prop-val">${typeHuman(f.fileType)}</span></div><div class="prop-row"><span class="prop-key">Uploaded</span><span class="prop-val">${f.createdAt?new Date(f.createdAt).toLocaleString('en',{dateStyle:'medium',timeStyle:'short'}):'-'}</span></div>`;
+    const primaryTmodBtn=isLink(f.fileType)
+      ?`<button class="tmod-act tmod-dl" title="Open Link" onclick="window.open('${esc(f.linkUrl)}','_blank','noopener')"><svg viewBox="0 0 24 24"><path d="M18 13v6a2 2 0 01-2 2H5a2 2 0 01-2-2V8a2 2 0 012-2h6"/><polyline points="15 3 21 3 21 9"/><line x1="10" y1="14" x2="21" y2="3"/></svg></button>`
+      :`<button class="tmod-act tmod-dl" title="Download" onclick="dlFile('${f._id}','${esc(f.originalName)}')"><svg viewBox="0 0 24 24"><polyline points="8 17 12 21 16 17"/><line x1="12" y1="12" x2="12" y2="21"/><path d="M20.88 18.09A5 5 0 0018 9h-1.26A8 8 0 103 16.29"/></svg></button>`;
+    ft.innerHTML=`${primaryTmodBtn}${f.visibility==='private'?`<button class="tmod-act" title="Manage Sharing" onclick="openSharePanel('file')"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"/><path d="M12 1v6m0 10v6M4.22 4.22l4.24 4.24m7.08 7.08l4.24 4.24M1 12h6m10 0h6M4.22 19.78l4.24-4.24m7.08-7.08l4.24-4.24"/></svg></button><div class="tmod-sep"></div><button class="tmod-act tmod-pub" title="Make Public" onclick="makeFilePublic('${f._id}')"><svg viewBox="0 0 24 24"><rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 019.9-1"/></svg></button><button class="tmod-act tmod-del" title="Delete File" onclick="delFileFromModal('${f._id}')"><svg viewBox="0 0 24 24"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 01-2 2H8a2 2 0 01-2-2L5 6"/></svg></button>`:''}` ;
     // Store in tokenModalFile so openPrev can access private file data without polluting allFiles
     tokenModalFile=f;
   }else{
@@ -423,7 +521,7 @@ function openTokenModal(data,kind){
     const files=(folder.files||[]).filter(x=>(x.visibility||'public')!=='private');
     hd.innerHTML=`<div class="tmodal-ico" style="background:var(--ylws)"><svg viewBox="0 0 24 24" fill="none" stroke="var(--ylw)" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M22 19a2 2 0 01-2 2H4a2 2 0 01-2-2V5a2 2 0 012-2h5l2 3h9a2 2 0 012 2z"/></svg></div><div class="tmodal-head-info"><div class="tmodal-title">${esc(folder.name)}</div><div class="tmodal-sub">${files.length} file${files.length!==1?'s':''}<span class="vis-badge vis-${folder.visibility==='public'?'pub':'priv'}">${folder.visibility==='public'?'Public':'Private'}</span></div></div>`;
     bd.innerHTML=files.length
-      ?`<div class="tmodal-file-list">${files.map(f=>`<div class="tmodal-file-row"><span class="tmodal-file-name" title="${esc(f.originalName)}">${esc(stripExt(f.originalName))}</span><span class="tmodal-file-meta">${fmtSz(f.fileSize)}</span><button class="tmodal-dl-btn" onclick="dlFile('${f._id}','${esc(f.originalName)}')" title="Download"><svg viewBox="0 0 24 24" stroke-linecap="round" stroke-linejoin="round"><polyline points="8 17 12 21 16 17"/><line x1="12" y1="12" x2="12" y2="21"/></svg></button></div>`).join('')}</div>`
+      ?`<div class="tmodal-file-list">${files.map(f=>`<div class="tmodal-file-row"><span class="tmodal-file-name" title="${esc(f.originalName)}">${esc(stripExt(f.originalName))}</span><span class="tmodal-file-meta">${isLink(f.fileType)?esc(f.linkDomain||'Link'):fmtSz(f.fileSize)}</span><button class="tmodal-dl-btn" onclick="${isLink(f.fileType)?`window.open('${esc(f.linkUrl)}','_blank','noopener')`:`dlFile('${f._id}','${esc(f.originalName)}')`}" title="${isLink(f.fileType)?'Open Link':'Download'}">${isLink(f.fileType)?`<svg viewBox="0 0 24 24" stroke-linecap="round" stroke-linejoin="round"><path d="M18 13v6a2 2 0 01-2 2H5a2 2 0 01-2-2V8a2 2 0 012-2h6"/><polyline points="15 3 21 3 21 9"/><line x1="10" y1="14" x2="21" y2="3"/></svg>`:`<svg viewBox="0 0 24 24" stroke-linecap="round" stroke-linejoin="round"><polyline points="8 17 12 21 16 17"/><line x1="12" y1="12" x2="12" y2="21"/></svg>`}</button></div>`).join('')}</div>`
       :`<div style="text-align:center;padding:24px;color:var(--t3);font-size:14px">This folder is empty</div>`;
     ft.innerHTML=`${files.length?`<button class="tmod-act" title="Download All as ZIP" onclick="downloadFolderZipFromModal()"><svg viewBox="0 0 24 24"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg></button>`:''}${folder.visibility==='private'?`<button class="tmod-act" title="Manage Sharing" onclick="openSharePanel('folder')"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"/><path d="M12 1v6m0 10v6M4.22 4.22l4.24 4.24m7.08 7.08l4.24 4.24M1 12h6m10 0h6M4.22 19.78l4.24-4.24m7.08-7.08l4.24-4.24"/></svg></button><div class="tmod-sep"></div><button class="tmod-act tmod-pub" title="Make Folder Public" onclick="makeFolderPublic('${folder._id}')"><svg viewBox="0 0 24 24"><rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 019.9-1"/></svg></button><button class="tmod-act tmod-del" title="Delete Folder" onclick="delFolderFromModal('${folder._id}')"><svg viewBox="0 0 24 24"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 01-2 2H8a2 2 0 01-2-2L5 6"/></svg></button>`:''}`;
     tokenModalFolder=folder; // store so delFolderFromModal can read folder name

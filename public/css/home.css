@@ -16,12 +16,20 @@
 /* Illustration */
 .hero-illo{width:100%}
 .hero-illo svg{width:100%;height:auto;display:block}
-.illo-layer{animation:illoFloat 5.5s ease-in-out infinite}
+.illo-glow{opacity:0.14;transition:opacity .3s var(--ease)}
+[data-theme="dark"] .illo-glow{opacity:0.24}
+.illo-layer{--px:0px;--py:0px;animation:illoFloat 5.5s ease-in-out infinite}
 .illo-back{animation-duration:7s;animation-delay:.15s}
 .illo-mid{animation-duration:6s;animation-delay:.4s}
 .illo-front{animation-duration:4.8s}
-@keyframes illoFloat{0%,100%{transform:translateY(0)}50%{transform:translateY(-9px)}}
-@media(prefers-reduced-motion:reduce){.illo-layer{animation:none}}
+.illo-ghost{animation-duration:8.5s;animation-delay:0s}
+@keyframes illoFloat{
+  0%,100%{transform:translate(var(--px),var(--py)) translateY(0)}
+  50%{transform:translate(var(--px),var(--py)) translateY(-9px)}
+}
+.illo-orbit{transform-box:view-box;transform-origin:220px 210px;animation:illoOrbitSpin 16s linear infinite}
+@keyframes illoOrbitSpin{to{transform:rotate(360deg)}}
+@media(prefers-reduced-motion:reduce){.illo-layer{animation:none}.illo-orbit{animation:none}}
 @media(max-width:860px){
   .hero{grid-template-columns:1fr;gap:36px;text-align:center}
   .hero-copy{text-align:center}

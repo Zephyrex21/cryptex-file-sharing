@@ -7,6 +7,19 @@ const fileSchema = new mongoose.Schema(
   {
     originalName: { type: String, required: true },
 
+    // ── Item kind ─────────────────────────────────────────────────────────
+    // "file" = a real uploaded file in Supabase Storage (the original, default
+    // behavior). "link" = a saved URL with a fetched title/preview — same
+    // sharing/token/folder/visibility system, no Supabase object behind it.
+    itemType: { type: String, enum: ["file", "link"], default: "file" },
+
+    // ── Link-only fields (unused when itemType === "file") ──────────────────
+    linkUrl:         { type: String },
+    linkTitle:       { type: String },
+    linkDescription: { type: String },
+    linkImage:       { type: String }, // only ever set from an https:// source — see linkPreview.js
+    linkDomain:      { type: String },
+
     // ── Storage fields (storage-agnostic; old cloudinary* kept for compat) ──
     fileUrl:       { type: String },
     filePath:      { type: String },

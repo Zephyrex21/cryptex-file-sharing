@@ -65,6 +65,55 @@ function scrambleReveal(el,duration=750){
   scrambleReveal(l1,700);
   setTimeout(()=>scrambleReveal(l2,700),120);
 })();
+
+// ── Hero illustration: token flicker ────────────────────────────────────────
+// The token text on the front card briefly re-scrambles one character every
+// couple seconds, then resolves back — reads as a live cipher feed rather
+// than static decoration. Subtle on purpose: one character, not the whole
+// string, so it never competes with the headline for attention.
+(function(){
+  const el=document.getElementById('illoToken');
+  if(!el)return;
+  if(window.matchMedia('(prefers-reduced-motion: reduce)').matches)return;
+  const base=el.textContent;
+  const chars='0123456789ABCDEF';
+  setInterval(()=>{
+    const pos=Math.floor(Math.random()*base.length);
+    const scrambled=base.split('');
+    scrambled[pos]=chars[Math.floor(Math.random()*chars.length)];
+    el.textContent=scrambled.join('');
+    setTimeout(()=>{el.textContent=base;},180);
+  },2200);
+})();
+
+// ── Hero illustration: mouse parallax ───────────────────────────────────────
+// Desktop + fine-pointer only. Sets --px/--py custom properties that the
+// illoFloat keyframe animation itself reads (see home.css) — this is
+// deliberate: setting el.style.transform directly here would fight the
+// running CSS animation, since animations take precedence over inline
+// transform values for as long as they're active. Routing the offset
+// through a custom property lets both effects combine smoothly instead.
+(function(){
+  const illo=document.querySelector('.hero-illo');
+  if(!illo)return;
+  if(window.matchMedia('(prefers-reduced-motion: reduce)').matches)return;
+  if(window.matchMedia('(pointer: coarse)').matches)return; // skip touch devices
+  const layers=illo.querySelectorAll('.illo-layer');
+  const strength=[3,5,8,12]; // ghost, back, mid, front — front moves most (parallax depth)
+  illo.addEventListener('mousemove',(e)=>{
+    const r=illo.getBoundingClientRect();
+    const cx=(e.clientX-r.left)/r.width-0.5;
+    const cy=(e.clientY-r.top)/r.height-0.5;
+    layers.forEach((l,i)=>{
+      const s=strength[i]??8;
+      l.style.setProperty('--px',(cx*s*2)+'px');
+      l.style.setProperty('--py',(cy*s*2)+'px');
+    });
+  });
+  illo.addEventListener('mouseleave',()=>{
+    layers.forEach(l=>{l.style.setProperty('--px','0px');l.style.setProperty('--py','0px');});
+  });
+})();
 // ── Scroll-triggered reveal (Features / About) ──────────────────────────────
 // Each element fades/lifts in once, the first time it enters the viewport.
 // Grouped per-section so stagger timing restarts at 0 for each section rather

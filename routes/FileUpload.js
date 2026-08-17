@@ -3,6 +3,7 @@ import multer from "multer";
 import rateLimit from "express-rate-limit";
 import {
   uploadFile,
+  createLink,
   getAllFiles,
   getSingleFile,
   getFileByToken,
@@ -37,13 +38,25 @@ const uploadLimiter = rateLimit({
   message: { message: "Too many uploads in a short time — please slow down" },
 });
 
+// Stricter than uploads — this endpoint makes an outbound server-side fetch
+// per request, which is a more valuable target for abuse than a plain upload.
+const linkLimiter = rateLimit({
+  windowMs: 60 * 1000,
+  limit: 10,
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: { message: "Too many links added in a short time — please slow down" },
+});
+
 const ALLOWED = [
   "image/jpeg","image/png","image/gif","image/webp",
   "video/mp4","video/webm","video/ogg","video/quicktime","video/x-msvideo",
   "application/pdf",
   "application/zip","application/x-zip-compressed",
   "text/plain","text/csv",
+  "application/xml","text/xml",
   "application/msword",
+  "application/vnd.ms-powerpoint",
   "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
   "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
   "application/vnd.openxmlformats-officedocument.presentationml.presentation",
@@ -66,6 +79,7 @@ const handleUpload = (req, res, next) =>
 // ── File routes ────────────────────────────────────────────────────────────
 
 router.post("/upload",            uploadLimiter, handleUpload, uploadFile);
+router.post("/link",              linkLimiter, createLink);
 router.get("/",                   getAllFiles);
 
 // Token lookup — must come before /:id routes (specific before generic)

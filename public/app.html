@@ -15,7 +15,7 @@
 </head>
 <body>
 <div class="orbs"><div class="cgrid"></div><div class="cglow cg1"></div><div class="cglow cg2"></div></div>
-<input type="file" id="fInput" accept="image/jpeg,image/png,image/gif,image/webp,video/mp4,video/webm,video/ogg,video/quicktime,video/x-msvideo,application/pdf,application/zip,application/x-zip-compressed,text/plain,text/csv,application/msword,application/vnd.openxmlformats-officedocument.wordprocessingml.document,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet,application/vnd.openxmlformats-officedocument.presentationml.presentation,.txt,.csv,.doc,.docx,.xlsx,.pptx" multiple/>
+<input type="file" id="fInput" accept="image/jpeg,image/png,image/gif,image/webp,video/mp4,video/webm,video/ogg,video/quicktime,video/x-msvideo,application/pdf,application/zip,application/x-zip-compressed,text/plain,text/csv,application/xml,text/xml,application/msword,application/vnd.ms-powerpoint,application/vnd.openxmlformats-officedocument.wordprocessingml.document,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet,application/vnd.openxmlformats-officedocument.presentationml.presentation,.txt,.csv,.xml,.doc,.docx,.xlsx,.pptx,.ppt" multiple/>
 <nav>
   <a class="nav-logo" href="/">
     <div class="lmark"><svg viewBox="0 0 28 28" fill="none"><path d="M14 3L25 10.5L22 25H6L3 10.5L14 3Z" fill="rgba(255,255,255,0.93)"/><path d="M3 10.5H25" stroke="rgba(255,255,255,0.25)" stroke-width=".7"/><path d="M3 10.5L9 3L14 10.5" fill="rgba(255,255,255,0.22)"/><path d="M10 17L14 13L18 17" stroke="rgba(92,86,232,0.7)" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"/></svg></div>
@@ -61,6 +61,13 @@
     <div class="prog" id="prog"><span class="prog-name" id="pName">Uploading…</span><div class="prog-track"><div class="prog-fill" id="pFill"></div></div><span class="prog-pct" id="pPct">0%</span></div>
   </div>
 
+  <div class="linkbar">
+    <svg viewBox="0 0 24 24"><path d="M10 13a5 5 0 007.54.54l3-3a5 5 0 00-7.07-7.07l-1.72 1.71"/><path d="M14 11a5 5 0 00-7.54-.54l-3 3a5 5 0 007.07 7.07l1.71-1.71"/></svg>
+    <span class="linkbar-lbl">Share a link</span>
+    <input type="url" id="linkInput" placeholder="Paste a URL to share it — https://…" autocomplete="off"/>
+    <button id="linkAddBtn"><svg viewBox="0 0 24 24"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>Add Link</button>
+  </div>
+
   <div class="sec-tabs">
     <button id="tab-files" class="sec-tab active" onclick="switchSection('files')">Files</button>
     <button id="tab-folders" class="sec-tab" onclick="switchSection('folders')">Folders</button>
@@ -74,6 +81,7 @@
       <button class="tab" data-f="pdf">PDFs</button>
       <button class="tab" data-f="zip">ZIP</button>
       <button class="tab" data-f="doc">Docs</button>
+      <button class="tab" data-f="link">Links</button>
     </div>
     <div class="swrp">
       <button class="sbtn" id="sortBtn">

@@ -3,6 +3,7 @@ import File from "../models/File.js";
 import Folder from "../models/Folder.js";
 import supabase from "../config/supabase.js";
 import { Readable } from "stream";
+import { isSafeUrl, safeFetchHtml, extractMeta } from "./linkPreview.js";
 
 const BUCKET = process.env.SUPABASE_BUCKET || "cloudvault-files";
 
@@ -45,7 +46,10 @@ const MAGIC_BYTES = {
   "application/x-zip-compressed": ZIP_SIGNATURES,
   "text/plain": "text",
   "text/csv":   "text",
+  "application/xml": "xml",
+  "text/xml":        "xml",
   "application/msword": [[0xD0, 0xCF, 0x11, 0xE0, 0xA1, 0xB1, 0x1A, 0xE1]],
+  "application/vnd.ms-powerpoint": [[0xD0, 0xCF, 0x11, 0xE0, 0xA1, 0xB1, 0x1A, 0xE1]],
   "application/vnd.openxmlformats-officedocument.wordprocessingml.document": "ooxml:word/document.xml",
   "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet":       "ooxml:xl/workbook.xml",
   "application/vnd.openxmlformats-officedocument.presentationml.presentation": "ooxml:ppt/presentation.xml",
@@ -71,6 +75,7 @@ const verifyMagicBytes = (buffer, mimetype) => {
   if (sig === "avi")  return bufferStartsWith(buffer, [0x52,0x49,0x46,0x46]) && buffer.slice(8,12).toString("ascii") === "AVI ";
   if (sig === "ftyp") return buffer.length >= 8 && buffer.slice(4,8).toString("ascii") === "ftyp";
   if (sig === "text") return looksLikeText(buffer);
+  if (sig === "xml") return looksLikeText(buffer) && buffer.subarray(0, 200).toString("utf8").trimStart().startsWith("<");
   if (typeof sig === "string" && sig.startsWith("ooxml:")) {
     const internalPath = sig.slice(6);
     return isZipSignature(buffer) && buffer.includes(Buffer.from(internalPath));
@@ -144,6 +149,64 @@ export const uploadFile = async (req, res) => {
     if (filePath) {
       await supabase.storage.from(BUCKET).remove([filePath]).catch(() => {});
     }
+    res.status(500).json({ message: e.message });
+  }
+};
+
+// ── CREATE LINK ──────────────────────────────────────────────────────────────
+// Saves a URL as a shareable item — same token/visibility/folder system as a
+// real upload, just no Supabase object behind it. Best-effort fetches a
+// title/image/description from the page (see linkPreview.js for the SSRF
+// protections on that fetch); if the fetch fails, we still save the link
+// with just the URL itself — the person typed a real address, that's enough
+// to be useful even without a rich preview.
+export const createLink = async (req, res) => {
+  try {
+    const { url, visibility } = req.body;
+    if (!url || typeof url !== "string" || !url.trim()) {
+      return res.status(400).json({ message: "A URL is required" });
+    }
+
+    let parsed;
+    try { parsed = new URL(url.trim()); }
+    catch { return res.status(400).json({ message: "That doesn't look like a valid URL" }); }
+
+    if (!["http:", "https:"].includes(parsed.protocol)) {
+      return res.status(400).json({ message: "Only http and https links are supported" });
+    }
+    if (!(await isSafeUrl(parsed.toString()))) {
+      return res.status(400).json({ message: "That URL can't be reached" });
+    }
+
+    let meta = { title: null, image: null, description: null, siteName: null };
+    try {
+      const html = await safeFetchHtml(parsed.toString());
+      meta = extractMeta(html);
+    } catch (err) {
+      console.warn(`Link preview fetch failed for ${parsed.toString()}: ${err.message}`);
+    }
+
+    // Only trust https images — an http image on an https page gets blocked
+    // by the browser as mixed content anyway, so there's no point saving it.
+    const safeImage = meta.image && meta.image.startsWith("https://") ? meta.image : null;
+    const domain = parsed.hostname.replace(/^www\./, "");
+    const title = sanitizeOriginalName(meta.title || domain);
+
+    const file = await File.create({
+      itemType:        "link",
+      originalName:    title,
+      linkUrl:         parsed.toString(),
+      linkTitle:       meta.title ? sanitizeOriginalName(meta.title) : null,
+      linkDescription: meta.description ? sanitizeOriginalName(meta.description) : null,
+      linkImage:       safeImage,
+      linkDomain:      sanitizeOriginalName(domain),
+      fileType:        "text/x-url",
+      shareToken:      generateToken(),
+      visibility:      visibility === "private" ? "private" : "public",
+    });
+
+    res.status(201).json({ message: "Link added!", file });
+  } catch (e) {
     res.status(500).json({ message: e.message });
   }
 };

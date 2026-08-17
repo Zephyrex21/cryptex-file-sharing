@@ -67,16 +67,29 @@
           <filter id="illoShadow" x="-40%" y="-40%" width="180%" height="180%">
             <feDropShadow dx="0" dy="14" stdDeviation="16" flood-color="#000" flood-opacity="0.16"/>
           </filter>
+          <filter id="illoBlur" x="-60%" y="-60%" width="220%" height="220%">
+            <feGaussianBlur stdDeviation="3.5"/>
+          </filter>
         </defs>
 
-        <!-- ambient glow -->
-        <circle cx="230" cy="210" r="170" fill="url(#illoGrad)" opacity="0.14"/>
+        <!-- ambient glow — intensity adjusts per theme via .illo-glow -->
+        <circle class="illo-glow" cx="220" cy="210" r="170" fill="url(#illoGrad)"/>
+
+        <!-- orbiting accent — traces a slow circle around the stack -->
+        <g class="illo-orbit">
+          <circle cx="220" cy="38" r="3.5" style="fill:url(#illoGrad)" opacity="0.55"/>
+        </g>
 
         <!-- faint cipher dots, echoes the page background texture -->
         <g style="fill:var(--t3)" opacity="0.35">
           <circle cx="60" cy="70" r="2"/><circle cx="380" cy="90" r="2"/>
           <circle cx="50" cy="320" r="2"/><circle cx="400" cy="300" r="2"/>
           <circle cx="400" cy="180" r="2"/>
+        </g>
+
+        <!-- ghost layer: a 4th, blurred card furthest back — pure depth cue -->
+        <g class="illo-layer illo-ghost" opacity="0.4" filter="url(#illoBlur)">
+          <rect x="78" y="102" width="148" height="108" rx="16" transform="rotate(-15 152 156)" style="fill:var(--bg2)"/>
         </g>
 
         <!-- back card: folder, muted -->
@@ -107,8 +120,8 @@
             </g>
             <rect x="130" y="228" width="130" height="10" rx="5" style="fill:var(--b2)"/>
             <rect x="130" y="246" width="90" height="8" rx="4" style="fill:var(--b1)"/>
-            <!-- dissolving token string along the bottom edge -->
-            <text x="130" y="288" style="font-family:var(--font-mono);font-size:15px;font-weight:700;fill:var(--acc);letter-spacing:1px">A3F9</text>
+            <!-- token string — briefly flickers/rescrambles on a loop, see home.js -->
+            <text id="illoToken" x="130" y="288" style="font-family:var(--font-mono);font-size:15px;font-weight:700;fill:var(--acc);letter-spacing:1px">A3F9</text>
             <rect x="196" y="278" width="7" height="7" rx="1.5" style="fill:var(--acc)" opacity="0.55"/>
             <rect x="210" y="278" width="7" height="7" rx="1.5" style="fill:var(--acc2)" opacity="0.4"/>
             <circle cx="228" cy="282" r="3" style="fill:var(--acc2)" opacity="0.3"/>
