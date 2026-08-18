@@ -3,6 +3,18 @@
 <head>
 <meta charset="UTF-8"/><meta name="viewport" content="width=device-width,initial-scale=1"/>
 <title>Your Vault — Cryptex</title>
+<meta name="description" content="Upload, share, and manage your files with token-based private access."/>
+<link rel="icon" type="image/svg+xml" href="/favicon.svg"/>
+<link rel="alternate icon" href="/favicon.ico"/>
+<link rel="apple-touch-icon" href="/apple-touch-icon.png"/>
+<meta property="og:type" content="website"/>
+<meta property="og:title" content="Your Vault — Cryptex"/>
+<meta property="og:description" content="Upload, share, and manage your files with token-based private access."/>
+<meta property="og:image" content="https://cryptex-file-sharing.onrender.com/og-image.png"/>
+<meta property="og:url" content="https://cryptex-file-sharing.onrender.com/app"/>
+<meta name="twitter:card" content="summary_large_image"/>
+<meta name="twitter:title" content="Your Vault — Cryptex"/>
+<meta name="twitter:image" content="https://cryptex-file-sharing.onrender.com/og-image.png"/>
 <script>
 // Override the default theme before first paint if the user has a saved
 // preference — avoids a flash of the wrong theme for returning dark-mode users.
@@ -145,6 +157,17 @@
     </div>
   </div>
 </div>
+<div class="modal-bg" id="renameModal">
+  <div class="cf-box">
+    <div class="cf-title" id="renameTitle">Rename</div>
+    <input class="cf-input" id="renameInput" type="text" placeholder="Name…" autocomplete="off" maxlength="200"
+      onkeydown="if(event.key==='Enter')submitRename();if(event.key==='Escape')closeRename()"/>
+    <div class="cf-foot">
+      <button class="btn-close" onclick="closeRename()">Cancel</button>
+      <button class="btn-acc" onclick="submitRename()">Rename</button>
+    </div>
+  </div>
+</div>
 <div class="modal-bg" id="atfModal">
   <div class="atf-box">
     <div class="atf-head">
@@ -202,6 +225,17 @@
     <div class="del-acts">
       <button class="btn-cancel" id="delCancel">Cancel</button>
       <button class="btn-red" id="delConfirm">Delete</button>
+    </div>
+  </div>
+</div>
+<div class="modal-bg" id="folderDelModal">
+  <div class="del-box">
+    <div class="del-ico"><svg viewBox="0 0 24 24"><path d="M22 19a2 2 0 01-2 2H4a2 2 0 01-2-2V5a2 2 0 012-2h5l2 3h9a2 2 0 012 2z"/></svg></div>
+    <h3>Delete this folder?</h3>
+    <p><span class="del-fname" id="folderDelName">This folder</span> will be permanently removed. Files inside will NOT be deleted.</p>
+    <div class="del-acts">
+      <button class="btn-cancel" id="folderDelCancel">Cancel</button>
+      <button class="btn-red" id="folderDelConfirmBtn">Delete</button>
     </div>
   </div>
 </div>

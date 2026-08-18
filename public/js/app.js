@@ -385,6 +385,46 @@ document.getElementById('delConfirm').onclick=()=>{
 };
 document.getElementById('delModal').addEventListener('click',e=>{if(e.target===document.getElementById('delModal')){pendingId=null;document.getElementById('delModal').classList.remove('open');}});
 
+// ── Generic Rename modal — replaces window.prompt() for both file and folder
+// rename, reusing the create-folder modal's markup/styling (same shape: a
+// title + single text input + cancel/confirm).
+let renameCallback=null;
+function openRename(title,currentValue,onConfirm){
+  document.getElementById('renameTitle').textContent=title;
+  const input=document.getElementById('renameInput');
+  input.value=currentValue;
+  renameCallback=onConfirm;
+  document.getElementById('renameModal').classList.add('open');
+  setTimeout(()=>{input.focus();input.select();},60);
+}
+function closeRename(){document.getElementById('renameModal').classList.remove('open');renameCallback=null;}
+function submitRename(){
+  const val=document.getElementById('renameInput').value.trim();
+  const cb=renameCallback;
+  closeRename();
+  if(val&&cb)cb(val);
+}
+document.getElementById('renameModal').addEventListener('click',e=>{if(e.target===document.getElementById('renameModal'))closeRename();});
+
+// ── Generic Confirm modal (folder delete) — replaces window.confirm(),
+// reusing the file-delete modal's markup/styling as a second, independent
+// instance. Deliberately NOT sharing pendingId/state with the file-delete
+// flow above — folder deletion has different semantics (no undo).
+let folderDelCallback=null;
+function openFolderDelConfirm(name,onConfirm){
+  document.getElementById('folderDelName').textContent=name||'This folder';
+  folderDelCallback=onConfirm;
+  document.getElementById('folderDelModal').classList.add('open');
+}
+function closeFolderDelConfirm(){document.getElementById('folderDelModal').classList.remove('open');folderDelCallback=null;}
+document.getElementById('folderDelCancel').onclick=closeFolderDelConfirm;
+document.getElementById('folderDelConfirmBtn').onclick=()=>{
+  const cb=folderDelCallback;
+  closeFolderDelConfirm();
+  if(cb)cb();
+};
+document.getElementById('folderDelModal').addEventListener('click',e=>{if(e.target===document.getElementById('folderDelModal'))closeFolderDelConfirm();});
+
 // ── PROPERTIES — user-friendly info only, no Cloudinary details ────────────
 function showProp(id){
   const f=allFiles.find(x=>x._id===id);if(!f)return;
@@ -428,7 +468,7 @@ function showProp(id){
 function closeProp(){document.getElementById('propModal').classList.remove('open');}
 document.getElementById('propModal').addEventListener('click',e=>{if(e.target===document.getElementById('propModal'))closeProp();});
 
-document.addEventListener('keydown',e=>{if(e.key==='Escape'){closeLB();closeProp();document.getElementById('delModal').classList.remove('open');closeTokenModal();closeAtf();closeCreateFolder();}});
+document.addEventListener('keydown',e=>{if(e.key==='Escape'){closeLB();closeProp();document.getElementById('delModal').classList.remove('open');closeTokenModal();closeAtf();closeCreateFolder();closeRename();closeFolderDelConfirm();}});
 
 // ── Toast ──────────────────────────────────────────────────────────────────
 function toast(msg,type='info'){
@@ -703,29 +743,31 @@ async function submitCreateFolder(){
 }
 // ── Rename + delete folder ────────────────────────────────────────────────
 async function renameFolderPr(id,currentName){
-  const name=prompt('Rename folder:',currentName);
-  if(!name||name===currentName)return;
-  try{
-    const res=await fetch(`${FOLDERS_API}/${id}`,{method:'PATCH',headers:{'Content-Type':'application/json'},body:JSON.stringify({name})});
-    if(!res.ok)throw new Error();
-    const f=allFolders.find(x=>x._id===id);if(f)f.name=name;
-    if(curFolder&&curFolder._id===id)curFolder.name=name;
-    renderFolders();toast('Renamed!','success');
-  }catch{toast('Rename failed','error');}
+  openRename('Rename Folder',currentName,async(name)=>{
+    if(name===currentName)return;
+    try{
+      const res=await fetch(`${FOLDERS_API}/${id}`,{method:'PATCH',headers:{'Content-Type':'application/json'},body:JSON.stringify({name})});
+      if(!res.ok)throw new Error();
+      const f=allFolders.find(x=>x._id===id);if(f)f.name=name;
+      if(curFolder&&curFolder._id===id)curFolder.name=name;
+      renderFolders();toast('Renamed!','success');
+    }catch{toast('Rename failed','error');}
+  });
 }
 async function delFolderConfirm(id,name){
-  if(!confirm(`Delete folder "${name}"?\n\nFiles inside will NOT be deleted.`))return;
-  try{
-    const res=await fetch(`${FOLDERS_API}/${id}`,{method:'DELETE'});
-    if(!res.ok)throw new Error();
-    allFolders=allFolders.filter(f=>f._id!==id);
-    if(curFolder&&curFolder._id===id){curFolder=null;folderCtx=null;}
-    renderFolders();
-    // Reload files: deleted folder's files had folderId set; they now need to
-    // re-appear in the gallery (backend already set their folderId to null).
-    await loadFiles();
-    toast('Folder deleted','success');
-  }catch{toast('Delete failed','error');}
+  openFolderDelConfirm(name,async()=>{
+    try{
+      const res=await fetch(`${FOLDERS_API}/${id}`,{method:'DELETE'});
+      if(!res.ok)throw new Error();
+      allFolders=allFolders.filter(f=>f._id!==id);
+      if(curFolder&&curFolder._id===id){curFolder=null;folderCtx=null;}
+      renderFolders();
+      // Reload files: deleted folder's files had folderId set; they now need to
+      // re-appear in the gallery (backend already set their folderId to null).
+      await loadFiles();
+      toast('Folder deleted','success');
+    }catch{toast('Delete failed','error');}
+  });
 }
 // ── Remove from folder (when in folder detail view) ───────────────────────
 async function removeFromFolder(folderId,fileId){
@@ -923,18 +965,19 @@ async function renameFilePr(id,currentName){
   // The extension is preserved silently — the user only ever sees/types the base name.
   const ext=getExt(currentName);
   const base=stripExt(currentName);
-  const newBase=prompt('Rename file:',base);
-  if(!newBase||!newBase.trim()||newBase.trim()===base)return;
-  const fullName=newBase.trim()+ext;
-  try{
-    const res=await fetch(`${API}/${id}`,{method:'PATCH',headers:{'Content-Type':'application/json'},body:JSON.stringify({name:fullName})});
-    if(!res.ok)throw new Error();
-    const f1=allFiles.find(x=>x._id===id);if(f1)f1.originalName=fullName;
-    if(curFolder){const f2=(curFolder.files||[]).find(x=>x._id===id);if(f2)f2.originalName=fullName;}
-    renderAll();
-    if(curFolder)renderFolders();
-    toast('Renamed!','success');
-  }catch{toast('Rename failed','error');}
+  openRename('Rename File',base,async(newBase)=>{
+    if(newBase===base)return;
+    const fullName=newBase+ext;
+    try{
+      const res=await fetch(`${API}/${id}`,{method:'PATCH',headers:{'Content-Type':'application/json'},body:JSON.stringify({name:fullName})});
+      if(!res.ok)throw new Error();
+      const f1=allFiles.find(x=>x._id===id);if(f1)f1.originalName=fullName;
+      if(curFolder){const f2=(curFolder.files||[]).find(x=>x._id===id);if(f2)f2.originalName=fullName;}
+      renderAll();
+      if(curFolder)renderFolders();
+      toast('Renamed!','success');
+    }catch{toast('Rename failed','error');}
+  });
 }
 async function makeFilePublic(id){
   try{

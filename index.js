@@ -60,6 +60,16 @@ app.get("/app", (req, res) => {
   res.sendFile(path.join(__dirname, "public", "app.html"));
 });
 
+// ── 404 ────────────────────────────────────────────────────────────────────
+// Catches anything that didn't match a static file, an API route, or one of
+// the two page routes above. Uses app.use() with no path argument rather
+// than a wildcard string — Express 5's stricter path-to-regexp rejects the
+// old bare "*" syntax, but a path-less middleware works identically on both
+// Express 4 and 5 since it isn't doing pattern matching at all.
+app.use((req, res) => {
+  res.status(404).sendFile(path.join(__dirname, "public", "404.html"));
+});
+
 app.listen(PORT, () => {
   console.log(`🚀 Server running at http://localhost:${PORT}`);
 });
