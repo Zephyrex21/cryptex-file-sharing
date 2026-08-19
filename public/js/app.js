@@ -44,6 +44,38 @@ document.querySelectorAll('.vtab').forEach(v=>v.addEventListener('click',()=>{
 
 // ── Upload ─────────────────────────────────────────────────────────────────
 const fInput=document.getElementById('fInput'),uzone=document.getElementById('uzone'),pickBtn=document.getElementById('pickBtn');
+
+// ── First-time celebration ───────────────────────────────────────────────────
+// A small confetti burst, reserved for the very FIRST successful upload and
+// the very FIRST link added (tracked via localStorage) — not every action,
+// since that would get old fast and stop feeling like anything. Lightweight,
+// no canvas/library: a handful of absolutely-positioned divs animated with
+// plain CSS. Respects reduced-motion by simply not firing.
+function celebrate(originEl){
+  if(!originEl)return;
+  if(window.matchMedia('(prefers-reduced-motion: reduce)').matches)return;
+  const rect=originEl.getBoundingClientRect();
+  const cx=rect.left+rect.width/2,cy=rect.top+rect.height/2;
+  const colors=['#7872F0','#A472F0','#4ADE80','#F0C040','#60A0F0','#F0529E'];
+  for(let i=0;i<18;i++){
+    const p=document.createElement('div');
+    p.className='confetti-piece';
+    const angle=Math.random()*Math.PI*2;
+    const dist=50+Math.random()*90;
+    p.style.setProperty('--tx',(Math.cos(angle)*dist)+'px');
+    p.style.setProperty('--ty',(Math.sin(angle)*dist-50)+'px'); // biased upward
+    p.style.setProperty('--rot',(Math.random()*360)+'deg');
+    p.style.background=colors[i%colors.length];
+    p.style.left=cx+'px';p.style.top=cy+'px';
+    document.body.appendChild(p);
+    setTimeout(()=>p.remove(),900);
+  }
+}
+function celebrateIfFirstTime(key,originEl){
+  if(localStorage.getItem(key))return;
+  localStorage.setItem(key,'1');
+  celebrate(originEl);
+}
 pickBtn.addEventListener('click',e=>{e.stopPropagation();fInput.click();});
 uzone.addEventListener('click',e=>{if(!e.target.closest('#pickBtn'))fInput.click();});
 fInput.addEventListener('change',()=>{[...fInput.files].forEach(doUpload);fInput.value='';});
@@ -76,6 +108,7 @@ function proc(){
     busy=false;
     if(xhr.status===201){
       pf.style.width='100%';pp.textContent='100%';toast(`${f.name} uploaded!`,'success');
+      celebrateIfFirstTime('cv-first-upload',uzone);
       const isLast=queue.length===0;
       if(isLast){pf.classList.add('success');pp.textContent='✓ Done';ptr.classList.add('pop');}
       setTimeout(()=>{pw.classList.remove('show');uzone.classList.remove('busy');pf.classList.remove('success');ptr.classList.remove('pop');loadFiles();proc();},isLast?1000:750);
@@ -110,6 +143,7 @@ async function addLink(){
     const data=await res.json().catch(()=>({}));
     if(!res.ok)throw new Error(data.message||'Could not add that link');
     toast('Link added!','success');
+    celebrateIfFirstTime('cv-first-link',document.getElementById('linkAddBtn'));
     input.value='';
     loadFiles();
   }catch(err){
@@ -120,6 +154,33 @@ async function addLink(){
 }
 document.getElementById('linkAddBtn').addEventListener('click',addLink);
 document.getElementById('linkInput').addEventListener('keydown',e=>{if(e.key==='Enter')addLink();});
+
+// ── Paste to create a file ──────────────────────────────────────────────────
+// Paste plain text anywhere on the page (not focused in a text field) and it
+// becomes a .txt file — handy for sharing a snippet or note without saving
+// it to disk first. Pasting an actual file (e.g. a copied screenshot) works
+// the same way and uploads it directly. Both route through the normal
+// doUpload() queue, so validation/progress/batch-counter all apply for free.
+document.addEventListener('paste',(e)=>{
+  const tag=e.target.tagName;
+  if(tag==='INPUT'||tag==='TEXTAREA'||e.target.isContentEditable)return;
+  const cd=e.clipboardData;
+  if(!cd)return;
+
+  if(cd.files&&cd.files.length>0){
+    e.preventDefault();
+    [...cd.files].forEach(doUpload);
+    return;
+  }
+
+  const text=cd.getData('text/plain');
+  if(text&&text.trim()){
+    e.preventDefault();
+    const d=new Date();
+    const stamp=d.toLocaleDateString('en',{month:'short',day:'numeric'})+' '+d.toLocaleTimeString('en',{hour:'numeric',minute:'2-digit'});
+    doUpload(new File([text],`Pasted text — ${stamp}.txt`,{type:'text/plain'}));
+  }
+});
 
 // ── Load ───────────────────────────────────────────────────────────────────
 async function loadFiles(){
@@ -468,7 +529,29 @@ function showProp(id){
 function closeProp(){document.getElementById('propModal').classList.remove('open');}
 document.getElementById('propModal').addEventListener('click',e=>{if(e.target===document.getElementById('propModal'))closeProp();});
 
-document.addEventListener('keydown',e=>{if(e.key==='Escape'){closeLB();closeProp();document.getElementById('delModal').classList.remove('open');closeTokenModal();closeAtf();closeCreateFolder();closeRename();closeFolderDelConfirm();}});
+document.addEventListener('keydown',e=>{if(e.key==='Escape'){closeLB();closeProp();document.getElementById('delModal').classList.remove('open');closeTokenModal();closeAtf();closeCreateFolder();closeRename();closeFolderDelConfirm();closeShortcuts();}});
+
+// ── Keyboard shortcuts ───────────────────────────────────────────────────────
+// Ignored while typing in any input/textarea (except Escape, handled above)
+// so shortcuts never hijack normal typing.
+const SHORTCUT_KEYS={
+  '/':()=>{document.getElementById('sInput').focus();},
+  'u':()=>fInput.click(),
+  'n':()=>showCreateFolder(),
+  'l':()=>document.getElementById('linkInput').focus(),
+  't':()=>document.getElementById('tInput')?.focus(),
+  '?':()=>toggleShortcuts(),
+};
+document.addEventListener('keydown',e=>{
+  const tag=e.target.tagName;
+  if(tag==='INPUT'||tag==='TEXTAREA'||e.target.isContentEditable)return;
+  if(e.metaKey||e.ctrlKey||e.altKey)return; // don't intercept browser shortcuts
+  const handler=SHORTCUT_KEYS[e.key];
+  if(handler){e.preventDefault();handler();}
+});
+function toggleShortcuts(){document.getElementById('shortcutsModal').classList.toggle('open');}
+function closeShortcuts(){document.getElementById('shortcutsModal').classList.remove('open');}
+document.getElementById('shortcutsModal')?.addEventListener('click',e=>{if(e.target===document.getElementById('shortcutsModal'))closeShortcuts();});
 
 // ── Toast ──────────────────────────────────────────────────────────────────
 function toast(msg,type='info'){

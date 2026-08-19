@@ -443,6 +443,12 @@
 .atf-empty{padding:24px 16px;text-align:center;color:var(--t3);font-size:13px;line-height:1.6}
 /* ── Create folder modal ──────────────────────────────────────────────── */
 .cf-box{background:var(--surf2);border:.5px solid var(--b2);border-radius:var(--r3);max-width:340px;width:100%;box-shadow:var(--sh3);padding:24px}
+.shortcuts-box{max-width:300px}
+.confetti-piece{position:fixed;width:6px;height:6px;border-radius:1px;pointer-events:none;z-index:99998;animation:confettiBurst .85s cubic-bezier(.25,.8,.35,1) forwards}
+@keyframes confettiBurst{0%{transform:translate(0,0) rotate(0deg);opacity:1}100%{transform:translate(var(--tx),var(--ty)) rotate(var(--rot));opacity:0}}
+.shortcuts-list{display:flex;flex-direction:column;gap:2px;margin:16px 0}
+.shortcut-row{display:flex;align-items:center;justify-content:space-between;padding:8px 4px;font-size:14px;color:var(--t2)}
+.shortcut-row kbd{font-family:var(--font-mono);font-size:12px;font-weight:600;color:var(--t1);background:var(--bg2);border:.5px solid var(--b2);border-bottom-width:2px;border-radius:6px;padding:3px 8px;min-width:20px;text-align:center}
 .modal-bg.open .cf-box{animation:lbIn .22s var(--spring) both}
 .cf-title{font-size:16px;font-weight:700;margin-bottom:16px;letter-spacing:-.2px}
 .cf-input{width:100%;padding:10px 14px;border-radius:var(--r1);border:.5px solid var(--b2);background:var(--bg);color:var(--t1);font-size:14px;font-family:var(--font);outline:none;box-sizing:border-box;transition:all .18s var(--ease)}
