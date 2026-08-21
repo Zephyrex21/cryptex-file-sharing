@@ -1,4 +1,5 @@
 import { randomUUID } from "crypto";
+import path from "path";
 import File from "../models/File.js";
 import Folder from "../models/Folder.js";
 import supabase from "../config/supabase.js";
@@ -53,6 +54,16 @@ const MAGIC_BYTES = {
   "application/vnd.openxmlformats-officedocument.wordprocessingml.document": "ooxml:word/document.xml",
   "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet":       "ooxml:xl/workbook.xml",
   "application/vnd.openxmlformats-officedocument.presentationml.presentation": "ooxml:ppt/presentation.xml",
+  // code/dev files — text-based, verified via looksLikeText; JSON-shaped
+  // ones (.json/.ipynb — a notebook file IS a JSON document) get the
+  // slightly stricter looksLikeJson check
+  "text/x-python": "text", "text/javascript": "text", "text/jsx": "text",
+  "text/typescript": "text", "text/tsx": "text", "text/markdown": "text",
+  "text/x-java": "text", "text/x-c": "text", "text/x-c++": "text",
+  "text/x-c-header": "text", "text/x-c++-header": "text",
+  "text/css": "text", "text/html": "text", "application/sql": "text",
+  "text/yaml": "text", "application/x-sh": "text",
+  "application/json": "json", "application/x-ipynb+json": "json",
 };
 const bufferStartsWith = (buffer, bytes) => {
   if (buffer.length < bytes.length) return false;
@@ -75,6 +86,7 @@ const verifyMagicBytes = (buffer, mimetype) => {
   if (sig === "avi")  return bufferStartsWith(buffer, [0x52,0x49,0x46,0x46]) && buffer.slice(8,12).toString("ascii") === "AVI ";
   if (sig === "ftyp") return buffer.length >= 8 && buffer.slice(4,8).toString("ascii") === "ftyp";
   if (sig === "text") return looksLikeText(buffer);
+  if (sig === "json") return looksLikeText(buffer) && /^[{[]/.test(buffer.subarray(0, 200).toString("utf8").trimStart());
   if (sig === "xml") return looksLikeText(buffer) && buffer.subarray(0, 200).toString("utf8").trimStart().startsWith("<");
   if (typeof sig === "string" && sig.startsWith("ooxml:")) {
     const internalPath = sig.slice(6);
@@ -88,6 +100,27 @@ const verifyMagicBytes = (buffer, mimetype) => {
 // length here too, so nothing odd ever lands in storage or logs in the first place.
 const sanitizeOriginalName = (name) =>
   String(name).replace(/[\x00-\x1F\x7F]/g, "").slice(0, 255).trim() || "file";
+
+// Most OSes have no registered MIME type for these extensions, so the
+// browser-reported file.mimetype is unreliable (often an empty string) —
+// the extension is the trustworthy signal here, not the claimed type. Only
+// used to pick which canonical type to verify/store; the actual bytes are
+// still checked against that type via verifyMagicBytes below, so a
+// mismatched upload (e.g. a binary renamed to .py) is still rejected.
+const CODE_EXT_TO_MIME = {
+  ".py": "text/x-python", ".ipynb": "application/x-ipynb+json",
+  ".js": "text/javascript", ".jsx": "text/jsx",
+  ".ts": "text/typescript", ".tsx": "text/tsx",
+  ".json": "application/json", ".md": "text/markdown",
+  ".java": "text/x-java", ".c": "text/x-c", ".cpp": "text/x-c++",
+  ".h": "text/x-c-header", ".hpp": "text/x-c++-header",
+  ".css": "text/css", ".html": "text/html", ".sql": "application/sql",
+  ".yml": "text/yaml", ".yaml": "text/yaml", ".sh": "application/x-sh",
+};
+const resolveEffectiveMimetype = (originalname, reportedMimetype) => {
+  const ext = path.extname(originalname).toLowerCase();
+  return CODE_EXT_TO_MIME[ext] || reportedMimetype;
+};
 
 // ── Upload buffer to Supabase Storage ─────────────────────────────────────
 const uploadToSupabase = async (buffer, originalname, mimetype) => {
@@ -118,16 +151,21 @@ export const uploadFile = async (req, res) => {
   try {
     if (!req.file) return res.status(400).json({ message: "No file provided" });
 
-    if (!verifyMagicBytes(req.file.buffer, req.file.mimetype)) {
+    // Browser-reported mimetype is unreliable for code/dev extensions (see
+    // CODE_EXT_TO_MIME above) — resolve the canonical type once, up front,
+    // and use it consistently everywhere below instead of the raw claim.
+    const effectiveMimetype = resolveEffectiveMimetype(req.file.originalname, req.file.mimetype);
+
+    if (!verifyMagicBytes(req.file.buffer, effectiveMimetype)) {
       return res.status(400).json({
-        message: `File content doesn't match its declared type (${req.file.mimetype}) — upload rejected`,
+        message: `File content doesn't match its declared type (${effectiveMimetype}) — upload rejected`,
       });
     }
 
     const result = await uploadToSupabase(
       req.file.buffer,
       req.file.originalname,
-      req.file.mimetype
+      effectiveMimetype
     );
     filePath = result.filePath;
 
@@ -137,7 +175,7 @@ export const uploadFile = async (req, res) => {
       originalName: sanitizeOriginalName(req.file.originalname),
       fileUrl:      result.publicUrl,
       filePath:     result.filePath,
-      fileType:     req.file.mimetype,
+      fileType:     effectiveMimetype,
       fileSize:     req.file.size,
       storageType:  "supabase",
       shareToken:   generateToken(),

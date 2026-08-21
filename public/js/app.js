@@ -86,9 +86,32 @@ uzone.addEventListener('dragleave',e=>{if(!uzone.contains(e.relatedTarget))uzone
 uzone.addEventListener('drop',e=>{e.preventDefault();uzone.classList.remove('drag-over');[...e.dataTransfer.files].forEach(doUpload);});
 
 function getLimit(m){return 50;} // flat 50MB cap for every file type
-const ALLOWED=['image/jpeg','image/png','image/gif','image/webp','video/mp4','video/webm','video/ogg','video/quicktime','video/x-msvideo','application/pdf','application/zip','application/x-zip-compressed','text/plain','text/csv','application/xml','text/xml','application/msword','application/vnd.ms-powerpoint','application/vnd.openxmlformats-officedocument.wordprocessingml.document','application/vnd.openxmlformats-officedocument.spreadsheetml.sheet','application/vnd.openxmlformats-officedocument.presentationml.presentation'];
+const ALLOWED=['image/jpeg','image/png','image/gif','image/webp','video/mp4','video/webm','video/ogg','video/quicktime','video/x-msvideo','application/pdf','application/zip','application/x-zip-compressed','text/plain','text/csv','application/xml','text/xml','application/msword','application/vnd.ms-powerpoint','application/vnd.openxmlformats-officedocument.wordprocessingml.document','application/vnd.openxmlformats-officedocument.spreadsheetml.sheet','application/vnd.openxmlformats-officedocument.presentationml.presentation','text/x-python','application/x-ipynb+json','text/javascript','text/jsx','text/typescript','text/tsx','application/json','text/markdown','text/x-java','text/x-c','text/x-c++','text/x-c-header','text/x-c++-header','text/css','text/html','application/sql','text/yaml','application/x-sh'];
+
+// Most OSes have no registered MIME type for these extensions, so
+// file.type is often just an empty string for them — same reason the
+// backend can't trust the raw browser-reported type either (see
+// CODE_EXT_TO_MIME in controllers/fileUpload.js, which this mirrors).
+const CODE_EXT_TO_MIME={
+  '.py':'text/x-python','.ipynb':'application/x-ipynb+json',
+  '.js':'text/javascript','.jsx':'text/jsx','.ts':'text/typescript','.tsx':'text/tsx',
+  '.json':'application/json','.md':'text/markdown',
+  '.java':'text/x-java','.c':'text/x-c','.cpp':'text/x-c++','.h':'text/x-c-header','.hpp':'text/x-c++-header',
+  '.css':'text/css','.html':'text/html','.sql':'application/sql','.yml':'text/yaml','.yaml':'text/yaml','.sh':'application/x-sh',
+};
+// Re-wraps a File with a corrected .type when its extension is a known code
+// file — File.type is read-only, so this constructs a new File rather than
+// mutating the original. No-op (returns the same file) for everything else.
+function normalizeCodeFileType(file){
+  const dot=file.name.lastIndexOf('.');
+  const ext=dot>0?file.name.slice(dot).toLowerCase():'';
+  const canonical=CODE_EXT_TO_MIME[ext];
+  if(!canonical||file.type===canonical)return file;
+  return new File([file],file.name,{type:canonical});
+}
 let queue=[],busy=false,batchTotal=0;
 function doUpload(f){
+  f=normalizeCodeFileType(f);
   if(!ALLOWED.includes(f.type))return toast(`"${f.type}" not supported`,'error');
   if(f.size>getLimit(f.type)*1024*1024)return toast(`${f.name} exceeds ${getLimit(f.type)}MB`,'error');
   if(!queue.length&&!busy)batchTotal=0; // starting a fresh batch
@@ -202,6 +225,7 @@ function getDisplay(){
   else if(curF==='pdf')f=f.filter(x=>x.fileType==='application/pdf');
   else if(curF==='zip')f=f.filter(x=>x.fileType?.includes('zip'));
   else if(curF==='doc')f=f.filter(x=>isDoc(x.fileType)||isSheet(x.fileType)||isSlide(x.fileType));
+  else if(curF==='code')f=f.filter(x=>isCode(x.fileType));
   else if(curF==='link')f=f.filter(x=>x.fileType==='text/x-url');
   if(searchQ){const q=searchQ.toLowerCase();f=f.filter(x=>x.originalName.toLowerCase().includes(q));}
   switch(curS){
@@ -231,7 +255,8 @@ const isZip=m=>m?.includes('zip');
 const isDoc=m=>m==='text/plain'||m==='application/xml'||m==='text/xml'||m==='application/msword'||m==='application/vnd.openxmlformats-officedocument.wordprocessingml.document';
 const isSheet=m=>m==='text/csv'||m==='application/vnd.openxmlformats-officedocument.spreadsheetml.sheet';
 const isSlide=m=>m==='application/vnd.ms-powerpoint'||m==='application/vnd.openxmlformats-officedocument.presentationml.presentation';
-function tc(m){if(isImg(m))return'img';if(isVid(m))return'vid';if(isPdf(m))return'pdf';if(isZip(m))return'zip';if(isDoc(m))return'doc';if(isSheet(m))return'sheet';if(isSlide(m))return'slide';if(isLink(m))return'link';return'file';}
+const isCode=m=>['text/x-python','application/x-ipynb+json','text/javascript','text/jsx','text/typescript','text/tsx','application/json','text/markdown','text/x-java','text/x-c','text/x-c++','text/x-c-header','text/x-c++-header','text/css','text/html','application/sql','text/yaml','application/x-sh'].includes(m);
+function tc(m){if(isImg(m))return'img';if(isVid(m))return'vid';if(isPdf(m))return'pdf';if(isZip(m))return'zip';if(isDoc(m))return'doc';if(isSheet(m))return'sheet';if(isSlide(m))return'slide';if(isCode(m))return'code';if(isLink(m))return'link';return'file';}
 function tl(m){
   if(isImg(m)){const map={'image/jpeg':'JPG','image/png':'PNG','image/gif':'GIF','image/webp':'WEBP'};return map[m]||'IMG';}
   if(isVid(m)){const map={'video/mp4':'MP4','video/webm':'WEBM','video/ogg':'OGV','video/quicktime':'MOV','video/x-msvideo':'AVI'};return map[m]||'VID';}
@@ -239,10 +264,11 @@ function tl(m){
   if(isDoc(m)){const map={'text/plain':'TXT','application/xml':'XML','text/xml':'XML','application/msword':'DOC','application/vnd.openxmlformats-officedocument.wordprocessingml.document':'DOCX'};return map[m]||'DOC';}
   if(isSheet(m)){const map={'text/csv':'CSV','application/vnd.openxmlformats-officedocument.spreadsheetml.sheet':'XLSX'};return map[m]||'SHEET';}
   if(isSlide(m)){const map={'application/vnd.ms-powerpoint':'PPT','application/vnd.openxmlformats-officedocument.presentationml.presentation':'PPTX'};return map[m]||'PPT';}
+  if(isCode(m)){const map={'text/x-python':'PY','application/x-ipynb+json':'IPYNB','text/javascript':'JS','text/jsx':'JSX','text/typescript':'TS','text/tsx':'TSX','application/json':'JSON','text/markdown':'MD','text/x-java':'JAVA','text/x-c':'C','text/x-c++':'CPP','text/x-c-header':'H','text/x-c++-header':'HPP','text/css':'CSS','text/html':'HTML','application/sql':'SQL','text/yaml':'YAML','application/x-sh':'SH'};return map[m]||'CODE';}
   if(isLink(m))return'LINK';
   return'FILE';
 }
-function typeHuman(m){if(isImg(m))return tl(m)+' Image';if(isVid(m))return tl(m)+' Video';if(isPdf(m))return'PDF Document';if(isZip(m))return'ZIP Archive';if(isDoc(m))return tl(m)==='TXT'?'Text File':tl(m)==='XML'?'XML File':'Word Document';if(isSheet(m))return tl(m)==='CSV'?'CSV Spreadsheet':'Excel Spreadsheet';if(isSlide(m))return'PowerPoint Presentation';if(isLink(m))return'Link';return'File';}
+function typeHuman(m){if(isImg(m))return tl(m)+' Image';if(isVid(m))return tl(m)+' Video';if(isPdf(m))return'PDF Document';if(isZip(m))return'ZIP Archive';if(isDoc(m))return tl(m)==='TXT'?'Text File':tl(m)==='XML'?'XML File':'Word Document';if(isSheet(m))return tl(m)==='CSV'?'CSV Spreadsheet':'Excel Spreadsheet';if(isSlide(m))return'PowerPoint Presentation';if(isCode(m))return tl(m)+' File';if(isLink(m))return'Link';return'File';}
 function mkThumb(f){
   if(isImg(f.fileType))return`<img src="${f.fileUrl||f.cloudinaryUrl}" alt="" loading="lazy">`;
   if(isVid(f.fileType))return`<div class="fph fph-vid"><div class="play-ring"><svg viewBox="0 0 16 16"><polygon points="4,2 14,8 4,14" fill="white"/></svg></div><span class="fph-lbl">${tl(f.fileType)}</span></div>`;
@@ -251,14 +277,15 @@ function mkThumb(f){
   if(isDoc(f.fileType))return`<div class="fph fph-doc"><div class="fph-icon"><svg viewBox="0 0 56 56" fill="none"><rect x="10" y="4" width="36" height="48" rx="4" fill="white" fill-opacity=".92"/><rect x="16" y="14" width="24" height="3" rx="1.5" fill="#0EA5D4" fill-opacity=".6"/><rect x="16" y="22" width="24" height="3" rx="1.5" fill="#0EA5D4" fill-opacity=".5"/><rect x="16" y="30" width="18" height="3" rx="1.5" fill="#0EA5D4" fill-opacity=".4"/><rect x="16" y="38" width="20" height="3" rx="1.5" fill="#0EA5D4" fill-opacity=".3"/></svg></div><span class="fph-lbl">${tl(f.fileType)}</span></div>`;
   if(isSheet(f.fileType))return`<div class="fph fph-sheet"><div class="fph-icon"><svg viewBox="0 0 56 56" fill="none"><rect x="8" y="8" width="40" height="40" rx="4" fill="white" fill-opacity=".92"/><rect x="8" y="8" width="40" height="10" rx="4" fill="#0D9488" fill-opacity=".8"/><line x1="21" y1="18" x2="21" y2="48" stroke="#0D9488" stroke-opacity=".35" stroke-width="2"/><line x1="35" y1="18" x2="35" y2="48" stroke="#0D9488" stroke-opacity=".35" stroke-width="2"/><line x1="8" y1="28" x2="48" y2="28" stroke="#0D9488" stroke-opacity=".35" stroke-width="2"/><line x1="8" y1="38" x2="48" y2="38" stroke="#0D9488" stroke-opacity=".35" stroke-width="2"/></svg></div><span class="fph-lbl">${tl(f.fileType)}</span></div>`;
   if(isSlide(f.fileType))return`<div class="fph fph-slide"><div class="fph-icon"><svg viewBox="0 0 56 56" fill="none"><rect x="4" y="12" width="48" height="32" rx="4" fill="white" fill-opacity=".92"/><rect x="10" y="30" width="6" height="8" rx="1.5" fill="#E8642D" fill-opacity=".6"/><rect x="19" y="24" width="6" height="14" rx="1.5" fill="#E8642D" fill-opacity=".75"/><rect x="28" y="18" width="6" height="20" rx="1.5" fill="#E8642D" fill-opacity=".9"/><circle cx="42" cy="22" r="5" fill="#E8642D" fill-opacity=".4"/></svg></div><span class="fph-lbl">PPTX</span></div>`;
+  if(isCode(f.fileType))return`<div class="fph fph-code"><div class="fph-icon"><svg viewBox="0 0 56 56" fill="none"><rect x="6" y="8" width="44" height="40" rx="6" fill="white" fill-opacity=".92"/><path d="M20 22l-6 6 6 6" stroke="#65A30D" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" fill="none"/><path d="M36 22l6 6-6 6" stroke="#65A30D" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" fill="none"/><line x1="31" y1="18" x2="25" y2="38" stroke="#65A30D" stroke-opacity=".55" stroke-width="2.5" stroke-linecap="round"/></svg></div><span class="fph-lbl">${tl(f.fileType)}</span></div>`;
   return`<div class="fph fph-file"><div class="fph-icon"><svg viewBox="0 0 48 48" fill="none"><path d="M10 8h20l10 10v22a2 2 0 01-2 2H10a2 2 0 01-2-2V10a2 2 0 012-2z" fill="white" fill-opacity=".6"/></svg></div><span class="fph-lbl">${tl(f.fileType)}</span></div>`;
 }
 function mkLThumb(f){
   if(isImg(f.fileType))return`<img src="${f.fileUrl||f.cloudinaryUrl}" alt="" loading="lazy">`;
-  const col=isVid(f.fileType)?'lph-vid':isPdf(f.fileType)?'lph-pdf':isZip(f.fileType)?'lph-zip':isDoc(f.fileType)?'lph-doc':isSheet(f.fileType)?'lph-sheet':isSlide(f.fileType)?'lph-slide':'lph-file';
-  const sc=isVid(f.fileType)?'rgba(255,255,255,.7)':isPdf(f.fileType)?'var(--red)':isZip(f.fileType)?'var(--ylw)':isDoc(f.fileType)?'var(--cyn)':isSheet(f.fileType)?'var(--tel)':isSlide(f.fileType)?'var(--org)':'var(--t3)';
-  const icons={vid:`<polygon points="4,3 13,8 4,13" fill="${sc}"/>`,pdf:`<path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z" stroke="${sc}" fill="none"/><polyline points="14 2 14 8 20 8" stroke="${sc}" fill="none"/>`,zip:`<path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4" stroke="${sc}" fill="none"/><polyline points="7 10 12 15 17 10" stroke="${sc}" fill="none"/><line x1="12" y1="15" x2="12" y2="3" stroke="${sc}"/>`,doc:`<path d="M13 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V9z" stroke="${sc}" fill="none"/><polyline points="13 2 13 9 20 9" stroke="${sc}" fill="none"/><line x1="8" y1="13" x2="16" y2="13" stroke="${sc}"/><line x1="8" y1="17" x2="16" y2="17" stroke="${sc}"/>`,sheet:`<rect x="3" y="4" width="18" height="16" rx="2" stroke="${sc}" fill="none"/><line x1="3" y1="10" x2="21" y2="10" stroke="${sc}"/><line x1="9" y1="10" x2="9" y2="20" stroke="${sc}"/><line x1="15" y1="10" x2="15" y2="20" stroke="${sc}"/>`,slide:`<rect x="2" y="5" width="20" height="13" rx="2" stroke="${sc}" fill="none"/><line x1="8" y1="21" x2="16" y2="21" stroke="${sc}"/><line x1="12" y1="18" x2="12" y2="21" stroke="${sc}"/>`,file:`<path d="M13 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V9z" stroke="${sc}" fill="none"/><polyline points="13 2 13 9 20 9" stroke="${sc}" fill="none"/>`};
-  const k=isVid(f.fileType)?'vid':isPdf(f.fileType)?'pdf':isZip(f.fileType)?'zip':isDoc(f.fileType)?'doc':isSheet(f.fileType)?'sheet':isSlide(f.fileType)?'slide':'file';
+  const col=isVid(f.fileType)?'lph-vid':isPdf(f.fileType)?'lph-pdf':isZip(f.fileType)?'lph-zip':isDoc(f.fileType)?'lph-doc':isSheet(f.fileType)?'lph-sheet':isSlide(f.fileType)?'lph-slide':isCode(f.fileType)?'lph-code':'lph-file';
+  const sc=isVid(f.fileType)?'rgba(255,255,255,.7)':isPdf(f.fileType)?'var(--red)':isZip(f.fileType)?'var(--ylw)':isDoc(f.fileType)?'var(--cyn)':isSheet(f.fileType)?'var(--tel)':isSlide(f.fileType)?'var(--org)':isCode(f.fileType)?'var(--cod)':'var(--t3)';
+  const icons={vid:`<polygon points="4,3 13,8 4,13" fill="${sc}"/>`,pdf:`<path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z" stroke="${sc}" fill="none"/><polyline points="14 2 14 8 20 8" stroke="${sc}" fill="none"/>`,zip:`<path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4" stroke="${sc}" fill="none"/><polyline points="7 10 12 15 17 10" stroke="${sc}" fill="none"/><line x1="12" y1="15" x2="12" y2="3" stroke="${sc}"/>`,doc:`<path d="M13 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V9z" stroke="${sc}" fill="none"/><polyline points="13 2 13 9 20 9" stroke="${sc}" fill="none"/><line x1="8" y1="13" x2="16" y2="13" stroke="${sc}"/><line x1="8" y1="17" x2="16" y2="17" stroke="${sc}"/>`,sheet:`<rect x="3" y="4" width="18" height="16" rx="2" stroke="${sc}" fill="none"/><line x1="3" y1="10" x2="21" y2="10" stroke="${sc}"/><line x1="9" y1="10" x2="9" y2="20" stroke="${sc}"/><line x1="15" y1="10" x2="15" y2="20" stroke="${sc}"/>`,slide:`<rect x="2" y="5" width="20" height="13" rx="2" stroke="${sc}" fill="none"/><line x1="8" y1="21" x2="16" y2="21" stroke="${sc}"/><line x1="12" y1="18" x2="12" y2="21" stroke="${sc}"/>`,code:`<polyline points="9 8 5 12 9 16" stroke="${sc}" fill="none"/><polyline points="15 8 19 12 15 16" stroke="${sc}" fill="none"/>`,file:`<path d="M13 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V9z" stroke="${sc}" fill="none"/><polyline points="13 2 13 9 20 9" stroke="${sc}" fill="none"/>`};
+  const k=isVid(f.fileType)?'vid':isPdf(f.fileType)?'pdf':isZip(f.fileType)?'zip':isDoc(f.fileType)?'doc':isSheet(f.fileType)?'sheet':isSlide(f.fileType)?'slide':isCode(f.fileType)?'code':'file';
   return`<div class="lfph ${col}"><svg viewBox="0 0 24 24" stroke-linecap="round" stroke-linejoin="round" stroke-width="1.8">${icons[k]}</svg></div>`;
 }
 
@@ -498,6 +525,7 @@ function showProp(id){
     doc:`<svg viewBox="0 0 24 24" stroke-linecap="round" stroke-linejoin="round"><path d="M13 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V9z"/><polyline points="13 2 13 9 20 9"/><line x1="8" y1="13" x2="16" y2="13"/><line x1="8" y1="17" x2="16" y2="17"/></svg>`,
     sheet:`<svg viewBox="0 0 24 24" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="16" rx="2"/><line x1="3" y1="10" x2="21" y2="10"/><line x1="9" y1="10" x2="9" y2="20"/><line x1="15" y1="10" x2="15" y2="20"/></svg>`,
     slide:`<svg viewBox="0 0 24 24" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="5" width="20" height="13" rx="2"/><line x1="8" y1="21" x2="16" y2="21"/><line x1="12" y1="18" x2="12" y2="21"/></svg>`,
+    code:`<svg viewBox="0 0 24 24" stroke-linecap="round" stroke-linejoin="round"><polyline points="16 18 22 12 16 6"/><polyline points="8 6 2 12 8 18"/></svg>`,
     link:`<svg viewBox="0 0 24 24" stroke-linecap="round" stroke-linejoin="round"><path d="M10 13a5 5 0 007.54.54l3-3a5 5 0 00-7.07-7.07l-1.72 1.71"/><path d="M14 11a5 5 0 00-7.54-.54l-3 3a5 5 0 007.07 7.07l1.71-1.71"/></svg>`,
     file:`<svg viewBox="0 0 24 24" stroke-linecap="round" stroke-linejoin="round"><path d="M13 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V9z"/><polyline points="13 2 13 9 20 9"/></svg>`
   };
@@ -613,8 +641,8 @@ function openTokenModal(data,kind){
     const f=data;
     const t=tc(f.fileType);
     const canP=isImg(f.fileType)||isVid(f.fileType)||isPdf(f.fileType);
-    const bgMap={img:'var(--blus)',vid:'rgba(0,0,0,.07)',pdf:'var(--reds)',zip:'var(--ylws)',doc:'var(--cyns)',sheet:'var(--tels)',slide:'var(--orgs)',link:'var(--pnks)',file:'var(--bg2)'};
-    const stMap={img:'var(--blu)',vid:'var(--t2)',pdf:'var(--red)',zip:'var(--ylw)',doc:'var(--cyn)',sheet:'var(--tel)',slide:'var(--org)',link:'var(--pnk)',file:'var(--t3)'};
+    const bgMap={img:'var(--blus)',vid:'rgba(0,0,0,.07)',pdf:'var(--reds)',zip:'var(--ylws)',doc:'var(--cyns)',sheet:'var(--tels)',slide:'var(--orgs)',code:'var(--cods)',link:'var(--pnks)',file:'var(--bg2)'};
+    const stMap={img:'var(--blu)',vid:'var(--t2)',pdf:'var(--red)',zip:'var(--ylw)',doc:'var(--cyn)',sheet:'var(--tel)',slide:'var(--org)',code:'var(--cod)',link:'var(--pnk)',file:'var(--t3)'};
     const svgMap={
       img:`<svg viewBox="0 0 24 24" fill="none" stroke="${stMap[t]}" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="8.5" cy="8.5" r="1.5"/><polyline points="21 15 16 10 5 21"/></svg>`,
       vid:`<svg viewBox="0 0 24 24" fill="none" stroke="${stMap[t]}" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><polygon points="23 7 16 12 23 17 23 7"/><rect x="1" y="5" width="15" height="14" rx="2"/></svg>`,
@@ -623,6 +651,7 @@ function openTokenModal(data,kind){
       doc:`<svg viewBox="0 0 24 24" fill="none" stroke="${stMap[t]}" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M13 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V9z"/><polyline points="13 2 13 9 20 9"/><line x1="8" y1="13" x2="16" y2="13"/><line x1="8" y1="17" x2="16" y2="17"/></svg>`,
       sheet:`<svg viewBox="0 0 24 24" fill="none" stroke="${stMap[t]}" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="16" rx="2"/><line x1="3" y1="10" x2="21" y2="10"/><line x1="9" y1="10" x2="9" y2="20"/><line x1="15" y1="10" x2="15" y2="20"/></svg>`,
       slide:`<svg viewBox="0 0 24 24" fill="none" stroke="${stMap[t]}" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="5" width="20" height="13" rx="2"/><line x1="8" y1="21" x2="16" y2="21"/><line x1="12" y1="18" x2="12" y2="21"/></svg>`,
+      code:`<svg viewBox="0 0 24 24" fill="none" stroke="${stMap[t]}" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><polyline points="16 18 22 12 16 6"/><polyline points="8 6 2 12 8 18"/></svg>`,
       link:`<svg viewBox="0 0 24 24" fill="none" stroke="${stMap[t]}" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M10 13a5 5 0 007.54.54l3-3a5 5 0 00-7.07-7.07l-1.72 1.71"/><path d="M14 11a5 5 0 00-7.54-.54l-3 3a5 5 0 007.07 7.07l1.71-1.71"/></svg>`,
       file:`<svg viewBox="0 0 24 24" fill="none" stroke="${stMap[t]}" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M13 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V9z"/><polyline points="13 2 13 9 20 9"/></svg>`
     };

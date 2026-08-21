@@ -1,6 +1,7 @@
 import express from "express";
 import multer from "multer";
 import rateLimit from "express-rate-limit";
+import path from "path";
 import {
   uploadFile,
   createLink,
@@ -60,13 +61,33 @@ const ALLOWED = [
   "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
   "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
   "application/vnd.openxmlformats-officedocument.presentationml.presentation",
+  // code/dev files — see CODE_EXT_TO_MIME in the controller for the
+  // canonical type each extension resolves to
+  "text/x-python","application/x-ipynb+json","text/javascript","text/jsx",
+  "text/typescript","text/tsx","application/json","text/markdown",
+  "text/x-java","text/x-c","text/x-c++","text/x-c-header","text/x-c++-header",
+  "text/css","text/html","application/sql","text/yaml","application/x-sh",
+];
+
+// Most OSes have no registered MIME type for .py/.ipynb/.cpp/etc, so browsers
+// commonly report an empty string or a generic fallback for these — trusting
+// file.mimetype alone would silently reject every code file a student
+// actually uploads. Falling back to the extension here is safe because the
+// magic-byte stage afterward still verifies the content actually looks like
+// text/JSON before anything is trusted or stored.
+const CODE_EXTENSIONS = [
+  ".py",".ipynb",".js",".jsx",".ts",".tsx",".json",".md",
+  ".java",".c",".cpp",".h",".hpp",".css",".html",".sql",".yml",".yaml",".sh",
 ];
 
 const upload = multer({
   storage: multer.memoryStorage(),
   limits: { fileSize: 50 * 1024 * 1024 }, // flat 50MB cap, all file types
-  fileFilter: (req, file, cb) =>
-    ALLOWED.includes(file.mimetype) ? cb(null, true) : cb(new Error(`"${file.mimetype}" is not supported`)),
+  fileFilter: (req, file, cb) => {
+    if (ALLOWED.includes(file.mimetype)) return cb(null, true);
+    if (CODE_EXTENSIONS.includes(path.extname(file.originalname).toLowerCase())) return cb(null, true);
+    cb(new Error(`"${file.mimetype}" is not supported`));
+  },
 });
 
 const handleUpload = (req, res, next) =>
