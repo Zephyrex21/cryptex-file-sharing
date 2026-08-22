@@ -151,6 +151,58 @@ export const uploadFile = async (req, res) => {
   try {
     if (!req.file) return res.status(400).json({ message: "No file provided" });
 
+    const isEncrypted = req.body.encrypted === "true";
+
+    // ── Client-side-encrypted (zero-knowledge) upload ─────────────────────
+    // req.file.buffer is AES-256-GCM ciphertext produced entirely in the
+    // browser — the plaintext bytes, real filename, and real MIME type never
+    // reach this server. That makes verifyMagicBytes structurally impossible
+    // to run here (ciphertext will never match a known signature, by
+    // definition — that's expected, not a gap). What we validate instead is
+    // that the required encryption metadata was actually sent, so this path
+    // can't be used as a backdoor around content validation for *unencrypted*
+    // uploads pretending to be octet-stream.
+    if (isEncrypted) {
+      const { iv, encryptedName, encryptedNameIV, encryptedMimeType, encryptedMimeTypeIV } = req.body;
+      if (!iv || !encryptedName || !encryptedNameIV || !encryptedMimeType || !encryptedMimeTypeIV) {
+        return res.status(400).json({ message: "Missing encryption metadata for encrypted upload" });
+      }
+      if (req.file.mimetype !== "application/octet-stream") {
+        return res.status(400).json({ message: "Encrypted uploads must be sent as application/octet-stream" });
+      }
+
+      const result = await uploadToSupabase(
+        req.file.buffer,
+        `encrypted-${Date.now()}.bin`, // storage path only — never derived from the real name
+        "application/octet-stream"
+      );
+      filePath = result.filePath;
+
+      const file = await File.create({
+        originalName: "Encrypted file", // placeholder; the real name only exists as ciphertext below
+        fileUrl:      result.publicUrl,
+        filePath:     result.filePath,
+        fileType:     "application/octet-stream",
+        fileSize:     req.file.size,
+        storageType:  "supabase",
+        shareToken:   generateToken(),
+        // Always private: a public gallery entry nobody can decrypt (no key
+        // ever reaches this server) has no purpose and can't be displayed
+        // meaningfully anyway. See setVisibility below for the same rule
+        // enforced against later attempts to flip this to public.
+        visibility:   "private",
+        encrypted:         true,
+        encryptionIV:      iv,
+        encryptedName,
+        encryptedNameIV,
+        encryptedMimeType,
+        encryptedMimeTypeIV,
+      });
+
+      return res.status(201).json({ message: "Uploaded (end-to-end encrypted)!", file });
+    }
+
+    // ── Ordinary upload — unchanged ─────────────────────────────────────────
     // Browser-reported mimetype is unreliable for code/dev extensions (see
     // CODE_EXT_TO_MIME above) — resolve the canonical type once, up front,
     // and use it consistently everywhere below instead of the raw claim.
@@ -303,6 +355,16 @@ export const renameFile = async (req, res) => {
   try {
     const { name } = req.body;
     if (!name?.trim()) return res.status(400).json({ message: "Name cannot be empty" });
+
+    const existing = await File.findById(req.params.id);
+    if (!existing) return res.status(404).json({ message: "Not found" });
+    // The real name of an encrypted file only exists as ciphertext the server
+    // can't read — writing a plaintext name here would leak exactly the
+    // metadata the encryption is meant to hide, so renaming is disabled.
+    if (existing.encrypted) {
+      return res.status(400).json({ message: "Encrypted files can't be renamed — the filename is end-to-end encrypted" });
+    }
+
     const file = await File.findByIdAndUpdate(
       req.params.id,
       { originalName: sanitizeOriginalName(name) },
@@ -321,6 +383,19 @@ export const setVisibility = async (req, res) => {
     if (!["public", "private"].includes(visibility)) {
       return res.status(400).json({ message: "visibility must be 'public' or 'private'" });
     }
+
+    if (visibility === "public") {
+      const existing = await File.findById(req.params.id);
+      if (!existing) return res.status(404).json({ message: "Not found" });
+      // An encrypted file can never usefully be "public" — nobody browsing
+      // the gallery has the key, so it would just be an inert, unlabeled
+      // entry. Keeping this server-enforced (not just hidden in the UI)
+      // means the rule holds even if a request is crafted by hand.
+      if (existing.encrypted) {
+        return res.status(400).json({ message: "Encrypted files must stay private — share via the encrypted link instead" });
+      }
+    }
+
     const update = { visibility };
     if (visibility === "public") {
       // Expiry only means something while a token is actually gating access.

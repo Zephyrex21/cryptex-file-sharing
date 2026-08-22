@@ -20,7 +20,7 @@ function navTo(id){
   setActiveNav(id);
 }
 function setActiveNav(id){
-  ['home','features','about'].forEach(s=>{
+  ['home','features','encryption','about'].forEach(s=>{
     const el=document.getElementById(`nl-${s}`);
     if(el) el.classList.toggle('active', s===id);
   });
@@ -29,7 +29,7 @@ function setActiveNav(id){
 const secObserver=new IntersectionObserver(entries=>{
   entries.forEach(e=>{if(e.isIntersecting)setActiveNav(e.target.id);});
 },{threshold:.4,rootMargin:'-60px 0px 0px 0px'});
-['home','features','about'].forEach(id=>{const el=document.getElementById(id);if(el)secObserver.observe(el);});
+['home','features','encryption','about'].forEach(id=>{const el=document.getElementById(id);if(el)secObserver.observe(el);});
 document.getElementById('hamBtn').onclick=()=>document.getElementById('mobMenu').classList.toggle('open');
 function closeMob(){document.getElementById('mobMenu').classList.remove('open');}
 // ── Hero decrypt-in animation ───────────────────────────────────────────────
@@ -122,6 +122,7 @@ function scrambleReveal(el,duration=750){
   const reduce=window.matchMedia('(prefers-reduced-motion: reduce)').matches;
   const groups=[
     document.querySelectorAll('#features .reveal'),
+    document.querySelectorAll('#encryption .reveal'),
     document.querySelectorAll('#about .about-wrap > div:first-child .reveal'),
     document.querySelectorAll('#about .rm-list .reveal')
   ];

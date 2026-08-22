@@ -10,6 +10,78 @@ const FOLDERS_API='/api/folders';
 let allFiles=[],curF='all',curS='newest',curV='grid',searchQ='';
 let allFolders=[],curSection='files',curFolder=null,folderCtx=null,atfFileId=null,tokenModalFile=null,tokenModalFolder=null,folderSearchQ='';
 let privRevealCtx={id:null,type:null}; // tracks which file/folder the privRevealModal is currently showing
+
+// ═══════════════════════════════════════════════════════════════════════
+// End-to-end encryption — AES-256-GCM via the browser's native Web Crypto
+// API. Every function below runs entirely client-side: a key is generated
+// here, used here to encrypt, and the only place it ever travels is inside
+// a URL *fragment* (#key=...) — fragments are never sent in HTTP requests
+// by any browser, so this server, its logs, and Supabase never see it. That
+// is the actual zero-knowledge guarantee, not just a claim: this backend is
+// structurally unable to decrypt these files even if it wanted to.
+//
+// encKeyCache holds keys ONLY in memory for the current tab (never
+// localStorage/cookies), so "Manage Sharing" can rebuild a full link after
+// a token regen without re-prompting the user mid-session. It's intentionally
+// gone on refresh — if the original share link is lost, the file is
+// permanently unrecoverable. There is no reset path. That's the trade-off
+// real zero-knowledge tools make, and we tell the user so in the UI.
+// ═══════════════════════════════════════════════════════════════════════
+const encKeyCache=new Map(); // fileId -> base64url AES key, this-tab-only
+let pendingDecryptKey=null;  // key parsed from location.hash on page load, if any
+
+function buf2b64url(buf){
+  let bin='';const bytes=new Uint8Array(buf);
+  for(let i=0;i<bytes.length;i++)bin+=String.fromCharCode(bytes[i]);
+  return btoa(bin).replace(/\+/g,'-').replace(/\//g,'_').replace(/=+$/,'');
+}
+function b64url2buf(s){
+  const pad=(4-s.length%4)%4;
+  const b64=s.replace(/-/g,'+').replace(/_/g,'/')+'='.repeat(pad);
+  const bin=atob(b64);const bytes=new Uint8Array(bin.length);
+  for(let i=0;i<bin.length;i++)bytes[i]=bin.charCodeAt(i);
+  return bytes.buffer;
+}
+function buf2b64(buf){
+  let bin='';const bytes=new Uint8Array(buf);
+  for(let i=0;i<bytes.length;i++)bin+=String.fromCharCode(bytes[i]);
+  return btoa(bin);
+}
+function b642buf(s){
+  const bin=atob(s);const bytes=new Uint8Array(bin.length);
+  for(let i=0;i<bin.length;i++)bytes[i]=bin.charCodeAt(i);
+  return bytes.buffer;
+}
+async function genAesKey(){
+  return crypto.subtle.generateKey({name:'AES-GCM',length:256},true,['encrypt','decrypt']);
+}
+async function exportKeyB64url(key){
+  return buf2b64url(await crypto.subtle.exportKey('raw',key));
+}
+async function importKeyB64url(str){
+  return crypto.subtle.importKey('raw',b64url2buf(str),{name:'AES-GCM'},true,['encrypt','decrypt']);
+}
+// Every call generates its OWN fresh random IV — required for GCM safety.
+// Reusing an IV under the same key across two different plaintexts (e.g.
+// content + filename) breaks GCM's authentication guarantee entirely, so
+// content/name/mimetype each get an independent IV, never shared.
+async function encryptBuffer(key,arrayBuffer){
+  const iv=crypto.getRandomValues(new Uint8Array(12));
+  const ciphertext=await crypto.subtle.encrypt({name:'AES-GCM',iv},key,arrayBuffer);
+  return{ciphertext,ivB64:buf2b64(iv)};
+}
+async function decryptBuffer(key,ciphertextBuf,ivB64){
+  const iv=new Uint8Array(b642buf(ivB64));
+  return crypto.subtle.decrypt({name:'AES-GCM',iv},key,ciphertextBuf);
+}
+async function encryptString(key,str){
+  const{ciphertext,ivB64}=await encryptBuffer(key,new TextEncoder().encode(str));
+  return{cipherB64:buf2b64(ciphertext),ivB64};
+}
+async function decryptString(key,cipherB64,ivB64){
+  const plain=await decryptBuffer(key,b642buf(cipherB64),ivB64);
+  return new TextDecoder().decode(plain);
+}
 // ── Search ─────────────────────────────────────────────────────────────────
 document.getElementById('sInput').addEventListener('input',e=>{searchQ=e.target.value.trim();renderAll();});
 document.getElementById('folderSearchInput').addEventListener('input',e=>{folderSearchQ=e.target.value.trim();renderFolders();});
@@ -44,6 +116,15 @@ document.querySelectorAll('.vtab').forEach(v=>v.addEventListener('click',()=>{
 
 // ── Upload ─────────────────────────────────────────────────────────────────
 const fInput=document.getElementById('fInput'),uzone=document.getElementById('uzone'),pickBtn=document.getElementById('pickBtn');
+const fInputDefaultAccept=fInput.getAttribute('accept');
+// Encrypted mode accepts any file type (see doUpload below for why) — so the
+// native picker's type filter is relaxed to match while the toggle is on,
+// otherwise "Choose Files" would silently hide files drag-and-drop can
+// already accept, which would be a confusing inconsistency.
+document.getElementById('encToggle')?.addEventListener('change',e=>{
+  if(e.target.checked)fInput.removeAttribute('accept');
+  else fInput.setAttribute('accept',fInputDefaultAccept);
+});
 
 // ── First-time celebration ───────────────────────────────────────────────────
 // A small confetti burst, reserved for the very FIRST successful upload and
@@ -110,20 +191,31 @@ function normalizeCodeFileType(file){
   return new File([file],file.name,{type:canonical});
 }
 let queue=[],busy=false,batchTotal=0;
+// Snapshotted per-file at drop/pick time, not read again later — so toggling
+// the switch mid-batch never changes files already queued.
 function doUpload(f){
   f=normalizeCodeFileType(f);
-  if(!ALLOWED.includes(f.type))return toast(`"${f.type}" not supported`,'error');
+  const encrypt=document.getElementById('encToggle')?.checked||false;
+  // The MIME allowlist exists so unencrypted content can be verified against
+  // its claimed type server-side (see verifyMagicBytes in the backend). An
+  // encrypted upload is opaque ciphertext by definition — the server can't
+  // inspect it either way — so that restriction has nothing left to protect
+  // once encryption is on, and encrypted mode can accept any file type.
+  if(!encrypt&&!ALLOWED.includes(f.type))return toast(`"${f.type}" not supported`,'error');
   if(f.size>getLimit(f.type)*1024*1024)return toast(`${f.name} exceeds ${getLimit(f.type)}MB`,'error');
   if(!queue.length&&!busy)batchTotal=0; // starting a fresh batch
-  queue.push(f);batchTotal++;proc();
+  queue.push({file:f,encrypt});batchTotal++;proc();
 }
 function proc(){
   if(busy||!queue.length)return;
-  busy=true;const f=queue.shift();
+  busy=true;const item=queue.shift();const f=item.file;
   const pos=batchTotal-queue.length; // 1-indexed position of this file within the batch
   const pw=document.getElementById('prog'),pf=document.getElementById('pFill'),pn=document.getElementById('pName'),pp=document.getElementById('pPct'),ptr=pw.querySelector('.prog-track');
   pn.textContent=batchTotal>1?`${f.name} · ${pos} of ${batchTotal}`:f.name;
   pf.classList.remove('success');pf.style.width='0%';pp.textContent='0%';pw.classList.add('show');uzone.classList.add('busy');
+
+  if(item.encrypt){uploadEncrypted(f,pos,{pw,pf,pn,pp,ptr});return;}
+
   const fd=new FormData();fd.append('file',f);
   const xhr=new XMLHttpRequest();
   xhr.upload.onprogress=e=>{if(e.lengthComputable){const p=Math.round(e.loaded/e.total*100);pf.style.width=p+'%';pp.textContent=p+'%';}};
@@ -140,6 +232,77 @@ function proc(){
   };
   xhr.onerror=()=>{busy=false;toast('Server unreachable','error');pw.classList.remove('show');uzone.classList.remove('busy');proc();};
   xhr.open('POST',`${API}/upload`);xhr.send(fd);
+}
+
+// ── Encrypted upload ─────────────────────────────────────────────────────
+// Encrypts entirely in the browser, THEN uploads the ciphertext — the server
+// never sees the plaintext bytes, name, or MIME type of this file. See the
+// crypto helpers above and controllers/fileUpload.js for the matching
+// server-side contract (which skips content verification here on purpose,
+// since it structurally cannot inspect ciphertext).
+async function uploadEncrypted(f,pos,ui){
+  const{pw,pf,pn,pp,ptr}=ui;
+  try{
+    pn.textContent=batchTotal>1?`Encrypting ${f.name} · ${pos} of ${batchTotal}…`:`Encrypting ${f.name}…`;
+    pp.textContent='';
+    const key=await genAesKey();
+    const plainBuf=await f.arrayBuffer();
+    const{ciphertext,ivB64}=await encryptBuffer(key,plainBuf);
+    const{cipherB64:encryptedName,ivB64:encryptedNameIV}=await encryptString(key,f.name);
+    const{cipherB64:encryptedMimeType,ivB64:encryptedMimeTypeIV}=await encryptString(key,f.type||'application/octet-stream');
+
+    pn.textContent=batchTotal>1?`Uploading ${f.name} · ${pos} of ${batchTotal}…`:`Uploading ${f.name}…`;
+    const fd=new FormData();
+    // Non-file fields are appended BEFORE the file — multer parses multipart
+    // fields in stream order, and the controller needs these already parsed
+    // into req.body by the time it validates the file part.
+    fd.append('encrypted','true');
+    fd.append('iv',ivB64);
+    fd.append('encryptedName',encryptedName);
+    fd.append('encryptedNameIV',encryptedNameIV);
+    fd.append('encryptedMimeType',encryptedMimeType);
+    fd.append('encryptedMimeTypeIV',encryptedMimeTypeIV);
+    fd.append('file',new Blob([ciphertext],{type:'application/octet-stream'}),'encrypted.bin');
+
+    const xhr=new XMLHttpRequest();
+    xhr.upload.onprogress=e=>{if(e.lengthComputable){const p=Math.round(e.loaded/e.total*100);pf.style.width=p+'%';pp.textContent=p+'%';}};
+    xhr.onload=async()=>{
+      busy=false;
+      if(xhr.status===201){
+        let data={};try{data=JSON.parse(xhr.responseText);}catch{}
+        const file=data.file;
+        if(file?._id)encKeyCache.set(file._id,await exportKeyB64url(key));
+        pf.style.width='100%';pp.textContent='100%';
+        const isLast=queue.length===0;
+        if(isLast){pf.classList.add('success');pp.textContent='✓ Done';ptr.classList.add('pop');}
+        setTimeout(()=>{pw.classList.remove('show');uzone.classList.remove('busy');pf.classList.remove('success');ptr.classList.remove('pop');loadFiles();proc();},isLast?1000:750);
+        toast(`${f.name} encrypted & uploaded 🔒`,'success');
+        celebrateIfFirstTime('cv-first-upload',uzone);
+        if(file)openEncryptedRevealModal(file);
+      }else{
+        let m='Upload failed';try{m=JSON.parse(xhr.responseText).message||m;}catch{}
+        toast(m,'error');pw.classList.remove('show');uzone.classList.remove('busy');proc();
+      }
+    };
+    xhr.onerror=()=>{busy=false;toast('Server unreachable','error');pw.classList.remove('show');uzone.classList.remove('busy');proc();};
+    xhr.open('POST',`${API}/upload`);xhr.send(fd);
+  }catch(err){
+    busy=false;
+    toast('Encryption failed: '+(err.message||'unknown error'),'error');
+    pw.classList.remove('show');uzone.classList.remove('busy');proc();
+  }
+}
+// Shown right after an encrypted upload finishes — reuses the same
+// "now private" reveal modal, but the copyable link MUST include the key
+// (see copyPrivLink below), since a token alone can't decrypt anything.
+function openEncryptedRevealModal(file){
+  privRevealCtx={id:file._id,type:'file',encrypted:true};
+  document.getElementById('prm-title').textContent='Encrypted & Uploaded 🔒🔑';
+  document.getElementById('prm-sub').textContent="This file is end-to-end encrypted — save the link below now. If it's lost, the file can't be recovered — we have no way to reset it.";
+  document.getElementById('prm-token').textContent=file.shareToken||'';
+  document.getElementById('prm-expiry-status').textContent='Never';
+  document.getElementById('privRevealModal').classList.add('open');
+  copyPrivLink(); // auto-copy the full link (token + key) immediately, same convenience as the plain-private flow
 }
 
 // ── Add Link ─────────────────────────────────────────────────────────────────
@@ -637,6 +800,7 @@ function openTokenModal(data,kind){
   const hd=document.getElementById('tmodalHead');
   const bd=document.getElementById('tmodalBody');
   const ft=document.getElementById('tmodalFoot');
+  if(kind==='file'&&data.encrypted){openEncryptedTokenModal(data);return;}
   if(kind==='file'){
     const f=data;
     const t=tc(f.fileType);
@@ -680,6 +844,115 @@ function openTokenModal(data,kind){
   }
   document.getElementById('tokenModal').classList.add('open');
 }
+
+// ── Encrypted file: token-modal flow ────────────────────────────────────
+// Distinct from the normal token modal above because an encrypted file needs
+// a DECRYPTION KEY, not just the token, before anything about it (even its
+// real name) can be shown. The key comes from the URL fragment on a full
+// share link, or from this tab's session cache if it was just encrypted here.
+async function openEncryptedTokenModal(f){
+  tokenModalFile=f;
+  const hd=document.getElementById('tmodalHead'),bd=document.getElementById('tmodalBody'),ft=document.getElementById('tmodalFoot');
+  const lockIco=`<div class="tmodal-ico" style="background:var(--surf2)"><svg viewBox="0 0 24 24" fill="none" stroke="var(--t2)" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0110 0v4"/></svg></div>`;
+  // pendingDecryptKey is single-shot: it represents the key from THIS page
+  // load's URL fragment (if any), meant for the one file that link points
+  // to. Consume it here so it's never mistakenly retried against a
+  // different encrypted file opened later in the same session — the
+  // per-file encKeyCache is what handles repeat opens correctly.
+  const key=pendingDecryptKey||encKeyCache.get(f._id)||null;
+  pendingDecryptKey=null;
+
+  if(key){
+    try{
+      await renderUnlockedEncryptedModal(f,key);
+      encKeyCache.set(f._id,key); // cache it so reopening this file later in the session doesn't need the URL fragment again
+      document.getElementById('tokenModal').classList.add('open');
+      return;
+    }
+    catch{ /* fall through to the manual-key prompt below — key was wrong/stale */ }
+  }
+
+  hd.innerHTML=`${lockIco}<div class="tmodal-head-info"><div class="tmodal-title">🔒 Encrypted File</div><div class="tmodal-sub">End-to-end encrypted<span class="vis-badge vis-priv">Private</span></div></div>`;
+  bd.innerHTML=`<div class="enc-unlock"><p>This file is end-to-end encrypted — its name and contents are unreadable without the decryption key from its share link.</p><input id="encKeyInput" type="text" placeholder="Paste decryption key…" autocomplete="off" spellcheck="false" onkeydown="if(event.key==='Enter')unlockEncryptedFile('${f._id}')"/></div>`;
+  ft.innerHTML=`<button class="tmod-act tmod-dl" title="Unlock" onclick="unlockEncryptedFile('${f._id}')"><svg viewBox="0 0 24 24"><rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0110 0v4"/></svg></button><button class="tmod-act" title="Manage Sharing" onclick="openSharePanel('file')"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"/><path d="M12 1v6m0 10v6M4.22 4.22l4.24 4.24m7.08 7.08l4.24 4.24M1 12h6m10 0h6M4.22 19.78l4.24-4.24m7.08-7.08l4.24-4.24"/></svg></button><button class="tmod-act tmod-del" title="Delete File" onclick="delFileFromModal('${f._id}')"><svg viewBox="0 0 24 24"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 01-2 2H8a2 2 0 01-2-2L5 6"/></svg></button>`;
+  document.getElementById('tokenModal').classList.add('open');
+  setTimeout(()=>document.getElementById('encKeyInput')?.focus(),60);
+}
+async function unlockEncryptedFile(id){
+  const input=document.getElementById('encKeyInput');
+  const keyStr=input?.value.trim();
+  if(!keyStr)return toast('Paste the decryption key first','error');
+  const f=tokenModalFile;
+  if(!f||f._id!==id)return;
+  try{
+    await renderUnlockedEncryptedModal(f,keyStr);
+    encKeyCache.set(f._id,keyStr);
+  }catch{
+    toast("That key doesn't decrypt this file — check you copied it in full",'error');
+  }
+}
+// Throws if the key is wrong — GCM's built-in authentication check IS the
+// verification step here, no separate check is needed.
+async function renderUnlockedEncryptedModal(f,keyStr){
+  const key=await importKeyB64url(keyStr);
+  const realName=await decryptString(key,f.encryptedName,f.encryptedNameIV);
+  const realType=await decryptString(key,f.encryptedMimeType,f.encryptedMimeTypeIV);
+  f._decKeyStr=keyStr;f._realName=realName;f._realType=realType; // stashed for download/preview below
+
+  const hd=document.getElementById('tmodalHead'),bd=document.getElementById('tmodalBody'),ft=document.getElementById('tmodalFoot');
+  const t=tc(realType),label=tl(realType);
+  const canP=isImg(realType)||isVid(realType)||isPdf(realType);
+  const bgMap={img:'var(--blus)',vid:'rgba(0,0,0,.07)',pdf:'var(--reds)',zip:'var(--ylws)',doc:'var(--cyns)',sheet:'var(--tels)',slide:'var(--orgs)',code:'var(--cods)',file:'var(--bg2)'};
+
+  hd.innerHTML=`<div class="tmodal-ico" style="background:${bgMap[t]||bgMap.file};font-size:20px">🔓</div><div class="tmodal-head-info"><div class="tmodal-title" title="${esc(realName)}">${esc(stripExt(realName))}</div><div class="tmodal-sub">${esc(label)} · Decrypted in your browser<span class="vis-badge vis-priv">🔒 E2E Encrypted</span></div></div>`;
+  bd.innerHTML=`<div class="prop-row"><span class="prop-key">Size</span><span class="prop-val">${fmtSz(f.fileSize)}</span></div><div class="prop-row"><span class="prop-key">Type</span><span class="prop-val">${typeHuman(realType)}</span></div><div class="prop-row"><span class="prop-key">Uploaded</span><span class="prop-val">${f.createdAt?new Date(f.createdAt).toLocaleString('en',{dateStyle:'medium',timeStyle:'short'}):'-'}</span></div><div style="margin-top:10px;font-size:12px;color:var(--t3)">🔒 Decrypted locally — the server never sees the plaintext.</div>`;
+  const previewBtn=canP?`<button class="tmod-act" title="Decrypt & Preview" onclick="decryptAndPreviewEnc('${f._id}')"><svg viewBox="0 0 24 24"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg></button>`:'';
+  ft.innerHTML=`<button class="tmod-act tmod-dl" title="Decrypt & Download" onclick="decryptAndDownloadEnc('${f._id}')"><svg viewBox="0 0 24 24"><polyline points="8 17 12 21 16 17"/><line x1="12" y1="12" x2="12" y2="21"/></svg></button>${previewBtn}<div class="tmod-sep"></div><button class="tmod-act" title="Manage Sharing" onclick="openSharePanel('file')"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"/><path d="M12 1v6m0 10v6M4.22 4.22l4.24 4.24m7.08 7.08l4.24 4.24M1 12h6m10 0h6M4.22 19.78l4.24-4.24m7.08-7.08l4.24-4.24"/></svg></button><button class="tmod-act tmod-del" title="Delete File" onclick="delFileFromModal('${f._id}')"><svg viewBox="0 0 24 24"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 01-2 2H8a2 2 0 01-2-2L5 6"/></svg></button>`;
+}
+// Fetches the raw ciphertext from the normal /download endpoint (it's just
+// bytes to the server — it doesn't know or care they're encrypted), decrypts
+// in-browser, then saves a Blob with the REAL filename/type restored.
+async function decryptAndDownloadEnc(id){
+  const f=tokenModalFile;
+  if(!f||f._id!==id||!f._decKeyStr)return;
+  toast('Decrypting…','info');
+  try{
+    const key=await importKeyB64url(f._decKeyStr);
+    const res=await fetch(`${API}/${id}/download`);
+    if(!res.ok)throw new Error();
+    const cipherBuf=await res.arrayBuffer();
+    const plainBuf=await decryptBuffer(key,cipherBuf,f.encryptionIV);
+    const blob=new Blob([plainBuf],{type:f._realType||'application/octet-stream'});
+    const url=URL.createObjectURL(blob);
+    const a=document.createElement('a');a.href=url;a.download=f._realName||'decrypted-file';
+    document.body.appendChild(a);a.click();document.body.removeChild(a);
+    setTimeout(()=>URL.revokeObjectURL(url),10000);
+    toast(`${f._realName} decrypted & downloaded 🔓`,'success');
+  }catch{toast('Decryption failed — the key or file data may be corrupted','error');}
+}
+async function decryptAndPreviewEnc(id){
+  const f=tokenModalFile;
+  if(!f||f._id!==id||!f._decKeyStr)return;
+  toast('Decrypting…','info');
+  try{
+    const key=await importKeyB64url(f._decKeyStr);
+    const res=await fetch(`${API}/${id}/download`);
+    if(!res.ok)throw new Error();
+    const cipherBuf=await res.arrayBuffer();
+    const plainBuf=await decryptBuffer(key,cipherBuf,f.encryptionIV);
+    const blob=new Blob([plainBuf],{type:f._realType||'application/octet-stream'});
+    const url=URL.createObjectURL(blob);
+    if(isPdf(f._realType)){window.open(url,'_blank');return;}
+    const img=document.getElementById('lbImg'),vid=document.getElementById('lbVid'),info=document.getElementById('lbInfo');
+    img.style.display='none';vid.style.display='none';img.src='';vid.src='';
+    if(isImg(f._realType)){img.src=url;img.style.display='block';}
+    else if(isVid(f._realType)){vid.src=url;vid.style.display='block';}
+    else{URL.revokeObjectURL(url);return;}
+    info.textContent=`${stripExt(f._realName)} · ${tl(f._realType)} · ${fmtSz(f.fileSize)} · 🔓 Decrypted locally`;
+    document.getElementById('lb').classList.add('open');document.body.style.overflow='hidden';
+  }catch{toast('Decryption failed — the key or file data may be corrupted','error');}
+}
+
 // Opens the same reveal-style panel used right after going private, but on-demand —
 // reads from tokenModalFile/tokenModalFolder (already populated by openTokenModal),
 // so it always reflects the CURRENT token + expiry, not a stale snapshot.
@@ -697,9 +970,11 @@ function openSharePanel(type){
   // (double backdrop, confusing to dismiss). `item` is already captured above.
   document.getElementById('tokenModal').classList.remove('open');
   tokenModalFile=null;tokenModalFolder=null;
-  privRevealCtx={id:item._id,type};
-  document.getElementById('prm-title').textContent=type==='folder'?'Manage Folder Sharing':'Manage File Sharing';
-  document.getElementById('prm-sub').textContent="Update this token\'s expiry, or share it again";
+  privRevealCtx={id:item._id,type,encrypted:type==='file'&&!!item.encrypted};
+  document.getElementById('prm-title').textContent=type==='folder'?'Manage Folder Sharing':(item.encrypted?'Manage Encrypted File Sharing 🔒':'Manage File Sharing');
+  document.getElementById('prm-sub').textContent=item.encrypted
+    ?"Regenerating the token keeps the same key — use \"Copy shareable link\" again below to get the updated link"
+    :"Update this token\'s expiry, or share it again";
   document.getElementById('prm-token').textContent=item.shareToken||'';
   document.getElementById('prm-expiry-status').textContent=fmtExpiryStatus(item.tokenExpiresAt);
   document.getElementById('privRevealModal').classList.add('open');
@@ -1039,7 +1314,17 @@ async function regenPrivToken(){
 function copyPrivLink(){
   const token=document.getElementById('prm-token').textContent;
   if(!token)return;
-  const link=`${window.location.origin}${window.location.pathname}?token=${token}`;
+  let link=`${window.location.origin}${window.location.pathname}?token=${token}`;
+  if(privRevealCtx.encrypted){
+    // The key never touched the server, so it only exists in THIS tab's
+    // in-memory cache (set at encrypt-upload time) — if that's gone (e.g.
+    // the page was refreshed since), we genuinely cannot rebuild the link.
+    const key=encKeyCache.get(privRevealCtx.id);
+    if(!key){toast("Decryption key isn't available in this session — use the link you saved when you encrypted this file",'error');return;}
+    link+=`#key=${key}`;
+    navigator.clipboard.writeText(link).then(()=>toast('Encrypted link copied 🔒 — this is the ONLY way to open this file','success')).catch(()=>toast('Link: '+link,'info'));
+    return;
+  }
   navigator.clipboard.writeText(link).then(()=>toast('Link copied ✓ — opening it auto-fills the token','success')).catch(()=>toast('Link: '+link,'info'));
 }
 async function toggleFolderVis(id,currentVis){
@@ -1068,7 +1353,7 @@ async function toggleFolderVis(id,currentVis){
 // ── Private file / folder management (called from token modal) ───────────
 // Delete a private file — uses existing delModal for confirmation UX
 function delFileFromModal(id){
-  const name=tokenModalFile?.originalName||'This file';
+  const name=tokenModalFile?._realName||tokenModalFile?.originalName||'This file';
   closeTokenModal(); // clears both tokenModalFile and tokenModalFolder
   setTimeout(()=>delFile(id,name),150);
 }
@@ -1127,7 +1412,15 @@ loadFiles();
 // Generated by "Copy shareable link" in the private-reveal popup — same token
 // system underneath, just a convenience so the recipient doesn't have to
 // manually copy-paste the raw token into the input box.
+//
+// #key=XXXX (only present on encrypted-file links) is read here too, into
+// pendingDecryptKey, BEFORE the token lookup fires — openEncryptedTokenModal
+// checks that variable so an encrypted link unlocks immediately instead of
+// prompting the recipient to paste the key by hand. Fragments are never sent
+// to the server, so this read is purely local to the browser.
 (function(){
+  const hashKey=new URLSearchParams(window.location.hash.slice(1)).get('key');
+  if(hashKey)pendingDecryptKey=hashKey;
   const t=new URLSearchParams(window.location.search).get('token');
   if(!t)return;
   const input=document.getElementById('tInput');

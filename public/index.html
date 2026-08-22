@@ -2,20 +2,20 @@
 <html lang="en" data-theme="light">
 <head>
 <meta charset="UTF-8"/><meta name="viewport" content="width=device-width,initial-scale=1"/>
-<title>Cryptex — Private File Sharing</title>
-<meta name="description" content="Token-based private file sharing. Upload, mark private, get a token — no accounts, no sign-up."/>
+<title>Cryptex — End-to-End Encrypted File Sharing</title>
+<meta name="description" content="Files are encrypted in your browser before upload — the key never touches our server. Zero-knowledge, token-based sharing. No accounts, no sign-up."/>
 <link rel="icon" type="image/svg+xml" href="/favicon.svg"/>
 <link rel="alternate icon" href="/favicon.ico"/>
 <link rel="apple-touch-icon" href="/apple-touch-icon.png"/>
 <!-- Open Graph / social preview — update the og:url / og:image domain if this ever moves off Render -->
 <meta property="og:type" content="website"/>
-<meta property="og:title" content="Cryptex — Private File Sharing"/>
-<meta property="og:description" content="Token-based private file sharing. Upload, mark private, get a token — no accounts, no sign-up."/>
+<meta property="og:title" content="Cryptex — End-to-End Encrypted File Sharing"/>
+<meta property="og:description" content="Files are encrypted in your browser before upload — the key never touches our server. Zero-knowledge, token-based sharing."/>
 <meta property="og:image" content="https://cryptex-file-sharing.onrender.com/og-image.png"/>
 <meta property="og:url" content="https://cryptex-file-sharing.onrender.com/"/>
 <meta name="twitter:card" content="summary_large_image"/>
-<meta name="twitter:title" content="Cryptex — Private File Sharing"/>
-<meta name="twitter:description" content="Token-based private file sharing. Upload, mark private, get a token — no accounts, no sign-up."/>
+<meta name="twitter:title" content="Cryptex — End-to-End Encrypted File Sharing"/>
+<meta name="twitter:description" content="Files are encrypted in your browser before upload — the key never touches our server. Zero-knowledge, token-based sharing."/>
 <meta name="twitter:image" content="https://cryptex-file-sharing.onrender.com/og-image.png"/>
 <script>
 // Override the default theme before first paint if the user has a saved
@@ -39,6 +39,7 @@
   <div class="nav-links">
     <button class="nav-link active" id="nl-home" onclick="navTo('home')">Home</button>
     <button class="nav-link" id="nl-features" onclick="navTo('features')">Features</button>
+    <button class="nav-link" id="nl-encryption" onclick="navTo('encryption')">Encryption</button>
     <button class="nav-link" id="nl-about" onclick="navTo('about')">About</button>
   </div>
   <div class="nav-right">
@@ -53,6 +54,7 @@
 <div class="mob-menu" id="mobMenu">
   <button class="nav-link" onclick="navTo('home');closeMob()">🏠 Home</button>
   <button class="nav-link" onclick="navTo('features');closeMob()">✨ Features</button>
+  <button class="nav-link" onclick="navTo('encryption');closeMob()">🔐 Encryption</button>
   <button class="nav-link" onclick="navTo('about');closeMob()">ℹ️ About</button>
   <a class="nav-link" href="/app">🔓 Open Vault</a>
 </div>
@@ -62,12 +64,15 @@
 <div style="max-width:1100px;margin:0 auto;padding:64px 20px 90px">
   <div class="hero">
     <div class="hero-copy">
-      <div class="eyebrow">🔐 Token-Based File Sharing · No Sign-up</div>
-      <h1><span id="heroLine1">Share privately.</span><br><span id="heroLine2" class="hgrad">Access by token.</span></h1>
-      <p>Upload a file, flip it private, get a token. Share the token — that's the whole system.</p>
+      <div class="eyebrow">🔐 End-to-End Encrypted · Zero-Knowledge</div>
+      <h1><span id="heroLine1">Encrypted end-to-end.</span><br><span id="heroLine2" class="hgrad">Not even we can see it.</span></h1>
+      <p>Files are encrypted in your browser before they're ever uploaded — the key never touches our server. Pair that with token-based access, and privacy stops being a policy promise and starts being math.</p>
       <div class="hero-cta">
         <a class="btn-pick" href="/app"><svg viewBox="0 0 24 24"><path d="M5 12h14M12 5l7 7-7 7"/></svg>Open Vault</a>
-        <a class="btn-ghost" href="#features">See how it works</a>
+        <a class="btn-ghost" href="#encryption">How the encryption works</a>
+      </div>
+      <div class="hero-trust">
+        <span>🔒 AES-256-GCM</span><span>🔑 Key never leaves your browser</span><span>🕶️ Zero-knowledge</span>
       </div>
     </div>
     <div class="hero-illo" aria-hidden="true">
@@ -153,12 +158,46 @@
   <h2 class="sec-title reveal">Token-based sharing.<br>Zero accounts needed.</h2>
   <p class="sec-sub reveal">Cryptex is built around one idea — private files stay private until you share them with a token.</p>
   <div class="feat-grid">
-    <div class="feat-card reveal"><div class="feat-ico" style="background:var(--accs)"><svg viewBox="0 0 24 24" style="stroke:var(--acc)"><path d="M10 13a5 5 0 007.54.54l3-3a5 5 0 00-7.07-7.07l-1.72 1.71"/><path d="M14 11a5 5 0 00-7.54-.54l-3 3a5 5 0 007.07 7.07l1.71-1.71"/></svg></div><h3>Token-Based Access</h3><p>Every file and folder gets a unique 16-character token. Paste it to instantly access — no login, no friction.</p></div>
-    <div class="feat-card reveal"><div class="feat-ico" style="background:var(--blus)"><svg viewBox="0 0 24 24" style="stroke:var(--blu)"><rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0110 0v4"/></svg></div><h3>Private by Default</h3><p>Mark any file or folder private — it vanishes from the gallery instantly. Only a token brings it back.</p></div>
-    <div class="feat-card reveal"><div class="feat-ico" style="background:var(--grns)"><svg viewBox="0 0 24 24" style="stroke:var(--grn)"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg></div><h3>Powered by Supabase</h3><p>Files stored in Supabase Storage — globally distributed, CDN-backed, and secured.</p></div>
-    <div class="feat-card reveal"><div class="feat-ico" style="background:var(--ylws)"><svg viewBox="0 0 24 24" style="stroke:var(--ylw)"><path d="M17 21v-2a4 4 0 00-4-4H5a4 4 0 00-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 00-3-3.87"/><path d="M16 3.13a4 4 0 010 7.75"/></svg></div><h3>Anonymous Sharing</h3><p>No sign-up for you or the recipient. Send a token over any channel and they're instantly in.</p></div>
+    <div class="feat-card feat-hl reveal"><span class="feat-badge">Zero-Knowledge</span><div class="feat-ico" style="background:var(--accs)"><svg viewBox="0 0 24 24" style="stroke:var(--acc)"><rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0110 0v4"/></svg></div><h3>End-to-End Encryption</h3><p>Encrypted in your browser with AES-256-GCM before it's ever uploaded. The key lives only in your share link — we never see it, so we can't read the file either.</p></div>
+    <div class="feat-card reveal"><div class="feat-ico" style="background:var(--blus)"><svg viewBox="0 0 24 24" style="stroke:var(--blu)"><path d="M10 13a5 5 0 007.54.54l3-3a5 5 0 00-7.07-7.07l-1.72 1.71"/><path d="M14 11a5 5 0 00-7.54-.54l-3 3a5 5 0 007.07 7.07l1.71-1.71"/></svg></div><h3>Token-Based Access</h3><p>Every file and folder gets a unique 16-character token. Paste it to instantly access — no login, no friction.</p></div>
+    <div class="feat-card reveal"><div class="feat-ico" style="background:var(--grns)"><svg viewBox="0 0 24 24" style="stroke:var(--grn)"><rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0110 0v4"/></svg></div><h3>Private by Default</h3><p>Mark any file or folder private — it vanishes from the gallery instantly. Only a token brings it back.</p></div>
+    <div class="feat-card reveal"><div class="feat-ico" style="background:var(--ylws)"><svg viewBox="0 0 24 24" style="stroke:var(--ylw)"><path d="M17 21v-2a4 4 0 00-4-4H5a4 4 0 00-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 00-3-3.87"/><path d="M16 3.13a4 4 0 010 7.75"/></svg></div><h3>Anonymous Sharing</h3><p>No sign-up for you or the recipient. Send a token (and key, if encrypted) over any channel and they're instantly in.</p></div>
     <div class="feat-card reveal"><div class="feat-ico" style="background:var(--cyns)"><svg viewBox="0 0 24 24" style="stroke:var(--cyn)"><path d="M22 19a2 2 0 01-2 2H4a2 2 0 01-2-2V5a2 2 0 012-2h5l2 3h9a2 2 0 012 2z"/></svg></div><h3>Folder Collections</h3><p>Group files into folders and share entire collections with a single token. Private folders hide all files automatically.</p></div>
     <div class="feat-card reveal"><div class="feat-ico" style="background:var(--reds)"><svg viewBox="0 0 24 24" style="stroke:var(--red)"><path d="M21 12.79A9 9 0 1111.21 3 7 7 0 0021 12.79z"/></svg></div><h3>Dark Mode</h3><p>A polished dark mode that follows your system preference — or toggle it manually any time.</p></div>
+  </div>
+</div>
+</section>
+<!-- ENCRYPTION — how the zero-knowledge flow actually works -->
+<section id="encryption">
+<div class="sec-wrap">
+  <div class="sec-eyebrow reveal">Our main focus</div>
+  <h2 class="sec-title reveal">How the encryption<br>actually works.</h2>
+  <p class="sec-sub reveal">No marketing claim here — this is the literal data flow. Toggle "End-to-end encrypt" on any upload and this is what happens, entirely inside your browser.</p>
+  <div class="enc-steps">
+    <div class="enc-step reveal">
+      <div class="enc-step-num">1</div>
+      <h3>Encrypt in your browser</h3>
+      <p>The Web Crypto API generates a random AES-256-GCM key and encrypts your file — content, filename, and file type — before a single byte leaves your device.</p>
+    </div>
+    <div class="enc-step-arrow" aria-hidden="true">→</div>
+    <div class="enc-step reveal">
+      <div class="enc-step-num">2</div>
+      <h3>Upload ciphertext only</h3>
+      <p>What reaches our server is opaque ciphertext with a generic type. There's no plaintext left to inspect — even our own upload validation is skipped for this reason.</p>
+    </div>
+    <div class="enc-step-arrow" aria-hidden="true">→</div>
+    <div class="enc-step reveal">
+      <div class="enc-step-num">3</div>
+      <h3>Key travels in the link, not the request</h3>
+      <p>Your share link looks like <code>…?token=xxxx#key=yyyy</code>. Browsers never send the <code>#</code> fragment in an HTTP request — so the key reaches whoever you send the link to, and nowhere else.</p>
+    </div>
+  </div>
+  <div class="enc-callout reveal">
+    <div class="enc-callout-ico">🔒</div>
+    <div>
+      <h4>This server is structurally unable to decrypt your files</h4>
+      <p>Not "won't" — <em>can't</em>. The key never appears in any request, log, or database row we control. The honest trade-off: if you lose the link, the file is gone for good. There's no reset button, because there's nothing on our end left to reset.</p>
+    </div>
   </div>
 </div>
 </section>
@@ -170,7 +209,7 @@
     <h2 class="sec-title reveal">Anonymous sharing.<br>Token-secured.</h2>
     <p class="sec-sub reveal" style="margin-bottom:0">A token-based file sharing system built on Node.js + Supabase. Upload privately, share selectively — no accounts, no tracking.</p>
     <div class="tech-stack reveal">
-      <span class="tech-tag">Node.js</span><span class="tech-tag">Express 5</span><span class="tech-tag">MongoDB</span><span class="tech-tag">Mongoose</span><span class="tech-tag">Supabase</span><span class="tech-tag">Multer</span><span class="tech-tag">Vanilla JS</span>
+      <span class="tech-tag">Node.js</span><span class="tech-tag">Express 5</span><span class="tech-tag">MongoDB</span><span class="tech-tag">Mongoose</span><span class="tech-tag">Supabase</span><span class="tech-tag">Multer</span><span class="tech-tag tech-tag-hl">Web Crypto API</span><span class="tech-tag tech-tag-hl">AES-256-GCM</span><span class="tech-tag">Vanilla JS</span>
     </div>
   </div>
   <div class="roadmap">
@@ -182,6 +221,7 @@
       <div class="rm-item reveal"><div class="rm-dot rm-done">✓</div><div><h4>Folder Collections with Tokens</h4><p>Group files, share entire folders with a single token</p></div></div>
       <div class="rm-item reveal"><div class="rm-dot rm-done">✓</div><div><h4>Expiring Tokens</h4><p>Time-limited access — set a token to auto-expire in 1h, 24h, or 7d</p></div></div>
       <div class="rm-item reveal"><div class="rm-dot rm-done">✓</div><div><h4>Token Regeneration & Folder ZIP Downloads</h4><p>Rotate a leaked token instantly; download an entire folder in one click</p></div></div>
+      <div class="rm-item reveal"><div class="rm-dot rm-done">✓</div><div><h4>End-to-End Encryption (AES-256-GCM)</h4><p>Client-side encryption via the Web Crypto API — content, filename, and type are unreadable without a key that never touches the server</p></div></div>
       <div class="rm-item reveal"><div class="rm-dot rm-soon">→</div><div><h4>Bulk Actions</h4><p>Select multiple files at once for batch download, delete, or move</p></div></div>
       <div class="rm-item reveal"><div class="rm-dot rm-future">○</div><div><h4>User Vaults</h4><p>Authentication so each user manages their own private vault</p></div></div>
     </div>
@@ -194,7 +234,7 @@
       <div class="lmark"><svg viewBox="0 0 28 28" fill="none"><path d="M14 3L25 10.5L22 25H6L3 10.5L14 3Z" fill="rgba(255,255,255,0.93)"/></svg></div>
       <span class="lname">Crypt<span>ex</span></span>
     </a>
-    <span class="foot-copy">Powered by Supabase · Anonymous · No sign-up</span>
+    <span class="foot-copy">🔒 End-to-End Encrypted · Anonymous · No sign-up</span>
   </div>
 </footer>
 <script src="/js/shared.js"></script>

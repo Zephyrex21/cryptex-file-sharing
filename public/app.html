@@ -73,6 +73,10 @@
     <p class="usub">Images, videos, PDFs, ZIP, docs — multiple files at once</p>
     <button class="btn-pick" id="pickBtn"><svg viewBox="0 0 24 24"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>Choose Files</button>
     <p class="uhint">Images · Videos · PDFs · ZIP · Docs — up to 50MB per file</p>
+    <label class="enc-toggle-wrap" onclick="event.stopPropagation()" title="Encrypted in your browser before it ever leaves your device — we never see the key, filename, or contents">
+      <span class="enc-toggle"><input type="checkbox" id="encToggle"/><span class="enc-toggle-track"><span class="enc-toggle-thumb"></span></span></span>
+      <span class="enc-toggle-lbl">🔒 End-to-end encrypt this upload</span>
+    </label>
     <div class="prog" id="prog"><span class="prog-name" id="pName">Uploading…</span><div class="prog-track"><div class="prog-fill" id="pFill"></div></div><span class="prog-pct" id="pPct">0%</span></div>
   </div>
 

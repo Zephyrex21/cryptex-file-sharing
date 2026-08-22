@@ -30,6 +30,30 @@ const fileSchema = new mongoose.Schema(
     fileSize:    { type: Number },
     storageType: { type: String, default: "supabase" },
 
+    // ── End-to-end encryption ────────────────────────────────────────────────
+    // Zero-knowledge design: everything stored below is CIPHERTEXT. The AES key
+    // itself is generated in the browser, never leaves it except inside a URL
+    // *fragment* (#key=...), which browsers never transmit in HTTP requests —
+    // so it never reaches this server, Supabase, or any log. If a user loses
+    // the link, the file is permanently unrecoverable; there is no reset path,
+    // by design. See controllers/fileUpload.js for the upload-time contract.
+    encrypted: { type: Boolean, default: false },
+
+    // Base64 12-byte GCM IV used for the file *content*. Required if encrypted.
+    encryptionIV: { type: String, default: null },
+
+    // originalName/fileType above are set to harmless placeholders for
+    // encrypted files (see controller). The real name/MIME type only exist
+    // here, as AES-GCM ciphertext — each with its OWN IV. This is not
+    // optional: reusing an IV across two different plaintexts under the same
+    // GCM key breaks the algorithm's authentication guarantee entirely (it
+    // leaks enough to forge ciphertexts), so content, name, and MIME type
+    // each get a fresh, independent 12-byte IV.
+    encryptedName:       { type: String, default: null },
+    encryptedNameIV:     { type: String, default: null },
+    encryptedMimeType:   { type: String, default: null },
+    encryptedMimeTypeIV: { type: String, default: null },
+
     // ── Sharing ─────────────────────────────────────────────────────────────
     // sparse: true → unique index ignores existing docs where token is null/undefined
     shareToken: {

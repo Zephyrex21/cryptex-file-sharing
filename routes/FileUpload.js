@@ -86,6 +86,13 @@ const upload = multer({
   fileFilter: (req, file, cb) => {
     if (ALLOWED.includes(file.mimetype)) return cb(null, true);
     if (CODE_EXTENSIONS.includes(path.extname(file.originalname).toLowerCase())) return cb(null, true);
+    // Client-side-encrypted uploads arrive as opaque ciphertext, always typed
+    // application/octet-stream — there's no real MIME type to check here by
+    // definition. We let it through at this layer and push the real
+    // validation (encryption metadata must actually be present and complete)
+    // into the controller, where req.body is guaranteed fully parsed. This
+    // avoids relying on multipart field ordering inside fileFilter itself.
+    if (file.mimetype === "application/octet-stream") return cb(null, true);
     cb(new Error(`"${file.mimetype}" is not supported`));
   },
 });

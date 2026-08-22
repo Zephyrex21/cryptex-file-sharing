@@ -242,6 +242,12 @@ export const removeFileFromFolder = async (req, res) => {
 // Streams every (non-private) file in the folder as a single .zip — no temp
 // files written to disk, everything is piped straight through. Same access
 // rule as opening the folder: private folders need their token.
+//
+// Encrypted files are always visibility:"private" (see uploadFile in
+// fileUpload.js), so the populate match below excludes them from every
+// folder listing automatically — they're never silently bundled into a zip
+// with ciphertext and no key. Bulk sharing of encrypted files would need a
+// folder-level key exchange, which is a deliberately separate future feature.
 export const downloadFolderZip = async (req, res) => {
   try {
     const folder = await Folder.findById(req.params.id).populate({
