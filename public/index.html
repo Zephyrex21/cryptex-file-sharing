@@ -85,27 +85,52 @@
           <filter id="illoShadow" x="-40%" y="-40%" width="180%" height="180%">
             <feDropShadow dx="0" dy="14" stdDeviation="16" flood-color="#000" flood-opacity="0.16"/>
           </filter>
+          <filter id="illoShadowSm" x="-80%" y="-80%" width="260%" height="260%">
+            <feDropShadow dx="0" dy="4" stdDeviation="5" flood-color="#000" flood-opacity="0.18"/>
+          </filter>
+          <clipPath id="illoShieldClip"><rect x="180" y="145" width="100" height="100" rx="28"/></clipPath>
+          <pattern id="illoDots" width="26" height="26" patternUnits="userSpaceOnUse">
+            <circle cx="2" cy="2" r="1.3" style="fill:var(--t3)"/>
+          </pattern>
         </defs>
+
+        <!-- faint dot-grid texture — pure atmosphere, sits behind everything -->
+        <rect x="0" y="0" width="460" height="390" fill="url(#illoDots)" opacity="0.3"/>
 
         <!-- ambient glow — breathes gently, intensity/base adjusts per theme -->
         <circle class="illo-glow" cx="230" cy="195" r="175" fill="url(#illoGrad)"/>
 
-        <!-- slow-spinning dashed ring — pure atmosphere, spins opposite to the orbit dots -->
+        <!-- two dashed rings, counter-rotating at different speeds — layered "gears" depth -->
         <circle class="illo-ring" cx="230" cy="195" r="148" fill="none" stroke="url(#illoGrad)" stroke-width="1.4" stroke-dasharray="1 11" opacity="0.45"/>
+        <circle class="illo-ring illo-ring-2" cx="230" cy="195" r="96" fill="none" stroke="url(#illoGrad)" stroke-width="1.2" stroke-dasharray="1 8" opacity="0.3"/>
 
-        <!-- 3 orbiting particles, traveling together around the shield -->
+        <!-- outer orbit: 3 particles travelling together -->
         <g class="illo-orbit">
           <circle cx="230" cy="47" r="4.5" style="fill:url(#illoGrad)" opacity="0.7"/>
           <circle cx="358" cy="269" r="3.5" style="fill:url(#illoGrad)" opacity="0.5"/>
           <circle cx="102" cy="269" r="3" style="fill:url(#illoGrad)" opacity="0.35"/>
         </g>
+        <!-- inner orbit: 2 more particles, opposite direction, faster -->
+        <g class="illo-orbit illo-orbit-2">
+          <circle cx="297" cy="262" r="3" style="fill:url(#illoGrad)" opacity="0.55"/>
+          <circle cx="163" cy="128" r="2.5" style="fill:url(#illoGrad)" opacity="0.4"/>
+        </g>
+
+        <!-- twinkling sparks around the shield -->
+        <g style="fill:url(#illoGrad)">
+          <path class="illo-spark illo-spark-a" d="M196 128l1.6 4.4 4.4 1.6-4.4 1.6-1.6 4.4-1.6-4.4-4.4-1.6 4.4-1.6z"/>
+          <path class="illo-spark illo-spark-b" d="M300 172l1.3 3.7 3.7 1.3-3.7 1.3-1.3 3.7-1.3-3.7-3.7-1.3 3.7-1.3z"/>
+          <path class="illo-spark illo-spark-c" d="M262 258l1.3 3.7 3.7 1.3-3.7 1.3-1.3 3.7-1.3-3.7-3.7-1.3 3.7-1.3z"/>
+        </g>
 
         <!-- faint hex/binary fragments scattered for atmosphere — barely moves with parallax, reads as background depth -->
         <g class="illo-layer illo-ghost" style="font-family:var(--font-mono);font-weight:700;fill:var(--t3)">
-          <text class="illo-hex illo-hex-a" x="42" y="78" font-size="13">01</text>
-          <text class="illo-hex illo-hex-b" x="392" y="88" font-size="13">1F</text>
-          <text class="illo-hex illo-hex-c" x="48" y="336" font-size="13">A9</text>
-          <text class="illo-hex illo-hex-d" x="398" y="326" font-size="13">E2</text>
+          <text class="illo-hex illo-hex-a" x="34" y="70" font-size="13">01</text>
+          <text class="illo-hex illo-hex-b" x="388" y="80" font-size="12">1F</text>
+          <text class="illo-hex illo-hex-c" x="40" y="330" font-size="12">A9</text>
+          <text class="illo-hex illo-hex-d" x="402" y="340" font-size="13">E2</text>
+          <text class="illo-hex illo-hex-a" x="220" y="30" font-size="11" style="animation-delay:.8s">10</text>
+          <text class="illo-hex illo-hex-c" x="225" y="372" font-size="11" style="animation-delay:2s">FF</text>
         </g>
 
         <!-- flow connectors: plaintext flows in from the left, ciphertext flows out to the right -->
@@ -123,7 +148,7 @@
           </g>
         </g>
 
-        <!-- center: the encryption core — a shield badge with a lock, gently pulsing -->
+        <!-- center: the encryption core — a shield badge with a lock, gently pulsing, with a shine sweep -->
         <g class="illo-layer illo-mid illo-shield">
           <rect x="180" y="145" width="100" height="100" rx="28" style="fill:url(#illoGrad)" filter="url(#illoShadow)"/>
           <g transform="translate(205,170)">
@@ -131,6 +156,24 @@
             <rect x="0" y="22" width="50" height="38" rx="10" fill="rgba(255,255,255,0.95)"/>
             <circle cx="25" cy="40" r="5" style="fill:var(--acc)"/>
             <rect x="22" y="40" width="6" height="12" rx="3" style="fill:var(--acc)"/>
+          </g>
+          <g clip-path="url(#illoShieldClip)">
+            <rect class="illo-scan" x="-46" y="140" width="34" height="110" fill="rgba(255,255,255,0.4)" transform="skewX(-18)"/>
+          </g>
+        </g>
+
+        <!-- small floating accent badges — extra depth cues, independent of the main 3-card flow -->
+        <g class="illo-layer illo-chip illo-chip-a">
+          <circle cx="128" cy="238" r="15" style="fill:var(--grn)" filter="url(#illoShadowSm)"/>
+          <circle cx="128" cy="238" r="15" fill="none" stroke="var(--surf2)" stroke-width="2.5"/>
+          <path d="M121 238l4.5 4.5 9-9" fill="none" stroke="#fff" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/>
+        </g>
+        <g class="illo-layer illo-chip illo-chip-b">
+          <circle cx="332" cy="156" r="15" style="fill:url(#illoGrad)" filter="url(#illoShadowSm)"/>
+          <circle cx="332" cy="156" r="15" fill="none" stroke="var(--surf2)" stroke-width="2.5"/>
+          <g transform="translate(324,148)">
+            <circle cx="6" cy="6" r="4" fill="none" stroke="#fff" stroke-width="2"/>
+            <path d="M9 9l7 7m0 0h-4m4 0v-4" fill="none" stroke="#fff" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
           </g>
         </g>
 
@@ -253,7 +296,7 @@
           <svg style="width:15px;height:15px;flex-shrink:0;fill:currentColor" viewBox="0 0 24 24"><path d="M12 .5C5.73.5.5 5.74.5 12.02c0 5.03 3.29 9.29 7.86 10.8.57.1.78-.25.78-.55 0-.27-.01-1.17-.02-2.12-3.2.7-3.88-1.36-3.88-1.36-.52-1.34-1.28-1.7-1.28-1.7-1.05-.72.08-.7.08-.7 1.16.08 1.77 1.2 1.77 1.2 1.03 1.77 2.7 1.26 3.36.96.1-.75.4-1.26.73-1.55-2.55-.29-5.24-1.28-5.24-5.68 0-1.25.45-2.28 1.18-3.09-.12-.29-.51-1.46.11-3.04 0 0 .97-.31 3.18 1.18a11 11 0 015.8 0c2.2-1.49 3.17-1.18 3.17-1.18.63 1.58.24 2.75.12 3.04.73.81 1.18 1.84 1.18 3.09 0 4.41-2.7 5.38-5.26 5.67.42.36.78 1.07.78 2.16 0 1.56-.01 2.81-.01 3.19 0 .3.2.66.79.55C20.71 21.3 24 17.05 24 12.02 24 5.74 18.77.5 12.5.5h-.5z"/></svg>
           <span>View source</span>
         </a>
-        <span class="foot-credit">Built by <a href="https://github.com/Zephyrex21" target="_blank" rel="noopener noreferrer">Saurabh Raj Shekhar</a></span>
+        <span class="foot-credit">Built by <a href="https://github.com/Zephyrex21" target="_blank" rel="noopener noreferrer">Rayan</a></span>
       </div>
     </div>
   </div>
