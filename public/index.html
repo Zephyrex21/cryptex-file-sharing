@@ -76,7 +76,7 @@
       </div>
     </div>
     <div class="hero-illo" aria-hidden="true">
-      <svg viewBox="0 0 440 400" xmlns="http://www.w3.org/2000/svg">
+      <svg viewBox="0 0 460 390" xmlns="http://www.w3.org/2000/svg">
         <defs>
           <linearGradient id="illoGrad" x1="0%" y1="0%" x2="100%" y2="100%">
             <stop offset="0%" style="stop-color:var(--acc)"/>
@@ -85,69 +85,69 @@
           <filter id="illoShadow" x="-40%" y="-40%" width="180%" height="180%">
             <feDropShadow dx="0" dy="14" stdDeviation="16" flood-color="#000" flood-opacity="0.16"/>
           </filter>
-          <filter id="illoBlur" x="-60%" y="-60%" width="220%" height="220%">
-            <feGaussianBlur stdDeviation="3.5"/>
-          </filter>
         </defs>
 
-        <!-- ambient glow — intensity adjusts per theme via .illo-glow -->
-        <circle class="illo-glow" cx="220" cy="210" r="170" fill="url(#illoGrad)"/>
+        <!-- ambient glow — breathes gently, intensity/base adjusts per theme -->
+        <circle class="illo-glow" cx="230" cy="195" r="175" fill="url(#illoGrad)"/>
 
-        <!-- orbiting accent — traces a slow circle around the stack -->
+        <!-- slow-spinning dashed ring — pure atmosphere, spins opposite to the orbit dots -->
+        <circle class="illo-ring" cx="230" cy="195" r="148" fill="none" stroke="url(#illoGrad)" stroke-width="1.4" stroke-dasharray="1 11" opacity="0.45"/>
+
+        <!-- 3 orbiting particles, traveling together around the shield -->
         <g class="illo-orbit">
-          <circle cx="220" cy="38" r="3.5" style="fill:url(#illoGrad)" opacity="0.55"/>
+          <circle cx="230" cy="47" r="4.5" style="fill:url(#illoGrad)" opacity="0.7"/>
+          <circle cx="358" cy="269" r="3.5" style="fill:url(#illoGrad)" opacity="0.5"/>
+          <circle cx="102" cy="269" r="3" style="fill:url(#illoGrad)" opacity="0.35"/>
         </g>
 
-        <!-- faint cipher dots, echoes the page background texture -->
-        <g style="fill:var(--t3)" opacity="0.35">
-          <circle cx="60" cy="70" r="2"/><circle cx="380" cy="90" r="2"/>
-          <circle cx="50" cy="320" r="2"/><circle cx="400" cy="300" r="2"/>
-          <circle cx="400" cy="180" r="2"/>
+        <!-- faint hex/binary fragments scattered for atmosphere — barely moves with parallax, reads as background depth -->
+        <g class="illo-layer illo-ghost" style="font-family:var(--font-mono);font-weight:700;fill:var(--t3)">
+          <text class="illo-hex illo-hex-a" x="42" y="78" font-size="13">01</text>
+          <text class="illo-hex illo-hex-b" x="392" y="88" font-size="13">1F</text>
+          <text class="illo-hex illo-hex-c" x="48" y="336" font-size="13">A9</text>
+          <text class="illo-hex illo-hex-d" x="398" y="326" font-size="13">E2</text>
         </g>
 
-        <!-- ghost layer: a 4th, blurred card furthest back — pure depth cue -->
-        <g class="illo-layer illo-ghost" opacity="0.4" filter="url(#illoBlur)">
-          <rect x="78" y="102" width="148" height="108" rx="16" transform="rotate(-15 152 156)" style="fill:var(--bg2)"/>
-        </g>
+        <!-- flow connectors: plaintext flows in from the left, ciphertext flows out to the right -->
+        <path class="illo-flow" d="M144 197 C160 197 164 197 180 197"/>
+        <path class="illo-flow illo-flow-2" d="M282 197 C298 197 302 197 318 197"/>
 
-        <!-- back card: folder, muted -->
+        <!-- input: the plaintext file, muted/back layer -->
         <g class="illo-layer illo-back">
-          <rect x="55" y="115" width="175" height="125" rx="18" transform="rotate(-9 142 177)" style="fill:var(--bg2);stroke:var(--b2);stroke-width:1"/>
-        </g>
-
-        <!-- middle card: file card w/ mini thumbnail + text lines -->
-        <g class="illo-layer illo-mid">
-          <g transform="rotate(7 245 150)">
-            <rect x="150" y="72" width="190" height="150" rx="20" style="fill:var(--surf2);stroke:var(--b2);stroke-width:1" filter="url(#illoShadow)"/>
-            <rect x="150" y="72" width="190" height="80" rx="20" style="fill:var(--blus)"/>
-            <rect x="150" y="132" width="190" height="20" style="fill:var(--blus)"/>
-            <rect x="166" y="168" width="120" height="10" rx="5" style="fill:var(--b2)"/>
-            <rect x="166" y="186" width="80" height="8" rx="4" style="fill:var(--b1)"/>
+          <g transform="rotate(-6 82 197)">
+            <rect x="25" y="150" width="115" height="95" rx="16" style="fill:var(--surf2);stroke:var(--b2);stroke-width:1" filter="url(#illoShadow)"/>
+            <rect x="25" y="150" width="115" height="26" rx="16" style="fill:var(--bg2)"/>
+            <rect x="41" y="198" width="80" height="8" rx="4" style="fill:var(--b2)"/>
+            <rect x="41" y="214" width="56" height="7" rx="3.5" style="fill:var(--b1)"/>
+            <rect x="41" y="229" width="68" height="7" rx="3.5" style="fill:var(--b1)"/>
           </g>
         </g>
 
-        <!-- front card: the "token" card -->
+        <!-- center: the encryption core — a shield badge with a lock, gently pulsing -->
+        <g class="illo-layer illo-mid illo-shield">
+          <rect x="180" y="145" width="100" height="100" rx="28" style="fill:url(#illoGrad)" filter="url(#illoShadow)"/>
+          <g transform="translate(205,170)">
+            <path d="M9 22V15a16 16 0 0132 0v7" fill="none" stroke="rgba(255,255,255,0.95)" stroke-width="6" stroke-linecap="round"/>
+            <rect x="0" y="22" width="50" height="38" rx="10" fill="rgba(255,255,255,0.95)"/>
+            <circle cx="25" cy="40" r="5" style="fill:var(--acc)"/>
+            <rect x="22" y="40" width="6" height="12" rx="3" style="fill:var(--acc)"/>
+          </g>
+        </g>
+
+        <!-- output: the ciphertext block — front layer, moves most with parallax, holds the live-flicker digits -->
         <g class="illo-layer illo-front">
-          <g transform="rotate(-5 220 230)">
-            <rect x="108" y="150" width="222" height="165" rx="22" style="fill:var(--surf2);stroke:url(#illoGrad);stroke-width:1.5" filter="url(#illoShadow)"/>
-            <!-- lock badge -->
-            <g transform="translate(130,172)">
-              <rect width="40" height="40" rx="12" style="fill:var(--accs)"/>
-              <path d="M12 20v-4a8 8 0 0116 0v4" style="fill:none;stroke:var(--acc);stroke-width:2;stroke-linecap:round" transform="translate(0,-2)"/>
-              <rect x="10" y="18" width="20" height="15" rx="3" style="fill:var(--acc)" transform="translate(0,-2)"/>
-            </g>
-            <rect x="130" y="228" width="130" height="10" rx="5" style="fill:var(--b2)"/>
-            <rect x="130" y="246" width="90" height="8" rx="4" style="fill:var(--b1)"/>
-            <!-- token string — briefly flickers/rescrambles on a loop, see home.js -->
-            <text id="illoToken" x="130" y="288" style="font-family:var(--font-mono);font-size:15px;font-weight:700;fill:var(--acc);letter-spacing:1px">A3F9</text>
-            <rect x="196" y="278" width="7" height="7" rx="1.5" style="fill:var(--acc)" opacity="0.55"/>
-            <rect x="210" y="278" width="7" height="7" rx="1.5" style="fill:var(--acc2)" opacity="0.4"/>
-            <circle cx="228" cy="282" r="3" style="fill:var(--acc2)" opacity="0.3"/>
-            <circle cx="240" cy="282" r="2" style="fill:var(--acc2)" opacity="0.2"/>
+          <g transform="rotate(6 377 197)">
+            <rect x="320" y="150" width="115" height="95" rx="16" style="fill:var(--surf2);stroke:url(#illoGrad);stroke-width:1.5" filter="url(#illoShadow)"/>
+            <rect x="320" y="150" width="115" height="26" rx="16" style="fill:var(--accs)"/>
+            <circle cx="337" cy="163" r="4" style="fill:var(--acc)" opacity="0.6"/>
+            <text id="illoToken" x="336" y="205" style="font-family:var(--font-mono);font-size:15px;font-weight:700;fill:var(--acc);letter-spacing:1.5px">9F3D2A</text>
+            <rect x="336" y="219" width="70" height="7" rx="3.5" style="fill:var(--b2)"/>
+            <rect x="336" y="233" width="46" height="7" rx="3.5" style="fill:var(--b1)"/>
           </g>
         </g>
       </svg>
     </div>
+    
   </div>
 </div>
 </section>
@@ -246,7 +246,16 @@
       <div class="lmark"><svg viewBox="0 0 28 28" fill="none"><path d="M14 3L25 10.5L22 25H6L3 10.5L14 3Z" fill="rgba(255,255,255,0.93)"/></svg></div>
       <span class="lname">Crypt<span>ex</span></span>
     </a>
-    <span class="foot-copy"><svg class="ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0110 0v4"/></svg> End-to-End Encrypted · Anonymous · No sign-up</span>
+    <div class="foot-right">
+      <span class="foot-copy"><svg class="ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0110 0v4"/></svg> End-to-End Encrypted · Anonymous · No sign-up</span>
+      <div class="foot-links">
+        <a class="foot-link" href="https://github.com/Zephyrex21/cryptex-file-sharing" target="_blank" rel="noopener noreferrer">
+          <svg style="width:15px;height:15px;flex-shrink:0;fill:currentColor" viewBox="0 0 24 24"><path d="M12 .5C5.73.5.5 5.74.5 12.02c0 5.03 3.29 9.29 7.86 10.8.57.1.78-.25.78-.55 0-.27-.01-1.17-.02-2.12-3.2.7-3.88-1.36-3.88-1.36-.52-1.34-1.28-1.7-1.28-1.7-1.05-.72.08-.7.08-.7 1.16.08 1.77 1.2 1.77 1.2 1.03 1.77 2.7 1.26 3.36.96.1-.75.4-1.26.73-1.55-2.55-.29-5.24-1.28-5.24-5.68 0-1.25.45-2.28 1.18-3.09-.12-.29-.51-1.46.11-3.04 0 0 .97-.31 3.18 1.18a11 11 0 015.8 0c2.2-1.49 3.17-1.18 3.17-1.18.63 1.58.24 2.75.12 3.04.73.81 1.18 1.84 1.18 3.09 0 4.41-2.7 5.38-5.26 5.67.42.36.78 1.07.78 2.16 0 1.56-.01 2.81-.01 3.19 0 .3.2.66.79.55C20.71 21.3 24 17.05 24 12.02 24 5.74 18.77.5 12.5.5h-.5z"/></svg>
+          <span>View source</span>
+        </a>
+        <span class="foot-credit">Built by <a href="https://github.com/Zephyrex21" target="_blank" rel="noopener noreferrer">Rayan</a></span>
+      </div>
+    </div>
   </div>
 </footer>
 <script src="/js/shared.js"></script>

@@ -16,11 +16,16 @@
 .hero-trust span{display:inline-flex;align-items:center;gap:5px}
 @media(max-width:860px){.hero-trust{justify-content:center}}
 
-/* Illustration */
+/* Illustration — encryption pipeline: plaintext file → shield/lock core →
+   ciphertext block, with orbiting particles and a slow-spinning ring for
+   atmosphere. Rebuilt from the original card-stack to match the encryption
+   framing directly rather than generic "sharing" imagery. */
 .hero-illo{width:100%}
 .hero-illo svg{width:100%;height:auto;display:block}
-.illo-glow{opacity:0.14;transition:opacity .3s var(--ease)}
-[data-theme="dark"] .illo-glow{opacity:0.24}
+.illo-glow{opacity:0.14;transition:opacity .3s var(--ease);animation:illoGlowPulse 4.5s ease-in-out infinite}
+[data-theme="dark"] .illo-glow{opacity:0.24;animation-name:illoGlowPulseDark}
+@keyframes illoGlowPulse{0%,100%{opacity:.13}50%{opacity:.20}}
+@keyframes illoGlowPulseDark{0%,100%{opacity:.22}50%{opacity:.30}}
 .illo-layer{--px:0px;--py:0px;animation:illoFloat 5.5s ease-in-out infinite}
 .illo-back{animation-duration:7s;animation-delay:.15s}
 .illo-mid{animation-duration:6s;animation-delay:.4s}
@@ -30,9 +35,32 @@
   0%,100%{transform:translate(var(--px),var(--py)) translateY(0)}
   50%{transform:translate(var(--px),var(--py)) translateY(-9px)}
 }
-.illo-orbit{transform-box:view-box;transform-origin:220px 210px;animation:illoOrbitSpin 16s linear infinite}
+/* Orbiting particles — travel together clockwise around the shield */
+.illo-orbit{transform-box:view-box;transform-origin:230px 195px;animation:illoOrbitSpin 16s linear infinite}
 @keyframes illoOrbitSpin{to{transform:rotate(360deg)}}
-@media(prefers-reduced-motion:reduce){.illo-layer{animation:none}.illo-orbit{animation:none}}
+/* Dashed background ring — spins the opposite direction, much slower, for a
+   layered "gears within gears" depth cue behind the orbiting particles */
+.illo-ring{transform-box:fill-box;transform-origin:center;animation:illoRingSpin 28s linear infinite}
+@keyframes illoRingSpin{to{transform:rotate(-360deg)}}
+/* Shield/lock core — gentle breathing pulse, reads as "actively encrypting" */
+.illo-shield{transform-box:fill-box;transform-origin:center;animation:illoShieldPulse 3.4s ease-in-out infinite}
+@keyframes illoShieldPulse{0%,100%{transform:scale(1)}50%{transform:scale(1.045)}}
+/* Flow connectors — marching-dash effect suggests data moving into the
+   shield (plaintext) and back out the other side (ciphertext) */
+.illo-flow{fill:none;stroke:url(#illoGrad);stroke-width:2.5;stroke-linecap:round;stroke-dasharray:5 9;animation:illoFlowMove 1s linear infinite}
+.illo-flow-2{animation-delay:.5s}
+@keyframes illoFlowMove{to{stroke-dashoffset:-28}}
+/* Faint hex/binary fragments — slow independent fades, staggered so they
+   never all breathe in sync */
+.illo-hex{animation:illoHexFade 5s ease-in-out infinite}
+.illo-hex-a{animation-delay:0s}
+.illo-hex-b{animation-delay:1.2s}
+.illo-hex-c{animation-delay:2.4s}
+.illo-hex-d{animation-delay:3.6s}
+@keyframes illoHexFade{0%,100%{opacity:.14}50%{opacity:.38}}
+@media(prefers-reduced-motion:reduce){
+  .illo-layer,.illo-orbit,.illo-ring,.illo-shield,.illo-flow,.illo-hex,.illo-glow{animation:none}
+}
 @media(max-width:860px){
   .hero{grid-template-columns:1fr;gap:36px;text-align:center}
   .hero-copy{text-align:center}
