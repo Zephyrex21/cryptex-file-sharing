@@ -63,6 +63,16 @@
 .enc-toggle input:checked+.enc-toggle-track .enc-toggle-thumb{transform:translateX(14px)}
 .enc-toggle input:focus-visible+.enc-toggle-track{box-shadow:0 0 0 3px var(--accg)}
 .enc-toggle-lbl{font-size:12.5px;font-weight:600;color:var(--t2)}
+@media(max-width:480px){
+  /* .uzone's 40px side padding eats nearly a quarter of a 320-375px phone
+     screen; tighten it so headings/hint text don't wrap awkwardly. */
+  .uzone{padding:40px 18px}
+  /* The toggle pill is inline-flex with no wrap — on very narrow screens the
+     icon+label text can be wider than the available space. Let it wrap onto
+     two lines rather than overflow the dashed drop-zone border. */
+  .enc-toggle-wrap{white-space:normal;flex-wrap:wrap;justify-content:center;max-width:100%;padding:8px 14px}
+  .enc-toggle-lbl{font-size:11.5px}
+}
 .prog{margin-top:24px;display:none;flex-direction:column;align-items:center;gap:9px}
 .prog.show{display:flex}
 .prog-name{font-size:13px;font-weight:600;color:var(--t1);max-width:340px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
@@ -78,14 +88,20 @@
 .prog-pct{font-size:12px;color:var(--t2);font-weight:500}
 /* Controls */
 .controls{display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin-bottom:20px;animation:fadeUp .5s var(--ease) .13s both;position:relative;z-index:200}
-.tabs{display:flex;background:var(--bg2);border-radius:99px;padding:3px;gap:2px;border:.5px solid var(--b1)}
+/* 8 filter pills don't fit in one row on any phone width — scroll instead of
+   wrapping (wrapping a pill-shaped segmented control looks broken; a
+   horizontally-scrollable strip is the standard mobile pattern for this,
+   same as iOS Settings / most app filter bars). Scrollbar hidden for a
+   cleaner look — the row still scrolls fine via touch or trackpad. */
+.tabs{display:flex;background:var(--bg2);border-radius:99px;padding:3px;gap:2px;border:.5px solid var(--b1);max-width:100%;overflow-x:auto;scrollbar-width:none;-ms-overflow-style:none;-webkit-overflow-scrolling:touch}
+.tabs::-webkit-scrollbar{display:none}
 .tab{padding:6px 16px;border-radius:99px;font-size:13px;font-weight:500;cursor:pointer;border:none;background:transparent;color:var(--t2);font-family:var(--font);transition:all .15s var(--ease);white-space:nowrap}
 .tab.active{background:var(--surf2);color:var(--t1);box-shadow:var(--sh1);font-weight:600}
 .swrp{position:relative}
 .sbtn{display:flex;align-items:center;gap:7px;background:var(--surf);border:.5px solid var(--b2);border-radius:99px;padding:8px 16px;font-size:13px;font-weight:500;color:var(--t2);cursor:pointer;font-family:var(--font);transition:all .15s var(--ease);box-shadow:var(--sh1);white-space:nowrap}
 .sbtn:hover{color:var(--t1);box-shadow:var(--sh2)}
 .sbtn svg{width:14px;height:14px;stroke:currentColor;fill:none;stroke-width:2;stroke-linecap:round}
-.smenu{position:absolute;top:calc(100% + 8px);left:0;background:var(--surf2);border:.5px solid var(--b2);border-radius:var(--r2);padding:6px;box-shadow:var(--sh3);min-width:185px;z-index:9999;display:none;animation:fadeUp .15s var(--ease) both}
+.smenu{position:absolute;top:calc(100% + 8px);left:0;background:var(--surf2);border:.5px solid var(--b2);border-radius:var(--r2);padding:6px;box-shadow:var(--sh3);min-width:185px;max-width:calc(100vw - 40px);z-index:9999;display:none;animation:fadeUp .15s var(--ease) both}
 .smenu.open{display:block}
 .sopt{padding:9px 14px;border-radius:var(--r1);font-size:13px;font-weight:500;cursor:pointer;color:var(--t2);transition:all .13s var(--ease);display:flex;align-items:center;justify-content:space-between;gap:8px}
 .sopt:hover{background:var(--bg2);color:var(--t1)}
@@ -290,10 +306,26 @@
 .lb-close:hover{background:rgba(255,255,255,.25);transform:scale(1.1)}
 .lb-close svg{width:18px;height:18px;stroke:#fff;fill:none;stroke-width:2.5;stroke-linecap:round}
 .lb-info{position:absolute;bottom:-36px;left:0;right:0;text-align:center;color:rgba(255,255,255,.55);font-size:13px;font-weight:500}
+/* The encrypted-file lightbox caption (name · type · size · "Decrypted
+   locally") runs longer than the plain-file caption and can wrap to two
+   lines on a narrow phone — bottom:-36px only reserves room for one. */
+@media(max-width:480px){
+  .lb{padding:24px 20px 64px}
+  .lb-info{bottom:-52px;font-size:11.5px;padding:0 12px}
+}
 
 /* Toasts */
 #toasts{position:fixed;bottom:28px;left:50%;transform:translateX(-50%);z-index:99999;display:flex;flex-direction:column;gap:8px;align-items:center;pointer-events:none}
 .toast{background:var(--surf2);backdrop-filter:blur(28px);border:.5px solid var(--b2);color:var(--t1);padding:10px 20px;border-radius:99px;font-size:14px;font-weight:500;display:flex;align-items:center;gap:9px;box-shadow:var(--sh3);animation:toastIn .28s var(--spring) both;white-space:nowrap;pointer-events:auto;position:relative}
+/* On phones, several toast messages (esp. the encryption ones — "Decryption
+   key isn't available in this session…") are long enough that nowrap would
+   push them off both edges of the screen. Switch to a wrapping card shape
+   instead of a pill once there isn't room for one line. */
+@media(max-width:480px){
+  #toasts{left:14px;right:14px;transform:none;width:auto}
+  .toast{white-space:normal;max-width:100%;text-align:left;border-radius:16px;align-items:flex-start}
+  .toast .td{margin-top:5px}
+}
 .toast.out{animation:toastOut .2s var(--ease) forwards}
 .toast.out::after{animation-play-state:paused}
 .toast::after{content:'';position:absolute;left:14px;right:14px;bottom:5px;height:2px;border-radius:2px;background:currentColor;opacity:.16;transform-origin:left;animation:toastDeplete var(--toast-dur,2800ms) linear forwards}

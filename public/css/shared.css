@@ -90,6 +90,12 @@ nav.scrolled{box-shadow:var(--sh1);border-bottom-color:var(--b2);backdrop-filter
 .icobtn{width:36px;height:36px;border-radius:50%;background:var(--bg2);border:.5px solid var(--b1);display:flex;align-items:center;justify-content:center;cursor:pointer;transition:all .18s var(--ease);color:var(--t2)}
 .icobtn:hover{background:var(--surfh);transform:scale(1.06)}
 .icobtn svg{width:16px;height:16px;stroke:currentColor;fill:none;stroke-width:2;stroke-linecap:round;stroke-linejoin:round}
+/* Generic inline icon — used everywhere a small SVG stands in for what used
+   to be an emoji glyph (lock, key, checkmark, etc). Inherits color from its
+   context via currentColor unless a spot needs a fixed accent color. */
+.ico{width:15px;height:15px;vertical-align:-3px;flex-shrink:0;display:inline-block;fill:none;stroke:currentColor;stroke-width:2;stroke-linecap:round;stroke-linejoin:round}
+.ico-sm{width:13px;height:13px;vertical-align:-2px}
+.ico-lg{width:20px;height:20px;vertical-align:-5px}
 .sun{display:block}.moon{display:none}
 [data-theme="dark"] .sun{display:none}[data-theme="dark"] .moon{display:block}
 /* Mobile */

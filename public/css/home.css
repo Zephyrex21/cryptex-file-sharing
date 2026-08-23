@@ -66,18 +66,30 @@
 /* ENCRYPTION SECTION — 3-step flow + zero-knowledge callout */
 #encryption{padding:80px 20px}
 .enc-steps{display:grid;grid-template-columns:1fr auto 1fr auto 1fr;gap:20px;align-items:stretch;margin-bottom:32px}
-.enc-step{background:var(--bg);border:.5px solid var(--b1);border-radius:var(--r3);padding:24px}
-.enc-step-num{width:30px;height:30px;border-radius:50%;background:linear-gradient(135deg,var(--acc),var(--acc2));color:#fff;font-size:13px;font-weight:800;display:flex;align-items:center;justify-content:center;margin-bottom:14px}
+.enc-step{background:var(--bg);border:.5px solid var(--b1);border-radius:var(--r3);padding:24px;transition:transform .3s var(--spring),box-shadow .3s var(--ease),border-color .3s var(--ease)}
+.enc-step:hover{transform:translateY(-4px);box-shadow:var(--sh2);border-color:var(--accg)}
+.enc-step-icowrap{position:relative;width:44px;height:44px;margin-bottom:16px}
+.enc-step-ico{width:44px;height:44px;padding:11px;border-radius:var(--r2);background:var(--accs);color:var(--acc);box-sizing:border-box}
+.enc-step-num{position:absolute;top:-6px;right:-6px;width:20px;height:20px;border-radius:50%;background:linear-gradient(135deg,var(--acc),var(--acc2));color:#fff;font-size:11px;font-weight:800;display:flex;align-items:center;justify-content:center;box-shadow:0 0 0 3px var(--bg);animation:encNumPulse 2.6s ease-in-out infinite}
+@keyframes encNumPulse{0%,100%{transform:scale(1)}50%{transform:scale(1.15)}}
 .enc-step h3{font-size:15px;font-weight:700;letter-spacing:-.2px;margin-bottom:8px}
 .enc-step p{font-size:13.5px;color:var(--t2);line-height:1.6}
 .enc-step p code{font-family:var(--font-mono);font-size:12px;background:var(--bg2);padding:1px 5px;border-radius:4px;color:var(--acc)}
-.enc-step-arrow{display:flex;align-items:center;justify-content:center;font-size:20px;color:var(--t3);font-weight:300}
+.enc-step-arrow{display:flex;align-items:center;justify-content:center;width:64px}
+.enc-step-arrow svg{width:64px;height:24px;overflow:visible}
+.enc-arrow-line{stroke:var(--b2);stroke-width:2}
+.enc-arrow-head{fill:none;stroke:var(--t3);stroke-width:2;stroke-linecap:round;stroke-linejoin:round}
+.enc-arrow-packet{fill:var(--acc);animation:encPacketFlow 1.8s ease-in-out infinite}
+@keyframes encPacketFlow{0%{transform:translateX(0);opacity:0}12%{opacity:1}88%{opacity:1}100%{transform:translateX(40px);opacity:0}}
+@media(prefers-reduced-motion:reduce){.enc-step-num{animation:none}.enc-arrow-packet{animation:none;opacity:1}}
 @media(max-width:900px){
   .enc-steps{grid-template-columns:1fr}
-  .enc-step-arrow{transform:rotate(90deg);padding:2px 0}
+  .enc-step-arrow{width:24px;height:64px;margin:0 auto;align-self:center}
+  .enc-step-arrow svg{transform:rotate(90deg)}
 }
 .enc-callout{display:flex;gap:16px;align-items:flex-start;background:var(--accs);border:.5px solid var(--accg);border-radius:var(--r3);padding:22px 26px}
-.enc-callout-ico{font-size:26px;flex-shrink:0;line-height:1}
+.enc-callout-ico{flex-shrink:0;width:26px;height:26px;color:var(--acc)}
+.enc-callout-ico svg{width:26px;height:26px}
 .enc-callout h4{font-size:15px;font-weight:700;margin-bottom:6px}
 .enc-callout p{font-size:13.5px;color:var(--t2);line-height:1.6}
 .enc-callout em{color:var(--acc);font-style:normal;font-weight:700}
@@ -94,6 +106,7 @@
 .rm-item{position:relative;display:flex;align-items:flex-start;gap:12px;padding:12px 0;border-bottom:.5px solid var(--b1)}
 .rm-item:last-child{border-bottom:none;padding-bottom:0}
 .rm-dot{position:relative;z-index:1;width:20px;height:20px;border-radius:50%;flex-shrink:0;display:flex;align-items:center;justify-content:center;font-size:10px;font-weight:700;margin-top:1px}
+.rm-dot svg{width:11px;height:11px;fill:none;stroke:currentColor}
 .rm-done{background:var(--grn);color:#fff;box-shadow:0 0 0 3px var(--surf)}.rm-soon{background:var(--accs);color:var(--acc);box-shadow:0 0 0 3px var(--surf)}.rm-future{background:var(--bg2);color:var(--t3);box-shadow:0 0 0 3px var(--surf)}
 .rm-item h4{font-size:14px;font-weight:600;margin-bottom:2px}
 .rm-item p{font-size:12px;color:var(--t2);line-height:1.5}

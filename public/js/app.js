@@ -11,6 +11,23 @@ let allFiles=[],curF='all',curS='newest',curV='grid',searchQ='';
 let allFolders=[],curSection='files',curFolder=null,folderCtx=null,atfFileId=null,tokenModalFile=null,tokenModalFolder=null,folderSearchQ='';
 let privRevealCtx={id:null,type:null}; // tracks which file/folder the privRevealModal is currently showing
 
+// ── Icon set ─────────────────────────────────────────────────────────────
+// Small inline SVGs standing in for every emoji glyph used to appear here.
+// stroke="currentColor" so each one inherits the color of whatever text it
+// sits in (toast, button, badge, etc) rather than needing its own styling
+// at every call site. Sized via the shared .ico class in shared.css.
+const ICONS={
+  lock:'<svg class="ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0110 0v4"/></svg>',
+  unlock:'<svg class="ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 019.9-1"/></svg>',
+  key:'<svg class="ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="7.5" cy="15.5" r="4.5"/><path d="M10.8 12.2L20 3m0 0h-5m5 0v5m-8.7 3.3L15 8"/></svg>',
+  link:'<svg class="ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M10 13a5 5 0 007.54.54l3-3a5 5 0 00-7.07-7.07l-1.72 1.71"/><path d="M14 11a5 5 0 00-7.54-.54l-3 3a5 5 0 007.07 7.07l1.71-1.71"/></svg>',
+  refresh:'<svg class="ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="23 4 23 10 17 10"/><polyline points="1 20 1 14 7 14"/><path d="M3.51 9a9 9 0 0114.13-3.36L23 10M1 14l5.36 4.36A9 9 0 0020.49 15"/></svg>',
+  download:'<svg class="ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="8 17 12 21 16 17"/><line x1="12" y1="12" x2="12" y2="21"/><path d="M20.88 18.09A5 5 0 0018 9h-1.26A8 8 0 103 16.29"/></svg>',
+  extLink:'<svg class="ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 13v6a2 2 0 01-2 2H5a2 2 0 01-2-2V8a2 2 0 012-2h6"/><polyline points="15 3 21 3 21 9"/><line x1="10" y1="14" x2="21" y2="3"/></svg>',
+  check:'<svg class="ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><polyline points="8 12.5 10.8 15.5 16 9"/></svg>',
+  arrowRight:'<svg class="ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="5" y1="12" x2="19" y2="12"/><polyline points="12 5 19 12 12 19"/></svg>',
+};
+
 // ═══════════════════════════════════════════════════════════════════════
 // End-to-end encryption — AES-256-GCM via the browser's native Web Crypto
 // API. Every function below runs entirely client-side: a key is generated
@@ -225,7 +242,7 @@ function proc(){
       pf.style.width='100%';pp.textContent='100%';toast(`${f.name} uploaded!`,'success');
       celebrateIfFirstTime('cv-first-upload',uzone);
       const isLast=queue.length===0;
-      if(isLast){pf.classList.add('success');pp.textContent='✓ Done';ptr.classList.add('pop');}
+      if(isLast){pf.classList.add('success');pp.innerHTML=ICONS.check+' Done';ptr.classList.add('pop');}
       setTimeout(()=>{pw.classList.remove('show');uzone.classList.remove('busy');pf.classList.remove('success');ptr.classList.remove('pop');loadFiles();proc();},isLast?1000:750);
     }
     else{let m='Upload failed';try{m=JSON.parse(xhr.responseText).message||m;}catch{}toast(m,'error');pw.classList.remove('show');uzone.classList.remove('busy');proc();}
@@ -274,9 +291,9 @@ async function uploadEncrypted(f,pos,ui){
         if(file?._id)encKeyCache.set(file._id,await exportKeyB64url(key));
         pf.style.width='100%';pp.textContent='100%';
         const isLast=queue.length===0;
-        if(isLast){pf.classList.add('success');pp.textContent='✓ Done';ptr.classList.add('pop');}
+        if(isLast){pf.classList.add('success');pp.innerHTML=ICONS.check+' Done';ptr.classList.add('pop');}
         setTimeout(()=>{pw.classList.remove('show');uzone.classList.remove('busy');pf.classList.remove('success');ptr.classList.remove('pop');loadFiles();proc();},isLast?1000:750);
-        toast(`${f.name} encrypted & uploaded 🔒`,'success');
+        toast(`${f.name} encrypted & uploaded ${ICONS.lock}`,'success');
         celebrateIfFirstTime('cv-first-upload',uzone);
         if(file)openEncryptedRevealModal(file);
       }else{
@@ -297,7 +314,7 @@ async function uploadEncrypted(f,pos,ui){
 // (see copyPrivLink below), since a token alone can't decrypt anything.
 function openEncryptedRevealModal(file){
   privRevealCtx={id:file._id,type:'file',encrypted:true};
-  document.getElementById('prm-title').textContent='Encrypted & Uploaded 🔒🔑';
+  document.getElementById('prm-title').innerHTML='Encrypted & Uploaded '+ICONS.lock+ICONS.key;
   document.getElementById('prm-sub').textContent="This file is end-to-end encrypted — save the link below now. If it's lost, the file can't be recovered — we have no way to reset it.";
   document.getElementById('prm-token').textContent=file.shareToken||'';
   document.getElementById('prm-expiry-status').textContent='Never';
@@ -703,7 +720,7 @@ function showProp(id){
       <div class="prop-row"><span class="prop-key">Domain</span><span class="prop-val">${esc(f.linkDomain||'')}</span></div>
       <div class="prop-row"><span class="prop-key">Added</span><span class="prop-val">${f.createdAt?new Date(f.createdAt).toLocaleString('en',{dateStyle:'medium',timeStyle:'short'}):'-'}</span></div>
     `;
-    propDl.textContent='↗ Open Link';
+    propDl.innerHTML=ICONS.extLink+' Open Link';
     propDl.onclick=()=>{window.open(f.linkUrl,'_blank','noopener');closeProp();};
   }else{
     // Only show user-relevant info — no Cloudinary internals
@@ -712,7 +729,7 @@ function showProp(id){
       <div class="prop-row"><span class="prop-key">Size</span><span class="prop-val">${fmtSz(f.fileSize)}</span></div>
       <div class="prop-row"><span class="prop-key">Uploaded</span><span class="prop-val">${f.createdAt?new Date(f.createdAt).toLocaleString('en',{dateStyle:'medium',timeStyle:'short'}):'-'}</span></div>
     `;
-    propDl.textContent='⬇ Download';
+    propDl.innerHTML=ICONS.download+' Download';
     propDl.onclick=()=>{dlFile(f._id,f.originalName);closeProp();};
   }
   document.getElementById('propModal').classList.add('open');
@@ -794,7 +811,7 @@ async function accessByToken(){
     if(res.ok){const d=await res.json();input.value='';openTokenModal(d.folder,'folder');return;}
     toast('No file or folder found for this token','error');
   }catch{toast('Network error — check your connection','error');}
-  finally{btn.textContent='Access →';btn.disabled=false;}
+  finally{btn.innerHTML='Access '+ICONS.arrowRight;btn.disabled=false;}
 }
 function openTokenModal(data,kind){
   const hd=document.getElementById('tmodalHead');
@@ -872,7 +889,7 @@ async function openEncryptedTokenModal(f){
     catch{ /* fall through to the manual-key prompt below — key was wrong/stale */ }
   }
 
-  hd.innerHTML=`${lockIco}<div class="tmodal-head-info"><div class="tmodal-title">🔒 Encrypted File</div><div class="tmodal-sub">End-to-end encrypted<span class="vis-badge vis-priv">Private</span></div></div>`;
+  hd.innerHTML=`${lockIco}<div class="tmodal-head-info"><div class="tmodal-title">${ICONS.lock} Encrypted File</div><div class="tmodal-sub">End-to-end encrypted<span class="vis-badge vis-priv">Private</span></div></div>`;
   bd.innerHTML=`<div class="enc-unlock"><p>This file is end-to-end encrypted — its name and contents are unreadable without the decryption key from its share link.</p><input id="encKeyInput" type="text" placeholder="Paste decryption key…" autocomplete="off" spellcheck="false" onkeydown="if(event.key==='Enter')unlockEncryptedFile('${f._id}')"/></div>`;
   ft.innerHTML=`<button class="tmod-act tmod-dl" title="Unlock" onclick="unlockEncryptedFile('${f._id}')"><svg viewBox="0 0 24 24"><rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0110 0v4"/></svg></button><button class="tmod-act" title="Manage Sharing" onclick="openSharePanel('file')"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"/><path d="M12 1v6m0 10v6M4.22 4.22l4.24 4.24m7.08 7.08l4.24 4.24M1 12h6m10 0h6M4.22 19.78l4.24-4.24m7.08-7.08l4.24-4.24"/></svg></button><button class="tmod-act tmod-del" title="Delete File" onclick="delFileFromModal('${f._id}')"><svg viewBox="0 0 24 24"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 01-2 2H8a2 2 0 01-2-2L5 6"/></svg></button>`;
   document.getElementById('tokenModal').classList.add('open');
@@ -904,8 +921,8 @@ async function renderUnlockedEncryptedModal(f,keyStr){
   const canP=isImg(realType)||isVid(realType)||isPdf(realType);
   const bgMap={img:'var(--blus)',vid:'rgba(0,0,0,.07)',pdf:'var(--reds)',zip:'var(--ylws)',doc:'var(--cyns)',sheet:'var(--tels)',slide:'var(--orgs)',code:'var(--cods)',file:'var(--bg2)'};
 
-  hd.innerHTML=`<div class="tmodal-ico" style="background:${bgMap[t]||bgMap.file};font-size:20px">🔓</div><div class="tmodal-head-info"><div class="tmodal-title" title="${esc(realName)}">${esc(stripExt(realName))}</div><div class="tmodal-sub">${esc(label)} · Decrypted in your browser<span class="vis-badge vis-priv">🔒 E2E Encrypted</span></div></div>`;
-  bd.innerHTML=`<div class="prop-row"><span class="prop-key">Size</span><span class="prop-val">${fmtSz(f.fileSize)}</span></div><div class="prop-row"><span class="prop-key">Type</span><span class="prop-val">${typeHuman(realType)}</span></div><div class="prop-row"><span class="prop-key">Uploaded</span><span class="prop-val">${f.createdAt?new Date(f.createdAt).toLocaleString('en',{dateStyle:'medium',timeStyle:'short'}):'-'}</span></div><div style="margin-top:10px;font-size:12px;color:var(--t3)">🔒 Decrypted locally — the server never sees the plaintext.</div>`;
+  hd.innerHTML=`<div class="tmodal-ico" style="background:${bgMap[t]||bgMap.file}"><svg viewBox="0 0 24 24" fill="none" stroke="var(--t1)" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 019.9-1"/></svg></div><div class="tmodal-head-info"><div class="tmodal-title" title="${esc(realName)}">${esc(stripExt(realName))}</div><div class="tmodal-sub">${esc(label)} · Decrypted in your browser<span class="vis-badge vis-priv">${ICONS.lock} E2E Encrypted</span></div></div>`;
+  bd.innerHTML=`<div class="prop-row"><span class="prop-key">Size</span><span class="prop-val">${fmtSz(f.fileSize)}</span></div><div class="prop-row"><span class="prop-key">Type</span><span class="prop-val">${typeHuman(realType)}</span></div><div class="prop-row"><span class="prop-key">Uploaded</span><span class="prop-val">${f.createdAt?new Date(f.createdAt).toLocaleString('en',{dateStyle:'medium',timeStyle:'short'}):'-'}</span></div><div style="margin-top:10px;font-size:12px;color:var(--t3)">${ICONS.lock} Decrypted locally — the server never sees the plaintext.</div>`;
   const previewBtn=canP?`<button class="tmod-act" title="Decrypt & Preview" onclick="decryptAndPreviewEnc('${f._id}')"><svg viewBox="0 0 24 24"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg></button>`:'';
   ft.innerHTML=`<button class="tmod-act tmod-dl" title="Decrypt & Download" onclick="decryptAndDownloadEnc('${f._id}')"><svg viewBox="0 0 24 24"><polyline points="8 17 12 21 16 17"/><line x1="12" y1="12" x2="12" y2="21"/></svg></button>${previewBtn}<div class="tmod-sep"></div><button class="tmod-act" title="Manage Sharing" onclick="openSharePanel('file')"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"/><path d="M12 1v6m0 10v6M4.22 4.22l4.24 4.24m7.08 7.08l4.24 4.24M1 12h6m10 0h6M4.22 19.78l4.24-4.24m7.08-7.08l4.24-4.24"/></svg></button><button class="tmod-act tmod-del" title="Delete File" onclick="delFileFromModal('${f._id}')"><svg viewBox="0 0 24 24"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 01-2 2H8a2 2 0 01-2-2L5 6"/></svg></button>`;
 }
@@ -927,7 +944,7 @@ async function decryptAndDownloadEnc(id){
     const a=document.createElement('a');a.href=url;a.download=f._realName||'decrypted-file';
     document.body.appendChild(a);a.click();document.body.removeChild(a);
     setTimeout(()=>URL.revokeObjectURL(url),10000);
-    toast(`${f._realName} decrypted & downloaded 🔓`,'success');
+    toast(`${f._realName} decrypted & downloaded ${ICONS.unlock}`,'success');
   }catch{toast('Decryption failed — the key or file data may be corrupted','error');}
 }
 async function decryptAndPreviewEnc(id){
@@ -948,7 +965,7 @@ async function decryptAndPreviewEnc(id){
     if(isImg(f._realType)){img.src=url;img.style.display='block';}
     else if(isVid(f._realType)){vid.src=url;vid.style.display='block';}
     else{URL.revokeObjectURL(url);return;}
-    info.textContent=`${stripExt(f._realName)} · ${tl(f._realType)} · ${fmtSz(f.fileSize)} · 🔓 Decrypted locally`;
+    info.innerHTML=`${esc(stripExt(f._realName))} · ${tl(f._realType)} · ${fmtSz(f.fileSize)} · ${ICONS.unlock} Decrypted locally`;
     document.getElementById('lb').classList.add('open');document.body.style.overflow='hidden';
   }catch{toast('Decryption failed — the key or file data may be corrupted','error');}
 }
@@ -971,7 +988,7 @@ function openSharePanel(type){
   document.getElementById('tokenModal').classList.remove('open');
   tokenModalFile=null;tokenModalFolder=null;
   privRevealCtx={id:item._id,type,encrypted:type==='file'&&!!item.encrypted};
-  document.getElementById('prm-title').textContent=type==='folder'?'Manage Folder Sharing':(item.encrypted?'Manage Encrypted File Sharing 🔒':'Manage File Sharing');
+  document.getElementById('prm-title').innerHTML=type==='folder'?'Manage Folder Sharing':(item.encrypted?'Manage Encrypted File Sharing '+ICONS.lock:'Manage File Sharing');
   document.getElementById('prm-sub').textContent=item.encrypted
     ?"Regenerating the token keeps the same key — use \"Copy shareable link\" again below to get the updated link"
     :"Update this token\'s expiry, or share it again";
@@ -1229,12 +1246,12 @@ async function copyToken(token){
   if(!token)return toast('Token not available — try refreshing','error');
   try{
     await navigator.clipboard.writeText(token);
-    toast('Token copied to clipboard ✓','success');
+    toast('Token copied to clipboard '+ICONS.check,'success');
   }catch{
     const ta=document.createElement('textarea');
     ta.value=token;ta.style.cssText='position:fixed;left:-9999px;opacity:0';
     document.body.appendChild(ta);ta.select();
-    try{document.execCommand('copy');toast('Token copied ✓','success');}
+    try{document.execCommand('copy');toast('Token copied '+ICONS.check,'success');}
     catch{toast('Token: '+token,'info');}
     document.body.removeChild(ta);
   }
@@ -1255,7 +1272,7 @@ async function toggleVis(id,currentVis){
     if(card){card.style.animation='delOut .3s var(--ease) forwards';setTimeout(()=>{card.remove();const n=allFiles.length;document.getElementById('badge').textContent=`${n} file${n!==1?'s':''}`;},320);}
     // Show token reveal popup + auto-copy
     privRevealCtx={id,type:'file'};
-    document.getElementById('prm-title').textContent='File is now Private 🔒';
+    document.getElementById('prm-title').innerHTML='File is now Private '+ICONS.lock;
     document.getElementById('prm-sub').textContent="Save this token — it\'s the only way to access this file";
     document.getElementById('prm-token').textContent=token;
     document.getElementById('prm-expiry-status').textContent='Never';
@@ -1267,7 +1284,7 @@ async function toggleVis(id,currentVis){
 function copyPrivToken(){
   const token=document.getElementById('prm-token').textContent;
   if(!token)return;
-  navigator.clipboard.writeText(token).then(()=>toast('Token copied ✓','success')).catch(()=>toast('Token: '+token,'info'));
+  navigator.clipboard.writeText(token).then(()=>toast('Token copied '+ICONS.check,'success')).catch(()=>toast('Token: '+token,'info'));
 }
 function fmtExpiry(minutes){
   if(!minutes||minutes<=0)return'never';
@@ -1322,10 +1339,10 @@ function copyPrivLink(){
     const key=encKeyCache.get(privRevealCtx.id);
     if(!key){toast("Decryption key isn't available in this session — use the link you saved when you encrypted this file",'error');return;}
     link+=`#key=${key}`;
-    navigator.clipboard.writeText(link).then(()=>toast('Encrypted link copied 🔒 — this is the ONLY way to open this file','success')).catch(()=>toast('Link: '+link,'info'));
+    navigator.clipboard.writeText(link).then(()=>toast('Encrypted link copied '+ICONS.lock+' — this is the ONLY way to open this file','success')).catch(()=>toast('Link: '+link,'info'));
     return;
   }
-  navigator.clipboard.writeText(link).then(()=>toast('Link copied ✓ — opening it auto-fills the token','success')).catch(()=>toast('Link: '+link,'info'));
+  navigator.clipboard.writeText(link).then(()=>toast('Link copied '+ICONS.check+' — opening it auto-fills the token','success')).catch(()=>toast('Link: '+link,'info'));
 }
 async function toggleFolderVis(id,currentVis){
   if(currentVis!=='public')return;
@@ -1341,7 +1358,7 @@ async function toggleFolderVis(id,currentVis){
     allFiles=allFiles.filter(f=>!f.folderId||f.folderId.toString()!==id);
     renderFolders();renderAll();
     privRevealCtx={id,type:'folder'};
-    document.getElementById('prm-title').textContent='Folder is now Private 🔒';
+    document.getElementById('prm-title').innerHTML='Folder is now Private '+ICONS.lock;
     document.getElementById('prm-sub').textContent="Save this token — it\'s the only way to access this folder";
     document.getElementById('prm-token').textContent=token;
     document.getElementById('prm-expiry-status').textContent='Never';
@@ -1384,7 +1401,7 @@ async function makeFilePublic(id){
     // This correctly handles the edge case where the file's parent folder is private
     // (getAllFiles would exclude it; manual allFiles.unshift would wrongly show it).
     closeTokenModal();
-    toast('File is now public ✓','success');
+    toast('File is now public '+ICONS.check,'success');
     await loadFiles();
   }catch{toast('Failed to make public','error');}
 }
@@ -1402,7 +1419,7 @@ async function makeFolderPublic(id){
     closeTokenModal();
     // Reload both: folders list + gallery (folder's files now need to appear)
     await Promise.all([loadFolders(),loadFiles()]);
-    toast('Folder is now public ✓','success');
+    toast('Folder is now public '+ICONS.check,'success');
   }catch{toast('Failed to make folder public','error');}
 }
 
