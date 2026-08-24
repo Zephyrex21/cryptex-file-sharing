@@ -46,7 +46,7 @@ function scrambleReveal(el,duration=750){
     let out='';
     for(let i=0;i<len;i++){
       const ch=finalText[i];
-      if(ch===' '||ch==='.'){out+=ch;continue;}
+      if(ch===' '||ch==='.'||ch==='-'){out+=ch;continue;}
       // characters resolve left-to-right, staggered — later chars lock in later
       const revealAt=(i/len)*0.7;
       out+= t>=revealAt+0.25 ? ch : chars[Math.floor(Math.random()*chars.length)];
@@ -59,10 +59,11 @@ function scrambleReveal(el,duration=750){
 }
 (function(){
   const reduce=window.matchMedia('(prefers-reduced-motion: reduce)').matches;
-  const l1=document.getElementById('heroLine1'),l2=document.getElementById('heroLine2');
+  const l1=document.getElementById('heroLine1'),lAes=document.getElementById('heroLineAES'),l2=document.getElementById('heroLine2');
   if(!l1||!l2)return;
   if(reduce)return; // leave text exactly as rendered, no animation
   scrambleReveal(l1,700);
+  if(lAes)scrambleReveal(lAes,700);
   setTimeout(()=>scrambleReveal(l2,700),120);
 })();
 
@@ -90,10 +91,36 @@ function scrambleReveal(el,duration=750){
 // the illustration still floats gently via the CSS illoFloat animation on
 // .illo-layer, it just no longer tracks the cursor.
 
+// ── Typewriter effect for static section headings ───────────────────────────
+// Types each line's real text back in, one character at a time, with a
+// blinking-cursor class toggled per line while it's active. The text is
+// captured from the DOM itself (not hardcoded here), so this works for any
+// heading with .tw-line spans without needing to duplicate copy in JS.
+function typewriterLines(lineEls,speed=32){
+  let li=0;
+  function typeNextLine(){
+    if(li>=lineEls.length)return;
+    const el=lineEls[li];
+    const full=el.textContent;
+    el.textContent='';
+    el.classList.add('tw-typing');
+    let ci=0;
+    (function typeChar(){
+      el.textContent=full.slice(0,ci);
+      ci++;
+      if(ci<=full.length)setTimeout(typeChar,speed);
+      else{el.classList.remove('tw-typing');li++;typeNextLine();}
+    })();
+  }
+  typeNextLine();
+}
+
 // ── Scroll-triggered reveal (Features / About) ──────────────────────────────
 // Each element fades/lifts in once, the first time it enters the viewport.
 // Grouped per-section so stagger timing restarts at 0 for each section rather
-// than accumulating one long delay across the whole page.
+// than accumulating one long delay across the whole page. Section headings
+// (.sec-title) additionally get the typewriter effect above, triggered by
+// this same first-intersection moment.
 (function(){
   const reduce=window.matchMedia('(prefers-reduced-motion: reduce)').matches;
   const groups=[
@@ -105,7 +132,14 @@ function scrambleReveal(el,duration=750){
   if(reduce){groups.forEach(g=>g.forEach(el=>el.classList.add('revealed')));return;}
   const io=new IntersectionObserver((entries)=>{
     entries.forEach(entry=>{
-      if(entry.isIntersecting){entry.target.classList.add('revealed');io.unobserve(entry.target);}
+      if(entry.isIntersecting){
+        entry.target.classList.add('revealed');
+        if(entry.target.classList.contains('sec-title')){
+          const lines=entry.target.querySelectorAll('.tw-line');
+          if(lines.length)typewriterLines(Array.from(lines));
+        }
+        io.unobserve(entry.target);
+      }
     });
   },{threshold:.15,rootMargin:'0px 0px -60px 0px'});
   groups.forEach(list=>{
