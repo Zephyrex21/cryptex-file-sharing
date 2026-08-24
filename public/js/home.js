@@ -86,34 +86,10 @@ function scrambleReveal(el,duration=750){
   },2200);
 })();
 
-// ── Hero illustration: mouse parallax ───────────────────────────────────────
-// Desktop + fine-pointer only. Sets --px/--py custom properties that the
-// illoFloat keyframe animation itself reads (see home.css) — this is
-// deliberate: setting el.style.transform directly here would fight the
-// running CSS animation, since animations take precedence over inline
-// transform values for as long as they're active. Routing the offset
-// through a custom property lets both effects combine smoothly instead.
-(function(){
-  const illo=document.querySelector('.hero-illo');
-  if(!illo)return;
-  if(window.matchMedia('(prefers-reduced-motion: reduce)').matches)return;
-  if(window.matchMedia('(pointer: coarse)').matches)return; // skip touch devices
-  const layers=illo.querySelectorAll('.illo-layer');
-  const strength=[3,5,8,12]; // ghost, back, mid, front — front moves most (parallax depth)
-  illo.addEventListener('mousemove',(e)=>{
-    const r=illo.getBoundingClientRect();
-    const cx=(e.clientX-r.left)/r.width-0.5;
-    const cy=(e.clientY-r.top)/r.height-0.5;
-    layers.forEach((l,i)=>{
-      const s=strength[i]??8;
-      l.style.setProperty('--px',(cx*s*2)+'px');
-      l.style.setProperty('--py',(cy*s*2)+'px');
-    });
-  });
-  illo.addEventListener('mouseleave',()=>{
-    layers.forEach(l=>{l.style.setProperty('--px','0px');l.style.setProperty('--py','0px');});
-  });
-})();
+// Mouse-parallax ("magnetic hover") on the hero illustration was removed —
+// the illustration still floats gently via the CSS illoFloat animation on
+// .illo-layer, it just no longer tracks the cursor.
+
 // ── Scroll-triggered reveal (Features / About) ──────────────────────────────
 // Each element fades/lifts in once, the first time it enters the viewport.
 // Grouped per-section so stagger timing restarts at 0 for each section rather

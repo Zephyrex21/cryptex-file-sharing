@@ -16,16 +16,24 @@
 .hero-trust span{display:inline-flex;align-items:center;gap:5px}
 @media(max-width:860px){.hero-trust{justify-content:center}}
 
-/* Illustration — encryption pipeline: plaintext file → shield/lock core →
-   ciphertext block, with orbiting particles and a slow-spinning ring for
-   atmosphere. Rebuilt from the original card-stack to match the encryption
-   framing directly rather than generic "sharing" imagery. */
+/* Illustration — encryption vault: a plaintext file flows in, an armored
+   shield/lock core processes it (halo pulse, armor ring, glass shine sweep,
+   tight energy micro-orbit), ciphertext flows out the other side. Wrapped
+   in layered atmosphere: a slow radar sweep, 3 counter-rotating dashed
+   rings with 7 orbiting particles between them, circuit traces reaching to
+   corner nodes with data pulses, faint hex-lattice motifs, twinkling
+   sparks, and drifting hex/binary fragments. Four small badges (zero-
+   knowledge, verified, key access, hashing) round out the security theme. */
 .hero-illo{width:100%}
 .hero-illo svg{width:100%;height:auto;display:block}
 .illo-glow{opacity:0.14;transition:opacity .3s var(--ease);animation:illoGlowPulse 4.5s ease-in-out infinite}
 [data-theme="dark"] .illo-glow{opacity:0.24;animation-name:illoGlowPulseDark}
 @keyframes illoGlowPulse{0%,100%{opacity:.13}50%{opacity:.20}}
 @keyframes illoGlowPulseDark{0%,100%{opacity:.22}50%{opacity:.30}}
+/* Ambient float bob — a slow, gentle vertical drift with no cursor-tracking.
+   (The magnetic mouse-parallax that used to also feed this via --px/--py
+   has been removed from home.js; the custom properties simply stay at their
+   0px default now, leaving just this bob.) */
 .illo-layer{--px:0px;--py:0px;animation:illoFloat 5.5s ease-in-out infinite}
 .illo-back{animation-duration:7s;animation-delay:.15s}
 .illo-mid{animation-duration:6s;animation-delay:.4s}
@@ -35,38 +43,59 @@
   0%,100%{transform:translate(var(--px),var(--py)) translateY(0)}
   50%{transform:translate(var(--px),var(--py)) translateY(-9px)}
 }
-/* Orbiting particles — travel together clockwise around the shield */
-.illo-orbit{transform-box:view-box;transform-origin:230px 195px;animation:illoOrbitSpin 16s linear infinite}
+/* Radar sweep — a slow rotating wedge of light pivoting on the shield's own
+   center (view-box origin, not fill-box — the wedge's own bounding-box
+   center doesn't coincide with its pivot point, so it needs the explicit
+   coordinate the same way the orbits below do) */
+.illo-radar-sweep{transform-box:view-box;transform-origin:260px 220px;animation:illoRadarSpin 9s linear infinite}
+@keyframes illoRadarSpin{to{transform:rotate(360deg)}}
+/* Orbiting particles — three independent rings, alternating direction and
+   speed so the motion never feels mechanical/synced */
+.illo-orbit{transform-box:view-box;transform-origin:260px 220px;animation:illoOrbitSpin 16s linear infinite}
 .illo-orbit-2{animation:illoOrbitSpinRev 11s linear infinite}
+.illo-orbit-3{animation:illoOrbitSpin 13.5s linear infinite}
+.illo-orbit-micro{animation:illoOrbitSpinRev 6s linear infinite}
 @keyframes illoOrbitSpin{to{transform:rotate(360deg)}}
 @keyframes illoOrbitSpinRev{to{transform:rotate(-360deg)}}
-/* Dashed background rings — spin opposite directions at different speeds for
-   a layered "gears within gears" depth cue behind the orbiting particles */
-.illo-ring{transform-box:fill-box;transform-origin:center;animation:illoRingSpin 28s linear infinite}
-.illo-ring-2{animation:illoOrbitSpin 19s linear infinite}
+/* Dashed background rings — three, alternating rotation direction/speed —
+   "gears within gears" depth cue behind the orbiting particles */
+.illo-ring{transform-box:fill-box;transform-origin:center;animation:illoRingSpin 32s linear infinite}
+.illo-ring-2{animation:illoOrbitSpin 22s linear infinite}
+.illo-ring-3{animation:illoRingSpin 15s linear infinite}
 @keyframes illoRingSpin{to{transform:rotate(-360deg)}}
 /* Shield/lock core — gentle breathing pulse, reads as "actively encrypting" */
 .illo-shield{transform-box:fill-box;transform-origin:center;animation:illoShieldPulse 3.4s ease-in-out infinite}
 @keyframes illoShieldPulse{0%,100%{transform:scale(1)}50%{transform:scale(1.045)}}
+/* Soft halo just behind the shield — pulses opacity/scale independently of
+   the badge itself, reads as an "energy field" radiating from the core */
+.illo-shield-halo{transform-box:fill-box;transform-origin:center;animation:illoHaloPulse 3.4s ease-in-out infinite}
+@keyframes illoHaloPulse{0%,100%{opacity:.18;transform:scale(1)}50%{opacity:.32;transform:scale(1.15)}}
 /* Diagonal shine sweeping across the shield — a "glass sheen" premium touch,
    clipped to the shield's own rounded-rect shape so it never spills outside it */
 .illo-scan{animation:illoScanSweep 3.2s ease-in-out infinite}
 @keyframes illoScanSweep{0%{transform:translateX(0);opacity:0}12%{opacity:.7}55%{opacity:.5}85%{opacity:0}100%{transform:translateX(300px);opacity:0}}
-/* Small floating accent badges (checkmark / key) — independent float rhythm
-   from the 3 main cards so the scene doesn't feel like it's moving in lockstep */
+/* Small floating accent badges (zero-knowledge / verified / key / hash) —
+   each on its own float rhythm so the scene never moves in lockstep */
 .illo-chip{animation-duration:5.2s}
 .illo-chip-a{animation-delay:.6s}
 .illo-chip-b{animation-duration:6.4s;animation-delay:1.3s}
+.illo-chip-c{animation-duration:5.8s;animation-delay:2.1s}
+.illo-chip-d{animation-duration:6.9s;animation-delay:.9s}
 /* Twinkling sparks — quick opacity blinks, staggered so they never sync up */
 .illo-spark{animation:illoSparkTwinkle 2.6s ease-in-out infinite;opacity:0}
 .illo-spark-a{animation-delay:0s}
 .illo-spark-b{animation-delay:.9s}
 .illo-spark-c{animation-delay:1.8s}
+.illo-spark-d{animation-delay:1.3s;animation-duration:2.2s}
+.illo-spark-e{animation-delay:2.4s;animation-duration:3s}
 @keyframes illoSparkTwinkle{0%,80%,100%{opacity:0;transform:scale(.6)}40%{opacity:1;transform:scale(1)}}
-/* Flow connectors — marching-dash effect suggests data moving into the
-   shield (plaintext) and back out the other side (ciphertext) */
+/* Flow connectors — marching-dash effect suggests data moving: in/out of the
+   shield (flow/flow-2), and along the circuit traces to the corner nodes
+   (flow-3/flow-4) */
 .illo-flow{fill:none;stroke:url(#illoGrad);stroke-width:2.5;stroke-linecap:round;stroke-dasharray:5 9;animation:illoFlowMove 1s linear infinite}
 .illo-flow-2{animation-delay:.5s}
+.illo-flow-3{stroke-width:1.8;stroke-dasharray:3 7;animation-duration:1.6s;animation-delay:.3s}
+.illo-flow-4{stroke-width:1.8;stroke-dasharray:3 7;animation-duration:1.6s;animation-delay:1s}
 @keyframes illoFlowMove{to{stroke-dashoffset:-28}}
 /* Faint hex/binary fragments — slow independent fades, staggered so they
    never all breathe in sync */
@@ -77,7 +106,7 @@
 .illo-hex-d{animation-delay:3.6s}
 @keyframes illoHexFade{0%,100%{opacity:.14}50%{opacity:.38}}
 @media(prefers-reduced-motion:reduce){
-  .illo-layer,.illo-orbit,.illo-ring,.illo-shield,.illo-flow,.illo-hex,.illo-glow,.illo-scan,.illo-spark{animation:none}
+  .illo-layer,.illo-orbit,.illo-ring,.illo-shield,.illo-shield-halo,.illo-flow,.illo-hex,.illo-glow,.illo-scan,.illo-spark,.illo-radar-sweep{animation:none}
 }
 @media(max-width:860px){
   .hero{grid-template-columns:1fr;gap:36px;text-align:center}

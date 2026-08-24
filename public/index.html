@@ -76,116 +76,185 @@
       </div>
     </div>
     <div class="hero-illo" aria-hidden="true">
-      <svg viewBox="0 0 460 390" xmlns="http://www.w3.org/2000/svg">
+      <svg viewBox="0 0 520 440" xmlns="http://www.w3.org/2000/svg">
         <defs>
           <linearGradient id="illoGrad" x1="0%" y1="0%" x2="100%" y2="100%">
             <stop offset="0%" style="stop-color:var(--acc)"/>
             <stop offset="100%" style="stop-color:var(--acc2)"/>
           </linearGradient>
+          <radialGradient id="illoRadarGrad" cx="0%" cy="0%" r="100%">
+            <stop offset="0%" style="stop-color:var(--acc);stop-opacity:0.22"/>
+            <stop offset="100%" style="stop-color:var(--acc);stop-opacity:0"/>
+          </radialGradient>
           <filter id="illoShadow" x="-40%" y="-40%" width="180%" height="180%">
             <feDropShadow dx="0" dy="14" stdDeviation="16" flood-color="#000" flood-opacity="0.16"/>
           </filter>
           <filter id="illoShadowSm" x="-80%" y="-80%" width="260%" height="260%">
             <feDropShadow dx="0" dy="4" stdDeviation="5" flood-color="#000" flood-opacity="0.18"/>
           </filter>
-          <clipPath id="illoShieldClip"><rect x="180" y="145" width="100" height="100" rx="28"/></clipPath>
+          <clipPath id="illoShieldClip"><rect x="205" y="165" width="110" height="110" rx="30"/></clipPath>
           <pattern id="illoDots" width="26" height="26" patternUnits="userSpaceOnUse">
             <circle cx="2" cy="2" r="1.3" style="fill:var(--t3)"/>
           </pattern>
         </defs>
 
         <!-- faint dot-grid texture — pure atmosphere, sits behind everything -->
-        <rect x="0" y="0" width="460" height="390" fill="url(#illoDots)" opacity="0.3"/>
+        <rect x="0" y="0" width="520" height="440" fill="url(#illoDots)" opacity="0.3"/>
+
+        <!-- faint hexagon motifs in the corners — a quiet security/lattice texture -->
+        <g fill="none" stroke="var(--t3)" stroke-width="1.2" opacity="0.16">
+          <path d="M56 42l16-9 16 9v18l-16 9-16-9z"/>
+          <path d="M466 56l13-7.5 13 7.5v15l-13 7.5-13-7.5z"/>
+          <path d="M50 372l14-8 14 8v16l-14 8-14-8z"/>
+          <path d="M460 384l12-7 12 7v14l-12 7-12-7z"/>
+        </g>
+
+        <!-- radar sweep — a slow rotating wedge of light, suggests active scanning across the whole scene -->
+        <path class="illo-radar-sweep" d="M260 220 L260 36 A184 184 0 0 1 411 128 Z" fill="url(#illoRadarGrad)"/>
+
+        <!-- faint concentric radar rings + spokes, independent of the dashed orbit rings below -->
+        <g fill="none" stroke="var(--t3)" opacity="0.09">
+          <circle cx="260" cy="220" r="55"/><circle cx="260" cy="220" r="115"/><circle cx="260" cy="220" r="175"/>
+        </g>
+        <g stroke="var(--t3)" opacity="0.07">
+          <line x1="260" y1="70" x2="260" y2="105"/><line x1="260" y1="335" x2="260" y2="370"/>
+          <line x1="110" y1="220" x2="145" y2="220"/><line x1="375" y1="220" x2="410" y2="220"/>
+          <line x1="154" y1="114" x2="178" y2="138"/><line x1="342" y1="302" x2="366" y2="326"/>
+          <line x1="366" y1="114" x2="342" y2="138"/><line x1="178" y1="302" x2="154" y2="326"/>
+        </g>
 
         <!-- ambient glow — breathes gently, intensity/base adjusts per theme -->
-        <circle class="illo-glow" cx="230" cy="195" r="175" fill="url(#illoGrad)"/>
+        <circle class="illo-glow" cx="260" cy="220" r="195" fill="url(#illoGrad)"/>
 
-        <!-- two dashed rings, counter-rotating at different speeds — layered "gears" depth -->
-        <circle class="illo-ring" cx="230" cy="195" r="148" fill="none" stroke="url(#illoGrad)" stroke-width="1.4" stroke-dasharray="1 11" opacity="0.45"/>
-        <circle class="illo-ring illo-ring-2" cx="230" cy="195" r="96" fill="none" stroke="url(#illoGrad)" stroke-width="1.2" stroke-dasharray="1 8" opacity="0.3"/>
+        <!-- three dashed rings, alternating rotation direction and speed — "gears within gears" -->
+        <circle class="illo-ring" cx="260" cy="220" r="185" fill="none" stroke="url(#illoGrad)" stroke-width="1.4" stroke-dasharray="1 13" opacity="0.4"/>
+        <circle class="illo-ring illo-ring-2" cx="260" cy="220" r="135" fill="none" stroke="url(#illoGrad)" stroke-width="1.2" stroke-dasharray="1 10" opacity="0.32"/>
+        <circle class="illo-ring illo-ring-3" cx="260" cy="220" r="95" fill="none" stroke="url(#illoGrad)" stroke-width="1.1" stroke-dasharray="5 6" opacity="0.28"/>
 
-        <!-- outer orbit: 3 particles travelling together -->
+        <!-- circuit traces reaching out to corner terminal nodes, with data pulses on two of them -->
+        <g fill="none" stroke="var(--b2)" stroke-width="1.3">
+          <path d="M222 178 L120 92"/><path d="M298 178 L400 92"/>
+          <path d="M222 262 L120 348"/><path d="M298 262 L400 348"/>
+        </g>
+        <path class="illo-flow illo-flow-3" d="M222 178 L120 92"/>
+        <path class="illo-flow illo-flow-4" d="M298 262 L400 348"/>
+        <g style="fill:var(--surf2);stroke:url(#illoGrad);stroke-width:1.5">
+          <circle cx="120" cy="92" r="5"/><circle cx="400" cy="92" r="5"/>
+          <circle cx="120" cy="348" r="5"/><circle cx="400" cy="348" r="5"/>
+        </g>
+
+        <!-- outer / middle / inner orbits — 7 particles total, each ring travels independently -->
         <g class="illo-orbit">
-          <circle cx="230" cy="47" r="4.5" style="fill:url(#illoGrad)" opacity="0.7"/>
-          <circle cx="358" cy="269" r="3.5" style="fill:url(#illoGrad)" opacity="0.5"/>
-          <circle cx="102" cy="269" r="3" style="fill:url(#illoGrad)" opacity="0.35"/>
+          <circle cx="260" cy="35" r="4.5" style="fill:url(#illoGrad)" opacity="0.7"/>
+          <circle cx="420" cy="313" r="3.5" style="fill:url(#illoGrad)" opacity="0.5"/>
+          <circle cx="100" cy="313" r="3" style="fill:url(#illoGrad)" opacity="0.35"/>
         </g>
-        <!-- inner orbit: 2 more particles, opposite direction, faster -->
         <g class="illo-orbit illo-orbit-2">
-          <circle cx="297" cy="262" r="3" style="fill:url(#illoGrad)" opacity="0.55"/>
-          <circle cx="163" cy="128" r="2.5" style="fill:url(#illoGrad)" opacity="0.4"/>
+          <circle cx="355" cy="125" r="3" style="fill:url(#illoGrad)" opacity="0.55"/>
+          <circle cx="165" cy="315" r="2.5" style="fill:url(#illoGrad)" opacity="0.4"/>
+        </g>
+        <g class="illo-orbit illo-orbit-3">
+          <circle cx="354" cy="237" r="2.5" style="fill:url(#illoGrad)" opacity="0.5"/>
+          <circle cx="166" cy="203" r="2" style="fill:url(#illoGrad)" opacity="0.35"/>
         </g>
 
-        <!-- twinkling sparks around the shield -->
+        <!-- twinkling sparks scattered around the core -->
         <g style="fill:url(#illoGrad)">
-          <path class="illo-spark illo-spark-a" d="M196 128l1.6 4.4 4.4 1.6-4.4 1.6-1.6 4.4-1.6-4.4-4.4-1.6 4.4-1.6z"/>
-          <path class="illo-spark illo-spark-b" d="M300 172l1.3 3.7 3.7 1.3-3.7 1.3-1.3 3.7-1.3-3.7-3.7-1.3 3.7-1.3z"/>
-          <path class="illo-spark illo-spark-c" d="M262 258l1.3 3.7 3.7 1.3-3.7 1.3-1.3 3.7-1.3-3.7-3.7-1.3 3.7-1.3z"/>
+          <path class="illo-spark illo-spark-a" d="M221 143l1.6 4.4 4.4 1.6-4.4 1.6-1.6 4.4-1.6-4.4-4.4-1.6 4.4-1.6z"/>
+          <path class="illo-spark illo-spark-b" d="M330 187l1.3 3.7 3.7 1.3-3.7 1.3-1.3 3.7-1.3-3.7-3.7-1.3 3.7-1.3z"/>
+          <path class="illo-spark illo-spark-c" d="M288 288l1.3 3.7 3.7 1.3-3.7 1.3-1.3 3.7-1.3-3.7-3.7-1.3 3.7-1.3z"/>
+          <path class="illo-spark illo-spark-d" d="M188 258l1 3 3 1-3 1-1 3-1-3-3-1 3-1z"/>
+          <path class="illo-spark illo-spark-e" d="M340 260l1 3 3 1-3 1-1 3-1-3-3-1 3-1z"/>
         </g>
 
         <!-- faint hex/binary fragments scattered for atmosphere — barely moves with parallax, reads as background depth -->
         <g class="illo-layer illo-ghost" style="font-family:var(--font-mono);font-weight:700;fill:var(--t3)">
-          <text class="illo-hex illo-hex-a" x="34" y="70" font-size="13">01</text>
-          <text class="illo-hex illo-hex-b" x="388" y="80" font-size="12">1F</text>
-          <text class="illo-hex illo-hex-c" x="40" y="330" font-size="12">A9</text>
-          <text class="illo-hex illo-hex-d" x="402" y="340" font-size="13">E2</text>
-          <text class="illo-hex illo-hex-a" x="220" y="30" font-size="11" style="animation-delay:.8s">10</text>
-          <text class="illo-hex illo-hex-c" x="225" y="372" font-size="11" style="animation-delay:2s">FF</text>
+          <text class="illo-hex illo-hex-a" x="38" y="80" font-size="13">01</text>
+          <text class="illo-hex illo-hex-b" x="448" y="90" font-size="12">1F</text>
+          <text class="illo-hex illo-hex-c" x="44" y="378" font-size="12">A9</text>
+          <text class="illo-hex illo-hex-d" x="460" y="386" font-size="13">E2</text>
+          <text class="illo-hex illo-hex-a" x="248" y="26" font-size="11" style="animation-delay:.8s">10</text>
+          <text class="illo-hex illo-hex-c" x="252" y="420" font-size="11" style="animation-delay:2s">FF</text>
+          <text class="illo-hex illo-hex-b" x="30" y="220" font-size="11" style="animation-delay:1.6s">C4</text>
+          <text class="illo-hex illo-hex-d" x="470" y="230" font-size="11" style="animation-delay:2.8s">7B</text>
         </g>
 
         <!-- flow connectors: plaintext flows in from the left, ciphertext flows out to the right -->
-        <path class="illo-flow" d="M144 197 C160 197 164 197 180 197"/>
-        <path class="illo-flow illo-flow-2" d="M282 197 C298 197 302 197 318 197"/>
+        <path class="illo-flow" d="M155 222 C172 222 188 222 205 222"/>
+        <path class="illo-flow illo-flow-2" d="M315 222 C332 222 348 222 365 222"/>
 
         <!-- input: the plaintext file, muted/back layer -->
         <g class="illo-layer illo-back">
-          <g transform="rotate(-6 82 197)">
-            <rect x="25" y="150" width="115" height="95" rx="16" style="fill:var(--surf2);stroke:var(--b2);stroke-width:1" filter="url(#illoShadow)"/>
-            <rect x="25" y="150" width="115" height="26" rx="16" style="fill:var(--bg2)"/>
-            <rect x="41" y="198" width="80" height="8" rx="4" style="fill:var(--b2)"/>
-            <rect x="41" y="214" width="56" height="7" rx="3.5" style="fill:var(--b1)"/>
-            <rect x="41" y="229" width="68" height="7" rx="3.5" style="fill:var(--b1)"/>
+          <g transform="rotate(-6 92 220)">
+            <rect x="30" y="170" width="125" height="100" rx="16" style="fill:var(--surf2);stroke:var(--b2);stroke-width:1" filter="url(#illoShadow)"/>
+            <path d="M132 170h23v23z" style="fill:var(--bg2)"/>
+            <rect x="30" y="170" width="125" height="26" rx="16" style="fill:var(--bg2)"/>
+            <rect x="46" y="218" width="88" height="8" rx="4" style="fill:var(--b2)"/>
+            <rect x="46" y="234" width="60" height="7" rx="3.5" style="fill:var(--b1)"/>
+            <rect x="46" y="249" width="74" height="7" rx="3.5" style="fill:var(--b1)"/>
           </g>
         </g>
 
-        <!-- center: the encryption core — a shield badge with a lock, gently pulsing, with a shine sweep -->
+        <!-- center: the encryption core — layered shield badge with lock, halo pulse, armor ring, shine sweep, and a tight energy micro-orbit -->
         <g class="illo-layer illo-mid illo-shield">
-          <rect x="180" y="145" width="100" height="100" rx="28" style="fill:url(#illoGrad)" filter="url(#illoShadow)"/>
-          <g transform="translate(205,170)">
+          <circle class="illo-shield-halo" cx="260" cy="220" r="72" style="fill:url(#illoGrad)" opacity="0.22"/>
+          <rect x="205" y="165" width="110" height="110" rx="30" style="fill:url(#illoGrad)" filter="url(#illoShadow)"/>
+          <rect x="215" y="175" width="90" height="90" rx="22" fill="none" stroke="rgba(255,255,255,0.28)" stroke-width="1.5"/>
+          <g transform="translate(235,192)">
             <path d="M9 22V15a16 16 0 0132 0v7" fill="none" stroke="rgba(255,255,255,0.95)" stroke-width="6" stroke-linecap="round"/>
             <rect x="0" y="22" width="50" height="38" rx="10" fill="rgba(255,255,255,0.95)"/>
-            <circle cx="25" cy="40" r="5" style="fill:var(--acc)"/>
-            <rect x="22" y="40" width="6" height="12" rx="3" style="fill:var(--acc)"/>
+            <circle cx="25" cy="40" r="5.5" style="fill:var(--acc)"/>
+            <rect x="22" y="41" width="6" height="13" rx="3" style="fill:var(--acc)"/>
           </g>
           <g clip-path="url(#illoShieldClip)">
-            <rect class="illo-scan" x="-46" y="140" width="34" height="110" fill="rgba(255,255,255,0.4)" transform="skewX(-18)"/>
+            <rect class="illo-scan" x="-46" y="160" width="34" height="120" fill="rgba(255,255,255,0.4)" transform="skewX(-18)"/>
+          </g>
+          <g class="illo-orbit illo-orbit-micro">
+            <circle cx="260" cy="157" r="2.4" style="fill:#fff" opacity="0.85"/>
+            <circle cx="260" cy="283" r="2" style="fill:#fff" opacity="0.6"/>
           </g>
         </g>
 
-        <!-- small floating accent badges — extra depth cues, independent of the main 3-card flow -->
+        <!-- four floating accent badges — zero-knowledge, verified, key access, hashing — extra thematic depth -->
         <g class="illo-layer illo-chip illo-chip-a">
-          <circle cx="128" cy="238" r="15" style="fill:var(--grn)" filter="url(#illoShadowSm)"/>
-          <circle cx="128" cy="238" r="15" fill="none" stroke="var(--surf2)" stroke-width="2.5"/>
-          <path d="M121 238l4.5 4.5 9-9" fill="none" stroke="#fff" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/>
+          <circle cx="54" cy="182" r="15" style="fill:var(--surf2)" filter="url(#illoShadowSm)"/>
+          <circle cx="54" cy="182" r="15" fill="none" stroke="var(--b2)" stroke-width="1.5"/>
+          <g transform="translate(43,171)" fill="none" stroke="var(--t2)" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M20.6 20.6A12.9 12.9 0 0111 23c-8.3 0-13-9.5-13-9.5a25.7 25.7 0 016-8.2M11.7 5A10.8 10.8 0 0114 4.7c8.3 0 13 9.5 13 9.5a25.7 25.7 0 01-2.5 3.8"/>
+            <line x1="1" y1="1" x2="21" y2="21"/>
+          </g>
         </g>
         <g class="illo-layer illo-chip illo-chip-b">
-          <circle cx="332" cy="156" r="15" style="fill:url(#illoGrad)" filter="url(#illoShadowSm)"/>
-          <circle cx="332" cy="156" r="15" fill="none" stroke="var(--surf2)" stroke-width="2.5"/>
-          <g transform="translate(324,148)">
+          <circle cx="153" cy="288" r="15" style="fill:var(--grn)" filter="url(#illoShadowSm)"/>
+          <circle cx="153" cy="288" r="15" fill="none" stroke="var(--surf2)" stroke-width="2.5"/>
+          <path d="M146 288l4.5 4.5 9-9" fill="none" stroke="#fff" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"/>
+        </g>
+        <g class="illo-layer illo-chip illo-chip-c">
+          <circle cx="466" cy="182" r="15" style="fill:url(#illoGrad)" filter="url(#illoShadowSm)"/>
+          <circle cx="466" cy="182" r="15" fill="none" stroke="var(--surf2)" stroke-width="2.5"/>
+          <g transform="translate(458,174)">
             <circle cx="6" cy="6" r="4" fill="none" stroke="#fff" stroke-width="2"/>
             <path d="M9 9l7 7m0 0h-4m4 0v-4" fill="none" stroke="#fff" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+          </g>
+        </g>
+        <g class="illo-layer illo-chip illo-chip-d">
+          <circle cx="367" cy="288" r="15" style="fill:var(--surf2)" filter="url(#illoShadowSm)"/>
+          <circle cx="367" cy="288" r="15" fill="none" stroke="var(--b2)" stroke-width="1.5"/>
+          <g transform="translate(360,281)" stroke="var(--t2)" stroke-width="1.8" stroke-linecap="round">
+            <line x1="2" y1="4" x2="12" y2="4"/><line x1="1" y1="8" x2="13" y2="8"/>
+            <line x1="4" y1="0" x2="2" y2="14"/><line x1="10" y1="0" x2="8" y2="14"/>
           </g>
         </g>
 
         <!-- output: the ciphertext block — front layer, moves most with parallax, holds the live-flicker digits -->
         <g class="illo-layer illo-front">
-          <g transform="rotate(6 377 197)">
-            <rect x="320" y="150" width="115" height="95" rx="16" style="fill:var(--surf2);stroke:url(#illoGrad);stroke-width:1.5" filter="url(#illoShadow)"/>
-            <rect x="320" y="150" width="115" height="26" rx="16" style="fill:var(--accs)"/>
-            <circle cx="337" cy="163" r="4" style="fill:var(--acc)" opacity="0.6"/>
-            <text id="illoToken" x="336" y="205" style="font-family:var(--font-mono);font-size:15px;font-weight:700;fill:var(--acc);letter-spacing:1.5px">9F3D2A</text>
-            <rect x="336" y="219" width="70" height="7" rx="3.5" style="fill:var(--b2)"/>
-            <rect x="336" y="233" width="46" height="7" rx="3.5" style="fill:var(--b1)"/>
+          <g transform="rotate(6 427 220)">
+            <rect x="365" y="170" width="125" height="100" rx="16" style="fill:var(--surf2);stroke:url(#illoGrad);stroke-width:1.5" filter="url(#illoShadow)"/>
+            <rect x="365" y="170" width="125" height="26" rx="16" style="fill:var(--accs)"/>
+            <circle cx="382" cy="183" r="4" style="fill:var(--acc)" opacity="0.6"/>
+            <text id="illoToken" x="381" y="223" style="font-family:var(--font-mono);font-size:14px;font-weight:700;fill:var(--acc);letter-spacing:1.3px">9F3D2A</text>
+            <text class="illo-hex" x="381" y="240" style="font-family:var(--font-mono);font-size:11px;font-weight:700;fill:var(--acc);letter-spacing:1.3px;opacity:.55">B061C7</text>
+            <rect x="381" y="251" width="70" height="6" rx="3" style="fill:var(--b2)"/>
           </g>
         </g>
       </svg>
