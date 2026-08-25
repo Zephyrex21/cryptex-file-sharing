@@ -28,6 +28,11 @@
 <link rel="stylesheet" href="/css/home.css"/>
 </head>
 <body>
+<!-- Preloader — removed from the DOM once dismissed, see shared.js -->
+<div id="preloader" class="preloader">
+  <div class="preloader-mark"><div class="lmark"><svg viewBox="0 0 28 28" fill="none"><path d="M14 3L25 10.5L22 25H6L3 10.5L14 3Z" fill="rgba(255,255,255,0.93)"/></svg></div></div>
+  <div class="preloader-bar"><div class="preloader-fill"></div></div>
+</div>
 <div class="orbs"><div class="cgrid"></div><div class="cglow cg1"></div><div class="cglow cg2"></div></div>
 
 <!-- NAVBAR: logo left | links CENTER | actions right -->
@@ -266,16 +271,100 @@
 <!-- FEATURES -->
 <section id="features">
 <div class="sec-wrap">
-  <div class="sec-eyebrow reveal">What makes us different</div>
-  <h2 class="sec-title reveal"><span class="tw-line">Token-based sharing.</span><br><span class="tw-line">Zero accounts needed.</span></h2>
-  <p class="sec-sub reveal">Cryptex is built around one idea — private files stay private until you share them with a token.</p>
-  <div class="feat-grid">
-    <div class="feat-card feat-hl reveal"><span class="feat-badge">Zero-Knowledge</span><div class="feat-ico" style="background:var(--accs)"><svg viewBox="0 0 24 24" style="stroke:var(--acc)"><rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0110 0v4"/></svg></div><h3>End-to-End Encryption</h3><p>Encrypted in your browser with AES-256-GCM before it's ever uploaded. The key lives only in your share link — we never see it, so we can't read the file either.</p></div>
-    <div class="feat-card reveal"><div class="feat-ico" style="background:var(--blus)"><svg viewBox="0 0 24 24" style="stroke:var(--blu)"><path d="M10 13a5 5 0 007.54.54l3-3a5 5 0 00-7.07-7.07l-1.72 1.71"/><path d="M14 11a5 5 0 00-7.54-.54l-3 3a5 5 0 007.07 7.07l1.71-1.71"/></svg></div><h3>Token-Based Access</h3><p>Every file and folder gets a unique 16-character token. Paste it to instantly access — no login, no friction.</p></div>
-    <div class="feat-card reveal"><div class="feat-ico" style="background:var(--grns)"><svg viewBox="0 0 24 24" style="stroke:var(--grn)"><rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0110 0v4"/></svg></div><h3>Private by Default</h3><p>Mark any file or folder private — it vanishes from the gallery instantly. Only a token brings it back.</p></div>
-    <div class="feat-card reveal"><div class="feat-ico" style="background:var(--ylws)"><svg viewBox="0 0 24 24" style="stroke:var(--ylw)"><path d="M17 21v-2a4 4 0 00-4-4H5a4 4 0 00-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 00-3-3.87"/><path d="M16 3.13a4 4 0 010 7.75"/></svg></div><h3>Anonymous Sharing</h3><p>No sign-up for you or the recipient. Send a token (and key, if encrypted) over any channel and they're instantly in.</p></div>
-    <div class="feat-card reveal"><div class="feat-ico" style="background:var(--cyns)"><svg viewBox="0 0 24 24" style="stroke:var(--cyn)"><path d="M22 19a2 2 0 01-2 2H4a2 2 0 01-2-2V5a2 2 0 012-2h5l2 3h9a2 2 0 012 2z"/></svg></div><h3>Folder Collections</h3><p>Group files into folders and share entire collections with a single token. Private folders hide all files automatically.</p></div>
-    <div class="feat-card reveal"><div class="feat-ico" style="background:var(--reds)"><svg viewBox="0 0 24 24" style="stroke:var(--red)"><path d="M21 12.79A9 9 0 1111.21 3 7 7 0 0021 12.79z"/></svg></div><h3>Dark Mode</h3><p>A polished dark mode that follows your system preference — or toggle it manually any time.</p></div>
+  <div class="feat-layout">
+    <div class="feat-illo-wrap reveal" aria-hidden="true">
+      <svg viewBox="0 0 380 400" xmlns="http://www.w3.org/2000/svg">
+        <defs>
+          <linearGradient id="featGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+            <stop offset="0%" style="stop-color:var(--acc)"/>
+            <stop offset="100%" style="stop-color:var(--acc2)"/>
+          </linearGradient>
+          <filter id="featShadow" x="-50%" y="-50%" width="200%" height="200%">
+            <feDropShadow dx="0" dy="18" stdDeviation="18" flood-color="#000" flood-opacity="0.18"/>
+          </filter>
+        </defs>
+
+        <circle class="illo-glow" cx="190" cy="230" r="165" fill="url(#featGrad)"/>
+
+        <!-- faint hex fragments + sparks — lighter touch than the hero illustration -->
+        <g style="font-family:var(--font-mono);font-weight:700;fill:var(--t3)">
+          <text class="illo-hex" x="30" y="70" font-size="12">7B</text>
+          <text class="illo-hex" x="320" y="86" font-size="12" style="animation-delay:1.5s">3F</text>
+          <text class="illo-hex" x="34" y="360" font-size="12" style="animation-delay:2.6s">C1</text>
+        </g>
+        <g style="fill:url(#featGrad)">
+          <path class="illo-spark illo-spark-a" d="M300 150l1.4 4 4 1.4-4 1.4-1.4 4-1.4-4-4-1.4 4-1.4z"/>
+          <path class="illo-spark illo-spark-c" d="M78 300l1.2 3.4 3.4 1.2-3.4 1.2-1.2 3.4-1.2-3.4-3.4-1.2 3.4-1.2z"/>
+        </g>
+
+        <!-- small orbit ring around the whole stack -->
+        <g class="feat-orbit">
+          <circle cx="190" cy="55" r="4" style="fill:url(#featGrad)" opacity="0.6"/>
+          <circle cx="325" cy="285" r="3" style="fill:url(#featGrad)" opacity="0.4"/>
+          <circle cx="55" cy="285" r="3" style="fill:url(#featGrad)" opacity="0.4"/>
+        </g>
+
+        <!-- base isometric platform -->
+        <g class="illo-layer illo-back" filter="url(#featShadow)">
+          <polygon points="190,207.5 315,243.75 315,316.25 190,352.5 65,316.25 65,243.75" style="fill:var(--surf2);stroke:var(--b2);stroke-width:1"/>
+          <polygon points="65,316.25 190,352.5 190,382.5 65,346.25" fill="#000" opacity="0.1"/>
+          <polygon points="190,352.5 315,316.25 315,346.25 190,382.5" fill="#000" opacity="0.18"/>
+          <polygon points="190,207.5 315,243.75 315,316.25 190,352.5 65,316.25 65,243.75" fill="#fff" opacity="0.04"/>
+        </g>
+
+        <!-- middle isometric platform -->
+        <g class="illo-layer illo-mid" filter="url(#featShadow)">
+          <polygon points="190,149.76 268,172.38 268,217.62 190,240.24 112,217.62 112,172.38" style="fill:url(#featGrad)"/>
+          <polygon points="112,217.62 190,240.24 190,262.24 112,239.62" fill="#000" opacity="0.14"/>
+          <polygon points="190,240.24 268,217.62 268,239.62 190,262.24" fill="#000" opacity="0.24"/>
+          <polygon points="190,149.76 268,172.38 268,217.62 190,240.24 112,217.62 112,172.38" fill="#fff" opacity="0.08"/>
+        </g>
+
+        <!-- capstone: shield + lock, sitting on top -->
+        <g class="illo-layer illo-front illo-shield">
+          <circle class="illo-shield-halo" cx="190" cy="175" r="58" style="fill:url(#featGrad)" opacity="0.22"/>
+          <rect x="145" y="130" width="90" height="90" rx="22" style="fill:url(#featGrad)" filter="url(#featShadow)"/>
+          <rect x="153" y="138" width="74" height="74" rx="17" fill="none" stroke="rgba(255,255,255,0.28)" stroke-width="1.4"/>
+          <g transform="translate(165,151)">
+            <path d="M7 18V12a13 13 0 0126 0v6" fill="none" stroke="rgba(255,255,255,0.95)" stroke-width="5" stroke-linecap="round"/>
+            <rect x="0" y="18" width="40" height="30" rx="8" fill="rgba(255,255,255,0.95)"/>
+            <circle cx="20" cy="32" r="4.5" style="fill:var(--acc)"/>
+            <rect x="17.5" y="32.5" width="5" height="10" rx="2.5" style="fill:var(--acc)"/>
+          </g>
+        </g>
+      </svg>
+    </div>
+    <div class="feat-content">
+      <div class="sec-eyebrow reveal">What makes us different</div>
+      <h2 class="sec-title reveal"><span class="tw-line">Token-based sharing.</span><br><span class="tw-line">Zero accounts needed.</span></h2>
+      <p class="sec-sub reveal">Cryptex is built around one idea — private files stay private until you share them with a token.</p>
+      <div class="feat-list">
+        <div class="feat-row feat-row-hl reveal">
+          <div class="feat-row-ico" style="background:var(--accs)"><svg viewBox="0 0 24 24" style="stroke:var(--acc)"><rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0110 0v4"/></svg></div>
+          <div class="feat-row-text"><h3>End-to-End Encryption <span class="feat-tag">Zero-Knowledge</span></h3><p>Encrypted in your browser with AES-256-GCM before it's ever uploaded — the key never touches our server.</p></div>
+        </div>
+        <div class="feat-row reveal">
+          <div class="feat-row-ico" style="background:var(--blus)"><svg viewBox="0 0 24 24" style="stroke:var(--blu)"><path d="M10 13a5 5 0 007.54.54l3-3a5 5 0 00-7.07-7.07l-1.72 1.71"/><path d="M14 11a5 5 0 00-7.54-.54l-3 3a5 5 0 007.07 7.07l1.71-1.71"/></svg></div>
+          <div class="feat-row-text"><h3>Token-Based Access</h3><p>Every file and folder gets a unique 16-character token — paste it to instantly access, no login required.</p></div>
+        </div>
+        <div class="feat-row reveal">
+          <div class="feat-row-ico" style="background:var(--grns)"><svg viewBox="0 0 24 24" style="stroke:var(--grn)"><rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0110 0v4"/></svg></div>
+          <div class="feat-row-text"><h3>Private by Default</h3><p>Mark any file or folder private — it vanishes from the gallery instantly. Only a token brings it back.</p></div>
+        </div>
+        <div class="feat-row reveal">
+          <div class="feat-row-ico" style="background:var(--ylws)"><svg viewBox="0 0 24 24" style="stroke:var(--ylw)"><path d="M17 21v-2a4 4 0 00-4-4H5a4 4 0 00-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 00-3-3.87"/><path d="M16 3.13a4 4 0 010 7.75"/></svg></div>
+          <div class="feat-row-text"><h3>Anonymous Sharing</h3><p>No sign-up for you or the recipient — send a token over any channel and they're instantly in.</p></div>
+        </div>
+        <div class="feat-row reveal">
+          <div class="feat-row-ico" style="background:var(--cyns)"><svg viewBox="0 0 24 24" style="stroke:var(--cyn)"><path d="M22 19a2 2 0 01-2 2H4a2 2 0 01-2-2V5a2 2 0 012-2h5l2 3h9a2 2 0 012 2z"/></svg></div>
+          <div class="feat-row-text"><h3>Folder Collections</h3><p>Group files into folders and share entire collections with a single token.</p></div>
+        </div>
+        <div class="feat-row reveal">
+          <div class="feat-row-ico" style="background:var(--reds)"><svg viewBox="0 0 24 24" style="stroke:var(--red)"><path d="M21 12.79A9 9 0 1111.21 3 7 7 0 0021 12.79z"/></svg></div>
+          <div class="feat-row-text"><h3>Dark Mode</h3><p>A polished dark mode that follows your system preference, or toggle it manually any time.</p></div>
+        </div>
+      </div>
+    </div>
   </div>
 </div>
 </section>

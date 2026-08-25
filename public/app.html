@@ -26,6 +26,11 @@
 <link rel="stylesheet" href="/css/app.css"/>
 </head>
 <body>
+<!-- Preloader — removed from the DOM once dismissed, see shared.js -->
+<div id="preloader" class="preloader">
+  <div class="preloader-mark"><div class="lmark"><svg viewBox="0 0 28 28" fill="none"><path d="M14 3L25 10.5L22 25H6L3 10.5L14 3Z" fill="rgba(255,255,255,0.93)"/></svg></div></div>
+  <div class="preloader-bar"><div class="preloader-fill"></div></div>
+</div>
 <div class="orbs"><div class="cgrid"></div><div class="cglow cg1"></div><div class="cglow cg2"></div></div>
 <input type="file" id="fInput" accept="image/jpeg,image/png,image/gif,image/webp,video/mp4,video/webm,video/ogg,video/quicktime,video/x-msvideo,application/pdf,application/zip,application/x-zip-compressed,text/plain,text/csv,application/xml,text/xml,application/msword,application/vnd.ms-powerpoint,application/vnd.openxmlformats-officedocument.wordprocessingml.document,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet,application/vnd.openxmlformats-officedocument.presentationml.presentation,.txt,.csv,.xml,.doc,.docx,.xlsx,.pptx,.ppt,.py,.ipynb,.js,.jsx,.ts,.tsx,.json,.md,.java,.c,.cpp,.h,.hpp,.css,.html,.sql,.yml,.yaml,.sh" multiple/>
 <nav>
