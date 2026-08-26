@@ -127,7 +127,7 @@ function typewriterLines(lineEls,speed=32){
     document.querySelectorAll('#features .reveal'),
     document.querySelectorAll('#encryption .reveal'),
     document.querySelectorAll('#about .about-wrap > div:first-child .reveal'),
-    document.querySelectorAll('#about .rm-list .reveal')
+    document.querySelectorAll('#about .faq-list .reveal')
   ];
   if(reduce){groups.forEach(g=>g.forEach(el=>el.classList.add('revealed')));return;}
   const io=new IntersectionObserver((entries)=>{
