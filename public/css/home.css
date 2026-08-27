@@ -35,6 +35,45 @@
 .hero-illo{width:100%}
 .hero-illo svg{width:100%;height:auto;display:block}
 .illo-glow{opacity:0.14;transition:opacity .3s var(--ease);animation:illoGlowPulse 4.5s ease-in-out infinite}
+/* ── Theme-adaptive shading for both illustrations ──────────────────────────
+   Flat black/white overlay "shading" tricks only work in the theme they were
+   tuned against: a black tint barely darkens an already-dark surface, and a
+   white tint on an already-near-white surface does nothing at all. Rather
+   than guess one opacity that compromises both themes, each of these gets
+   its own light/dark value so the isometric depth cues and shadows actually
+   read correctly in both. */
+.illo-dropshadow{flood-color:#000;flood-opacity:0.16}
+.illo-dropshadow-sm{flood-color:#000;flood-opacity:0.18}
+.feat-dropshadow{flood-color:#000;flood-opacity:0.18}
+[data-theme="dark"] .illo-dropshadow{flood-opacity:0.55}
+[data-theme="dark"] .illo-dropshadow-sm{flood-opacity:0.6}
+[data-theme="dark"] .feat-dropshadow{flood-opacity:0.55}
+.illo-fold-shadow{fill:#000;opacity:0.07}
+.illo-fold-shadow-accent{fill:#000;opacity:0.05}
+.illo-fold-crease{fill:none;stroke:#000;stroke-width:1;opacity:0.15}
+[data-theme="dark"] .illo-fold-shadow{opacity:0.3}
+[data-theme="dark"] .illo-fold-shadow-accent{opacity:0.22}
+[data-theme="dark"] .illo-fold-crease{stroke:#fff;opacity:0.12}
+/* Base (neutral-surface) isometric platform — surf2 flips from near-white to
+   near-black across themes, so its side-face shadows need much more opacity
+   in dark mode to keep the same perceived contrast against the top face,
+   and the top-face highlight (invisible on an already-white surface) only
+   ever does real work in dark mode, where it's worth boosting slightly. */
+.iso-shadow-1{fill:#000;opacity:0.1}
+.iso-shadow-2{fill:#000;opacity:0.18}
+.iso-highlight{fill:#fff;opacity:0.04}
+[data-theme="dark"] .iso-shadow-1{opacity:0.4}
+[data-theme="dark"] .iso-shadow-2{opacity:0.55}
+[data-theme="dark"] .iso-highlight{opacity:0.1}
+/* Accent-gradient isometric platform (middle/shield) — already sits on a
+   saturated color rather than a neutral one, so black/white overlays stay
+   visible in both themes; still nudged slightly for extra definition. */
+.iso-shadow-accent-1{fill:#000;opacity:0.14}
+.iso-shadow-accent-2{fill:#000;opacity:0.24}
+.iso-highlight-accent{fill:#fff;opacity:0.08}
+[data-theme="dark"] .iso-shadow-accent-1{opacity:0.22}
+[data-theme="dark"] .iso-shadow-accent-2{opacity:0.34}
+[data-theme="dark"] .iso-highlight-accent{opacity:0.12}
 [data-theme="dark"] .illo-glow{opacity:0.24;animation-name:illoGlowPulseDark}
 @keyframes illoGlowPulse{0%,100%{opacity:.13}50%{opacity:.20}}
 @keyframes illoGlowPulseDark{0%,100%{opacity:.22}50%{opacity:.30}}

@@ -102,10 +102,10 @@
             <stop offset="100%" style="stop-color:#fff;stop-opacity:0"/>
           </radialGradient>
           <filter id="illoShadow" x="-40%" y="-40%" width="180%" height="180%">
-            <feDropShadow dx="0" dy="14" stdDeviation="16" flood-color="#000" flood-opacity="0.16"/>
+            <feDropShadow class="illo-dropshadow" dx="0" dy="14" stdDeviation="16"/>
           </filter>
           <filter id="illoShadowSm" x="-80%" y="-80%" width="260%" height="260%">
-            <feDropShadow dx="0" dy="4" stdDeviation="5" flood-color="#000" flood-opacity="0.18"/>
+            <feDropShadow class="illo-dropshadow-sm" dx="0" dy="4" stdDeviation="5"/>
           </filter>
           <filter id="illoSoftGlow" x="-120%" y="-120%" width="340%" height="340%">
             <feGaussianBlur stdDeviation="2.4"/>
@@ -217,8 +217,8 @@
           <g transform="rotate(-6 92 220)">
             <rect x="30" y="170" width="125" height="100" rx="16" style="fill:var(--surf2);stroke:var(--b2);stroke-width:1" filter="url(#illoShadow)"/>
             <rect x="30" y="170" width="125" height="26" rx="16" style="fill:var(--bg2)"/>
-            <path d="M132 170h23v23z" fill="#000" opacity="0.07"/>
-            <path d="M132 170L155 193" style="stroke:#000;stroke-width:1;opacity:.15"/>
+            <path class="illo-fold-shadow" d="M132 170h23v23z"/>
+            <path class="illo-fold-crease" d="M132 170L155 193"/>
             <rect x="46" y="218" width="88" height="8" rx="4" style="fill:var(--b2)"/>
             <rect x="46" y="234" width="60" height="7" rx="3.5" style="fill:var(--b1)"/>
             <rect x="46" y="249" width="74" height="7" rx="3.5" style="fill:var(--b1)"/>
@@ -282,7 +282,7 @@
           <g transform="rotate(6 427 220)">
             <rect x="365" y="170" width="125" height="100" rx="16" style="fill:var(--surf2);stroke:url(#illoGrad);stroke-width:1.5" filter="url(#illoShadow)"/>
             <rect x="365" y="170" width="125" height="26" rx="16" style="fill:var(--accs)"/>
-            <path d="M467 170h23v23z" fill="#000" opacity="0.05"/>
+            <path class="illo-fold-shadow-accent" d="M467 170h23v23z"/>
             <path d="M467 170L490 193" style="stroke:var(--acc);stroke-width:1;opacity:.3"/>
             <circle cx="382" cy="183" r="4" style="fill:var(--acc)" opacity="0.6"/>
             <text id="illoToken" x="381" y="223" style="font-family:var(--font-mono);font-size:14px;font-weight:700;fill:var(--acc);letter-spacing:1.3px">9F3D2A</text>
@@ -318,7 +318,7 @@
             <stop offset="100%" style="stop-color:#fff;stop-opacity:0"/>
           </radialGradient>
           <filter id="featShadow" x="-50%" y="-50%" width="200%" height="200%">
-            <feDropShadow dx="0" dy="18" stdDeviation="18" flood-color="#000" flood-opacity="0.18"/>
+            <feDropShadow class="feat-dropshadow" dx="0" dy="18" stdDeviation="18"/>
           </filter>
           <filter id="featSoftGlow" x="-120%" y="-120%" width="340%" height="340%">
             <feGaussianBlur stdDeviation="2.2"/>
@@ -349,9 +349,9 @@
         <!-- base isometric platform -->
         <g class="illo-layer illo-back" filter="url(#featShadow)">
           <polygon points="190,207.5 315,243.75 315,316.25 190,352.5 65,316.25 65,243.75" style="fill:var(--surf2);stroke:var(--b2);stroke-width:1"/>
-          <polygon points="65,316.25 190,352.5 190,382.5 65,346.25" fill="#000" opacity="0.1"/>
-          <polygon points="190,352.5 315,316.25 315,346.25 190,382.5" fill="#000" opacity="0.18"/>
-          <polygon points="190,207.5 315,243.75 315,316.25 190,352.5 65,316.25 65,243.75" fill="#fff" opacity="0.04"/>
+          <polygon class="iso-shadow-1" points="65,316.25 190,352.5 190,382.5 65,346.25"/>
+          <polygon class="iso-shadow-2" points="190,352.5 315,316.25 315,346.25 190,382.5"/>
+          <polygon class="iso-highlight" points="190,207.5 315,243.75 315,316.25 190,352.5 65,316.25 65,243.75"/>
           <path d="M65,243.75 L190,207.5 L315,243.75" fill="none" stroke="#fff" stroke-width="1.2" opacity="0.35"/>
         </g>
 
@@ -361,9 +361,9 @@
         <!-- middle isometric platform -->
         <g class="illo-layer illo-mid" filter="url(#featShadow)">
           <polygon points="190,149.76 268,172.38 268,217.62 190,240.24 112,217.62 112,172.38" style="fill:url(#featGrad)"/>
-          <polygon points="112,217.62 190,240.24 190,262.24 112,239.62" fill="#000" opacity="0.14"/>
-          <polygon points="190,240.24 268,217.62 268,239.62 190,262.24" fill="#000" opacity="0.24"/>
-          <polygon points="190,149.76 268,172.38 268,217.62 190,240.24 112,217.62 112,172.38" fill="#fff" opacity="0.08"/>
+          <polygon class="iso-shadow-accent-1" points="112,217.62 190,240.24 190,262.24 112,239.62"/>
+          <polygon class="iso-shadow-accent-2" points="190,240.24 268,217.62 268,239.62 190,262.24"/>
+          <polygon class="iso-highlight-accent" points="190,149.76 268,172.38 268,217.62 190,240.24 112,217.62 112,172.38"/>
           <path d="M112,172.38 L190,149.76 L268,172.38" fill="none" stroke="#fff" stroke-width="1.2" opacity="0.4"/>
         </g>
 
@@ -422,7 +422,7 @@
 <!-- ENCRYPTION — how the zero-knowledge flow actually works -->
 <section id="encryption">
 <div class="sec-wrap">
-  <div class="sec-eyebrow reveal">Our main focus</div>
+  <div class="sec-eyebrow reveal">Zero-Knowledge Architecture</div>
   <h2 class="sec-title reveal"><span class="tw-line">How the encryption</span><br><span class="tw-line">actually works.</span></h2>
   <p class="sec-sub reveal">No marketing claim here — this is the literal data flow. Toggle "End-to-end encrypt" on any upload and this is what happens, entirely inside your browser.</p>
   <div class="enc-steps">
