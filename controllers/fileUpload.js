@@ -5,6 +5,7 @@ import Folder from "../models/Folder.js";
 import supabase from "../config/supabase.js";
 import { Readable } from "stream";
 import { isSafeUrl, safeFetchHtml, extractMeta } from "./linkPreview.js";
+import { checkKnownMalwareHash } from "../utils/malwareScan.js";
 
 const BUCKET = process.env.SUPABASE_BUCKET || "cloudvault-files";
 
@@ -99,6 +100,7 @@ export const verifyMagicBytes = (buffer, mimetype) => {
 // from causing HTML/script injection, but strip control characters and cap
 // length here too, so nothing odd ever lands in storage or logs in the first place.
 export const sanitizeOriginalName = (name) =>
+  // eslint-disable-next-line no-control-regex -- intentional: stripping control chars is the point
   String(name).replace(/[\x00-\x1F\x7F]/g, "").slice(0, 255).trim() || "file";
 
 // Most OSes have no registered MIME type for these extensions, so the
@@ -212,6 +214,16 @@ export const uploadFile = async (req, res) => {
       return res.status(400).json({
         message: `File content doesn't match its declared type (${effectiveMimetype}) — upload rejected`,
       });
+    }
+
+    // Best-effort malware pre-screen (see utils/malwareScan.js for what this
+    // does and doesn't catch). Runs after the free local magic-byte check,
+    // before paying for a network round-trip. checked=false means no
+    // verdict was possible — fail open, don't block the upload over a
+    // third-party outage or missing API key.
+    const scan = await checkKnownMalwareHash(req.file.buffer);
+    if (scan.flagged) {
+      return res.status(400).json({ message: `Upload rejected: ${scan.reason}` });
     }
 
     const result = await uploadToSupabase(

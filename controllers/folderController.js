@@ -9,6 +9,7 @@ const generateToken = () => randomUUID().replace(/-/g, "").slice(0, 16);
 // Same defense-in-depth as fileUpload.js's sanitizeOriginalName — strip
 // control characters and cap length before anything reaches storage.
 const sanitizeFolderName = (name) =>
+  // eslint-disable-next-line no-control-regex -- intentional: stripping control chars is the point
   String(name).replace(/[\x00-\x1F\x7F]/g, "").slice(0, 255).trim();
 
 // ── Zip Slip protection ──────────────────────────────────────────────────────
@@ -271,7 +272,7 @@ export const downloadFolderZip = async (req, res) => {
       return res.status(404).json({ message: "No files available to download in this folder" });
     }
 
-    const safeName = (folder.name || "folder").replace(/[^a-z0-9_\-]/gi, "_");
+    const safeName = (folder.name || "folder").replace(/[^a-z0-9_-]/gi, "_");
     res.setHeader("Content-Type", "application/zip");
     res.setHeader("Content-Disposition", `attachment; filename="${safeName}.zip"`);
 

@@ -5,6 +5,7 @@ A secure file sharing platform built with the MERN stack and Supabase Storage �
 Cryptex allows users to upload files, organize them into folders, generate unique share tokens, and control access through public/private visibility settings. File contents are stored in Supabase Storage while metadata is managed through MongoDB. Any upload can also be encrypted entirely in the browser before it's sent — in that mode, the server only ever stores ciphertext and never sees the decryption key.
 
 [![Live Demo](https://img.shields.io/badge/Live-Demo-brightgreen?style=for-the-badge)](https://cryptex-file-sharing.onrender.com/)
+[![CI](https://github.com/Zephyrex21/cryptex-file-sharing/actions/workflows/ci.yml/badge.svg)](https://github.com/Zephyrex21/cryptex-file-sharing/actions/workflows/ci.yml)
 
 
 # Features
@@ -168,6 +169,7 @@ PORT=3000
 - Supabase Service Role Key remains server-side.
 - Private files can only be accessed through their token.
 - Uploaded file content is verified against its declared type using magic-byte signatures, not just the client-reported MIME type (see `verifyMagicBytes` in `controllers/fileUpload.js`).
+- Unencrypted uploads get a best-effort malware pre-screen via VirusTotal's hash-lookup API — see `utils/malwareScan.js` for exactly what this does and doesn't catch (it's a known-hash lookup, not a full scan, and fails open if VirusTotal is unreachable or no API key is configured).
 - **Encrypted uploads are zero-knowledge by construction**, not just policy: the AES key never appears in any request body, response, log line, or database row this server controls. This also means magic-byte content verification is skipped for encrypted uploads — the server has no plaintext to check, which is the expected cost of not being able to read the file at all.
 - Known limitation: encryption happens at upload time only. There's currently no way to encrypt a file that's already been uploaded in plain — that would require downloading, encrypting, and re-uploading it, which isn't implemented yet.
 - Known limitation: encrypted files are excluded from folder ZIP downloads (bulk decryption would need a folder-level key exchange, which is a separate future feature, not a silent omission).

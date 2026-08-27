@@ -7,6 +7,7 @@
   "scripts": {
     "start": "node index.js",
     "dev": "nodemon index.js",
+    "lint": "eslint .",
     "test": "vitest run",
     "test:watch": "vitest"
   },
@@ -23,6 +24,8 @@
     "nodemon": "^3.1.14"
   },
   "devDependencies": {
+    "@eslint/js": "^10.0.1",
+    "eslint": "^10.9.1",
     "vitest": "^2.1.4"
   }
 }
