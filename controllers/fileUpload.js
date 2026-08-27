@@ -79,7 +79,7 @@ const looksLikeText = (buffer) => {
   if (sample.includes(0x00)) return false;
   return !sample.toString("utf8").includes("\uFFFD");
 };
-const verifyMagicBytes = (buffer, mimetype) => {
+export const verifyMagicBytes = (buffer, mimetype) => {
   const sig = MAGIC_BYTES[mimetype];
   if (!sig) return true; // type not in our table — fileFilter already restricts to ALLOWED, so this shouldn't occur
   if (sig === "webp") return bufferStartsWith(buffer, [0x52,0x49,0x46,0x46]) && buffer.slice(8,12).toString("ascii") === "WEBP";
@@ -98,7 +98,7 @@ const verifyMagicBytes = (buffer, mimetype) => {
 // Defense in depth: the frontend's esc() already prevents the displayed name
 // from causing HTML/script injection, but strip control characters and cap
 // length here too, so nothing odd ever lands in storage or logs in the first place.
-const sanitizeOriginalName = (name) =>
+export const sanitizeOriginalName = (name) =>
   String(name).replace(/[\x00-\x1F\x7F]/g, "").slice(0, 255).trim() || "file";
 
 // Most OSes have no registered MIME type for these extensions, so the

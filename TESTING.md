@@ -5,6 +5,18 @@ through it locally (`npm run dev`) and on the live Render deploy. Hard-refresh
 (Ctrl+Shift+R) wherever you test — CSS/JS caching will otherwise show you
 stale versions and make things look broken when they aren't.
 
+## Automated tests
+
+`npm test` runs 48 Vitest cases covering the security-critical logic that's
+otherwise easy to silently break: magic-byte content verification (every
+supported file type, plus mismatch/tampering cases), the SSRF protections in
+`isSafeUrl` (private IPs, IPv6, cloud metadata address, mixed-resolution,
+DNS-failure — all with `dns.lookup` mocked, so it needs no network access),
+and the encrypted-file business rules (`renameFile`/`setVisibility` rejecting
+encrypted files, expiry-date math). Everything below this point is still a
+manual walkthrough — a good next step would be extending this suite to cover
+the folder ZIP flow and the visibility/token-expiry HTTP routes end to end.
+
 ## Homepage (`/`)
 
 - [ ] Hero headline scrambles then resolves on load ("Encrypted end-to-end.")
