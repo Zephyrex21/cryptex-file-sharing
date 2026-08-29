@@ -121,7 +121,29 @@
 .grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(285px,1fr));gap:16px}
 .list{display:flex;flex-direction:column;gap:8px}
 /* File card */
-.fcard{background:var(--surf);border-radius:var(--r3);border:.5px solid var(--b1);box-shadow:var(--sh1);overflow:hidden;transition:transform .24s var(--spring),box-shadow .3s var(--ease),border-color .22s var(--ease);animation:cardIn .38s var(--ease) both}
+.fcard{position:relative;background:var(--surf);border-radius:var(--r3);border:.5px solid var(--b1);box-shadow:var(--sh1);overflow:hidden;transition:transform .24s var(--spring),box-shadow .3s var(--ease),border-color .22s var(--ease);animation:cardIn .38s var(--ease) both}
+/* Bulk-select checkboxes — hidden entirely outside select mode, so they add
+   zero visual noise (and zero layout cost) to the normal browsing view. */
+#selectModeBtn.active{background:var(--acc);color:#fff;border-color:var(--acc)}
+.sel-check{display:none;position:absolute;top:10px;left:10px;z-index:6;width:22px;height:22px;cursor:pointer}
+.grid.select-mode .sel-check{display:block}
+.lrow .sel-check{position:static;display:none;flex-shrink:0}
+.list.select-mode .lrow .sel-check{display:block}
+.sel-check input{position:absolute;opacity:0;width:100%;height:100%;margin:0;cursor:pointer}
+.sel-check span{display:block;width:22px;height:22px;border-radius:7px;border:2px solid rgba(255,255,255,.85);background:rgba(0,0,0,.28);backdrop-filter:blur(4px);transition:all .15s var(--ease);position:relative}
+.lrow .sel-check span{border-color:var(--b2);background:var(--bg2);backdrop-filter:none}
+.sel-check input:checked+span{background:var(--acc);border-color:var(--acc)}
+.sel-check input:checked+span::after{content:'';position:absolute;left:6px;top:2px;width:6px;height:11px;border:solid #fff;border-width:0 2px 2px 0;transform:rotate(45deg)}
+/* Floating bulk-action toolbar */
+.selbar{position:fixed;left:50%;bottom:24px;transform:translate(-50%,120%);display:flex;align-items:center;gap:6px;background:var(--surf2);border:.5px solid var(--b2);border-radius:99px;padding:8px 10px 8px 18px;box-shadow:var(--sh3);z-index:600;transition:transform .3s var(--spring);font-size:13.5px;font-weight:600;color:var(--t1)}
+.selbar.show{transform:translate(-50%,0)}
+.selbar button{display:flex;align-items:center;gap:6px;background:var(--bg2);border:none;border-radius:99px;padding:8px 14px;font-size:13px;font-weight:600;color:var(--t2);cursor:pointer;font-family:var(--font);transition:all .15s var(--ease);white-space:nowrap}
+.selbar button svg{width:14px;height:14px;fill:none;stroke:currentColor;stroke-width:2}
+.selbar button:hover{background:var(--b2);color:var(--t1)}
+.selbar-del{color:var(--red)!important}
+.selbar-del:hover{background:var(--reds)!important}
+.selbar-clear{padding:8px!important;background:transparent!important}
+@media(max-width:640px){.selbar{left:12px;right:12px;transform:translateY(120%);width:auto;flex-wrap:wrap;justify-content:center}.selbar.show{transform:translateY(0)}}
 .fcard:hover{transform:translateY(-6px);box-shadow:0 0 0 1px var(--accg),var(--sh3);border-color:var(--accg)}
 .cthumb{position:relative;aspect-ratio:16/9;overflow:hidden}
 .cthumb img{width:100%;height:100%;object-fit:cover;display:block;transition:transform .35s var(--ease)}
@@ -358,6 +380,8 @@
 .toast-undo-btn{background:var(--acc);color:#fff;border:none;border-radius:99px;padding:4px 12px;font-size:12px;font-weight:700;cursor:pointer;margin-left:4px;font-family:var(--font);transition:filter .15s var(--ease)}
 .toast-undo-btn:hover{filter:brightness(1.15)}
 .privrev-expiry{margin:0 24px 8px;padding:10px 14px;background:var(--surf3);border:.5px solid var(--b1);border-radius:var(--r2)}
+.privrev-qr{margin:0 24px 14px;padding:16px;background:var(--surf3);border:.5px solid var(--b1);border-radius:var(--r2);display:flex;align-items:center;justify-content:center}
+.privrev-qr img{width:200px;height:200px;border-radius:8px;background:#fff;padding:8px}
 .privrev-expiry-label{font-size:12px;color:var(--t3);margin-bottom:8px}
 .privrev-expiry-label strong{color:var(--t1);font-weight:700}
 .privrev-expiry-btns{display:flex;gap:6px}

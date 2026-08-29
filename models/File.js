@@ -77,6 +77,14 @@ const fileSchema = new mongoose.Schema(
     // since expiry is meaningless once something isn't gated behind a token.
     tokenExpiresAt: { type: Date, default: null },
 
+    // Optional self-destruct by ACCESS COUNT rather than time. null = unlimited.
+    // viewCount only increments while maxViews is actually set (see
+    // getFileByToken) — no point writing on every access for the common
+    // unlimited case. Reset to 0 whenever maxViews changes or the token is
+    // regenerated, so a fresh limit always starts from a clean slate.
+    maxViews:  { type: Number, default: null },
+    viewCount: { type: Number, default: 0 },
+
     // Optional — which folder this file belongs to (null = not in any folder)
     folderId: {
       type:    mongoose.Schema.Types.ObjectId,

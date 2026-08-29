@@ -2,9 +2,15 @@ import express from "express";
 import dotenv from "dotenv";
 import path from "path";
 import { fileURLToPath } from "url";
+import { createRequire } from "module";
+import swaggerUi from "swagger-ui-express";
 import connectDB from "./config/database.js";
 import fileUploadRoutes from "./routes/FileUpload.js";
 import folderRoutes     from "./routes/folder.js";
+import { generateQr }   from "./controllers/qrController.js";
+
+const require = createRequire(import.meta.url);
+const openapiSpec = require("./openapi.json");
 
 dotenv.config();
 
@@ -47,6 +53,10 @@ app.use(express.static(path.join(__dirname, "public")));
 // ── API Routes ─────────────────────────────────────────────────────────────
 app.use("/api/files",   fileUploadRoutes);
 app.use("/api/folders", folderRoutes);
+app.get("/api/qr",      generateQr);
+
+// ── API docs ───────────────────────────────────────────────────────────────
+app.use("/api-docs", swaggerUi.serve, swaggerUi.setup(openapiSpec));
 
 // ── Pages ──────────────────────────────────────────────────────────────────
 // Two-page site: "/" is the marketing homepage, "/app" is the actual file

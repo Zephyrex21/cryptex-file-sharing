@@ -13,6 +13,7 @@ import {
   previewFile,
   downloadFile,
   deleteFile,
+  downloadFilesZip,
 } from "../controllers/fileUpload.js";
 
 const router = express.Router();
@@ -108,6 +109,7 @@ const handleUpload = (req, res, next) =>
 
 router.post("/upload",            uploadLimiter, handleUpload, uploadFile);
 router.post("/link",              linkLimiter, createLink);
+router.post("/batch-zip",         downloadFilesZip);
 router.get("/",                   getAllFiles);
 
 // Token lookup — must come before /:id routes (specific before generic)

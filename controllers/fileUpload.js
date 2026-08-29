@@ -4,8 +4,10 @@ import File from "../models/File.js";
 import Folder from "../models/Folder.js";
 import supabase from "../config/supabase.js";
 import { Readable } from "stream";
+import { ZipArchive } from "archiver";
 import { isSafeUrl, safeFetchHtml, extractMeta } from "./linkPreview.js";
 import { checkKnownMalwareHash } from "../utils/malwareScan.js";
+import { sanitizeZipEntryName } from "./folderController.js";
 
 const BUCKET = process.env.SUPABASE_BUCKET || "cloudvault-files";
 
@@ -329,7 +331,19 @@ export const getAllFiles = async (req, res) => {
       query.folderId = { $nin: privateFolderIdArr };
     }
 
-    const files = await File.find(query).sort({ createdAt: -1 });
+    // Pagination is opt-in via ?page=&limit= — omitting both keeps the exact
+    // existing behavior (every matching file, one response) so the current
+    // frontend gallery keeps working unchanged. Provide either param to get
+    // a bounded page back instead, which is what a client built for scale
+    // (or just a much bigger library than a demo ever has) would use.
+    const hasPaging = req.query.page !== undefined || req.query.limit !== undefined;
+    const page = Math.max(1, parseInt(req.query.page, 10) || 1);
+    const limit = Math.min(100, Math.max(1, parseInt(req.query.limit, 10) || 20));
+
+    const total = hasPaging ? await File.countDocuments(query) : undefined;
+    let filesQuery = File.find(query).sort({ createdAt: -1 });
+    if (hasPaging) filesQuery = filesQuery.skip((page - 1) * limit).limit(limit);
+    const files = await filesQuery;
 
     // One-time migration: assign tokens to any legacy docs that don't have one.
     const needsToken = files.filter(f => !f.shareToken);
@@ -337,6 +351,12 @@ export const getAllFiles = async (req, res) => {
       await Promise.all(needsToken.map(f => { f.shareToken = generateToken(); return f.save(); }));
     }
 
+    if (hasPaging) {
+      return res.status(200).json({
+        count: files.length, files, total, page, limit,
+        hasMore: page * limit < total,
+      });
+    }
     res.status(200).json({ count: files.length, files });
   } catch (e) { res.status(500).json({ message: e.message }); }
 };
@@ -348,6 +368,20 @@ export const getFileByToken = async (req, res) => {
     if (!file) return res.status(404).json({ message: "Invalid token — file not found" });
     if (file.tokenExpiresAt && file.tokenExpiresAt < new Date()) {
       return res.status(410).json({ message: "This token has expired" });
+    }
+    // Atomic: only increments if still under the limit at update time, so two
+    // near-simultaneous requests on the very last remaining view can't both
+    // slip through (a plain read-then-write here would allow exactly that).
+    if (file.maxViews) {
+      const updated = await File.findOneAndUpdate(
+        { _id: file._id, viewCount: { $lt: file.maxViews } },
+        { $inc: { viewCount: 1 } },
+        { new: true }
+      );
+      if (!updated) {
+        return res.status(410).json({ message: "This link has reached its view limit and is no longer available" });
+      }
+      return res.status(200).json({ file: updated });
     }
     res.status(200).json({ file });
   } catch (e) { res.status(500).json({ message: e.message }); }
@@ -391,7 +425,7 @@ export const renameFile = async (req, res) => {
 // Body: { visibility: "public" | "private" }
 export const setVisibility = async (req, res) => {
   try {
-    const { visibility, expiresIn, regenerateToken } = req.body;
+    const { visibility, expiresIn, maxViews, regenerateToken } = req.body;
     if (!["public", "private"].includes(visibility)) {
       return res.status(400).json({ message: "visibility must be 'public' or 'private'" });
     }
@@ -410,13 +444,28 @@ export const setVisibility = async (req, res) => {
 
     const update = { visibility };
     if (visibility === "public") {
-      // Expiry only means something while a token is actually gating access.
+      // Expiry/view-limits only mean something while a token is actually
+      // gating access.
       update.tokenExpiresAt = null;
-    } else if (expiresIn !== undefined) {
+      update.maxViews = null;
+      update.viewCount = 0;
+    } else {
       // expiresIn is in minutes. 0/null/falsy → never expires.
-      update.tokenExpiresAt = expiresIn > 0 ? new Date(Date.now() + expiresIn * 60000) : null;
+      if (expiresIn !== undefined) {
+        update.tokenExpiresAt = expiresIn > 0 ? new Date(Date.now() + expiresIn * 60000) : null;
+      }
+      // A new view limit always restarts the count from zero — setting
+      // "3 views" should mean 3 views from now, not 3 minus however many
+      // this link already had before the setting changed.
+      if (maxViews !== undefined) {
+        update.maxViews = maxViews > 0 ? maxViews : null;
+        update.viewCount = 0;
+      }
     }
-    if (regenerateToken) update.shareToken = generateToken();
+    if (regenerateToken) {
+      update.shareToken = generateToken();
+      update.viewCount = 0; // a rotated token is a clean slate for its view budget too
+    }
 
     const file = await File.findByIdAndUpdate(
       req.params.id,
@@ -502,4 +551,61 @@ export const deleteFile = async (req, res) => {
     await file.deleteOne();
     res.status(200).json({ message: "Deleted!" });
   } catch (e) { res.status(500).json({ message: e.message }); }
+};
+
+// ── BULK: DOWNLOAD SELECTED FILES AS ZIP ────────────────────────────────────
+// Same streaming-archive approach as downloadFolderZip in folderController.js
+// (no temp files, piped straight through), just driven by an arbitrary list
+// of file IDs from the bulk-select UI instead of a folder's membership.
+// Encrypted files are silently skipped — bundling raw ciphertext into a zip
+// with no key attached isn't useful, same reasoning as the folder version.
+export const downloadFilesZip = async (req, res) => {
+  try {
+    const ids = Array.isArray(req.body.ids) ? req.body.ids.slice(0, 200) : [];
+    if (!ids.length) return res.status(400).json({ message: "No file IDs provided" });
+
+    const files = await File.find({
+      _id: { $in: ids },
+      visibility: { $ne: "private" },
+      encrypted: { $ne: true },
+      itemType: "file",
+    });
+    if (!files.length) return res.status(404).json({ message: "No downloadable files found for the given IDs" });
+
+    res.setHeader("Content-Type", "application/zip");
+    res.setHeader("Content-Disposition", `attachment; filename="cryptex-selected-${Date.now()}.zip"`);
+
+    const archive = new ZipArchive({ zlib: { level: 9 } });
+    archive.on("error", (err) => {
+      if (!res.headersSent) res.status(500).json({ message: err.message });
+      else res.destroy();
+    });
+    archive.pipe(res);
+
+    const usedNames = new Set();
+    for (const file of files) {
+      const sourceUrl = file.fileUrl || file.cloudinaryUrl;
+      if (!sourceUrl) continue;
+      try {
+        const response = await fetch(sourceUrl);
+        if (!response.ok || !response.body) continue;
+        let name = sanitizeZipEntryName(file.originalName || "file");
+        if (usedNames.has(name)) {
+          const dot = name.lastIndexOf(".");
+          const ext = dot > 0 ? name.slice(dot) : "";
+          const base = dot > 0 ? name.slice(0, dot) : name;
+          let n = 2;
+          while (usedNames.has(`${base} (${n})${ext}`)) n++;
+          name = `${base} (${n})${ext}`;
+        }
+        usedNames.add(name);
+        archive.append(Readable.fromWeb(response.body), { name });
+      } catch {
+        // Skip a file that fails to fetch rather than aborting the whole zip
+      }
+    }
+    await archive.finalize();
+  } catch (e) {
+    if (!res.headersSent) res.status(500).json({ message: e.message });
+  }
 };

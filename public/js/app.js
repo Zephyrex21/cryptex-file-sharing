@@ -8,7 +8,7 @@
 const API='/api/files';
 const FOLDERS_API='/api/folders';
 let allFiles=[],curF='all',curS='newest',curV='grid',searchQ='';
-let allFolders=[],curSection='files',curFolder=null,folderCtx=null,atfFileId=null,tokenModalFile=null,tokenModalFolder=null,folderSearchQ='';
+let allFolders=[],curSection='files',curFolder=null,folderCtx=null,atfFileId=null,atfBulkIds=null,tokenModalFile=null,tokenModalFolder=null,folderSearchQ='';
 let privRevealCtx={id:null,type:null}; // tracks which file/folder the privRevealModal is currently showing
 
 // ── Icon set ─────────────────────────────────────────────────────────────
@@ -128,7 +128,10 @@ document.querySelectorAll('.sopt').forEach(o=>o.addEventListener('click',e=>{
 document.querySelectorAll('.vtab').forEach(v=>v.addEventListener('click',()=>{
   document.querySelectorAll('.vtab').forEach(x=>x.classList.remove('active'));
   v.classList.add('active');curV=v.dataset.v;
-  document.getElementById('fc').className=curV==='grid'?'grid':'list';renderAll();
+  // Preserve select-mode across a grid/list switch — className= replaces
+  // the whole class list, so it'd otherwise silently drop out of select
+  // mode (and leave the toolbar/checkboxes out of sync) every time.
+  document.getElementById('fc').className=(curV==='grid'?'grid':'list')+(selectMode?' select-mode':'');renderAll();
 }));
 
 // ── Upload ─────────────────────────────────────────────────────────────────
@@ -318,6 +321,7 @@ function openEncryptedRevealModal(file){
   document.getElementById('prm-sub').textContent="This file is end-to-end encrypted — save the link below now. If it's lost, the file can't be recovered — we have no way to reset it.";
   document.getElementById('prm-token').textContent=file.shareToken||'';
   document.getElementById('prm-expiry-status').textContent='Never';
+  resetPrivRevealExtras(null,0);
   document.getElementById('privRevealModal').classList.add('open');
   copyPrivLink(); // auto-copy the full link (token + key) immediately, same convenience as the plain-private flow
 }
@@ -498,6 +502,64 @@ const OPEN_BTN_GRID=(f)=>`<button class="cact" title="Open Link" onclick="window
 const DL_BTN_LIST=(f)=>`<button class="lact la-dl" title="Download" onclick="dlFile('${f._id}','${esc(f.originalName)}')"><svg viewBox="0 0 24 24" stroke-linecap="round" stroke-linejoin="round"><polyline points="8 17 12 21 16 17"/><line x1="12" y1="12" x2="12" y2="21"/></svg></button>`;
 const OPEN_BTN_LIST=(f)=>`<button class="lact la-dl" title="Open Link" onclick="window.open('${esc(f.linkUrl)}','_blank','noopener')"><svg viewBox="0 0 24 24" stroke-linecap="round" stroke-linejoin="round"><path d="M18 13v6a2 2 0 01-2 2H5a2 2 0 01-2-2V8a2 2 0 012-2h6"/><polyline points="15 3 21 3 21 9"/><line x1="10" y1="14" x2="21" y2="3"/></svg></button>`;
 
+// ── Bulk selection ───────────────────────────────────────────────────────
+// Selection state lives entirely client-side (a Set of file IDs) — nothing
+// server-side needs to know a "selection" exists, only the eventual batch
+// action (delete/zip/move) does.
+let selectMode=false;
+const selectedIds=new Set();
+const SEL_CHECK=(id)=>`<label class="sel-check" onclick="event.stopPropagation()"><input type="checkbox" ${selectedIds.has(id)?'checked':''} onchange="toggleSelect('${id}',this.checked)"/><span></span></label>`;
+function toggleSelectMode(){
+  selectMode=!selectMode;
+  document.getElementById('fc').classList.toggle('select-mode',selectMode);
+  document.getElementById('selectModeBtn').classList.toggle('active',selectMode);
+  if(!selectMode)clearSelection();
+}
+function toggleSelect(id,checked){
+  if(checked)selectedIds.add(id);else selectedIds.delete(id);
+  updateSelBar();
+}
+function updateSelBar(){
+  const bar=document.getElementById('selBar');
+  const n=selectedIds.size;
+  document.getElementById('selCount').textContent=`${n} selected`;
+  bar.classList.toggle('show',n>0);
+}
+function clearSelection(){
+  selectedIds.clear();
+  document.querySelectorAll('#fc .sel-check input').forEach(cb=>{cb.checked=false;});
+  updateSelBar();
+}
+async function bulkDelete(){
+  if(!selectedIds.size)return;
+  const ids=[...selectedIds];
+  if(!confirm(`Delete ${ids.length} selected file${ids.length!==1?'s':''}? This can't be undone.`))return;
+  const results=await Promise.allSettled(ids.map(id=>fetch(`${API}/${id}`,{method:'DELETE'})));
+  const failed=results.filter(r=>r.status==='rejected'||!r.value.ok).length;
+  const okCount=ids.length-failed;
+  toast(failed?`Deleted ${okCount}, ${failed} failed`:`Deleted ${okCount} file${okCount!==1?'s':''}`,failed?'error':'success');
+  clearSelection();loadFiles();
+}
+async function bulkDownloadZip(){
+  if(!selectedIds.size)return;
+  const ids=[...selectedIds];
+  toast('Preparing ZIP…','info');
+  try{
+    const res=await fetch(`${API}/batch-zip`,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({ids})});
+    if(!res.ok){let m='Failed to build ZIP';try{m=(await res.json()).message||m;}catch{}throw new Error(m);}
+    const blob=await res.blob();
+    const url=URL.createObjectURL(blob);
+    const a=document.createElement('a');a.href=url;a.download=`cryptex-selected-${Date.now()}.zip`;
+    document.body.appendChild(a);a.click();document.body.removeChild(a);
+    setTimeout(()=>URL.revokeObjectURL(url),10000);
+    toast('ZIP downloaded '+ICONS.download,'success');
+  }catch(e){toast(e.message||'Failed to download ZIP','error');}
+}
+function bulkMove(){
+  if(!selectedIds.size)return;
+  showAtfBulk([...selectedIds]);
+}
+
 function mkGrid(f,i){
   const type=tc(f.fileType),label=tl(f.fileType);
   const d=document.createElement('div');
@@ -505,6 +567,7 @@ function mkGrid(f,i){
   d.className='fcard';d.id=`card-${f._id}`;d.style.animationDelay=`${i*.05}s`;
   if(isLink(f.fileType)){
     d.innerHTML=`
+      ${SEL_CHECK(f._id)}
       <div class="cthumb clink-thumb" onclick="window.open('${esc(f.linkUrl)}','_blank','noopener')" style="cursor:pointer">
         ${isRecent(f.createdAt)?'<span class="new-badge">NEW</span>':''}
         ${f.linkImage?`<img src="${esc(f.linkImage)}" alt="" loading="lazy" onerror="this.style.display='none';this.nextElementSibling.style.display='flex'">`:''}
@@ -520,6 +583,7 @@ function mkGrid(f,i){
   }
   const canP=isImg(f.fileType)||isVid(f.fileType)||isPdf(f.fileType);
   d.innerHTML=`
+    ${SEL_CHECK(f._id)}
     <div class="cthumb" onclick="${canP?`openPrev('${f._id}')`:''}" style="cursor:${canP?'pointer':'default'}">
       ${isRecent(f.createdAt)?'<span class="new-badge">NEW</span>':''}
       ${mkThumb(f)}
@@ -541,6 +605,7 @@ function mkList(f,i){
   if(isLink(f.fileType)){
     d.innerHTML=`
       <div class="lrow">
+        ${SEL_CHECK(f._id)}
         <div class="lthumb llink-thumb" onclick="window.open('${esc(f.linkUrl)}','_blank','noopener')" style="cursor:pointer">${f.linkImage?`<img src="${esc(f.linkImage)}" alt="" loading="lazy" onerror="this.style.display='none'">`:`<svg viewBox="0 0 24 24" stroke-linecap="round" stroke-linejoin="round"><path d="M10 13a5 5 0 007.54.54l3-3a5 5 0 00-7.07-7.07l-1.72 1.71"/><path d="M14 11a5 5 0 00-7.54-.54l-3 3a5 5 0 007.07 7.07l1.71-1.71"/></svg>`}</div>
         <div class="linfo">
           <div class="lname" title="${esc(f.originalName)}">${esc(f.originalName)}${isRecent(f.createdAt)?'<span class="new-badge-list">NEW</span>':''}</div>
@@ -553,6 +618,7 @@ function mkList(f,i){
   const canP=isImg(f.fileType)||isVid(f.fileType)||isPdf(f.fileType);
   d.innerHTML=`
     <div class="lrow">
+      ${SEL_CHECK(f._id)}
       <div class="lthumb" onclick="${canP?`openPrev('${f._id}')`:''}" style="cursor:${canP?'pointer':'default'}">${mkLThumb(f)}</div>
       <div class="linfo">
         <div class="lname" title="${esc(f.originalName)}">${esc(stripExt(f.originalName))}${isRecent(f.createdAt)?'<span class="new-badge-list">NEW</span>':''}</div>
@@ -980,6 +1046,19 @@ function fmtExpiryStatus(expiresAt){
   const hrs=diff/3600000;
   return hrs<24?`${Math.round(hrs)}h left`:`${Math.round(hrs/24)}d left`;
 }
+function fmtViewsStatus(maxViews,viewCount){
+  if(!maxViews)return'Unlimited';
+  const left=Math.max(0,maxViews-(viewCount||0));
+  return`${left} view${left!==1?'s':''} left`;
+}
+// Called every time privRevealModal is (re)populated for a different item —
+// the QR image and view-limit line are per-item state that must never leak
+// from whichever file/folder was showing before.
+function resetPrivRevealExtras(maxViews,viewCount){
+  document.getElementById('prm-views-status').textContent=fmtViewsStatus(maxViews,viewCount);
+  document.getElementById('prm-qr-wrap').style.display='none';
+  document.getElementById('prm-qr-img').src='';
+}
 function openSharePanel(type){
   const item=type==='folder'?tokenModalFolder:tokenModalFile;
   if(!item)return;
@@ -994,6 +1073,7 @@ function openSharePanel(type){
     :"Update this token\'s expiry, or share it again";
   document.getElementById('prm-token').textContent=item.shareToken||'';
   document.getElementById('prm-expiry-status').textContent=fmtExpiryStatus(item.tokenExpiresAt);
+  resetPrivRevealExtras(item.maxViews,item.viewCount);
   document.getElementById('privRevealModal').classList.add('open');
 }
 function downloadFolderZipFromModal(){
@@ -1194,16 +1274,26 @@ async function showAtf(fileId){
   renderAtf();
   document.getElementById('atfModal').classList.add('open');
 }
-function closeAtf(){document.getElementById('atfModal').classList.remove('open');atfFileId=null;}
+function closeAtf(){document.getElementById('atfModal').classList.remove('open');atfFileId=null;atfBulkIds=null;}
 document.getElementById('atfModal').addEventListener('click',e=>{if(e.target===document.getElementById('atfModal'))closeAtf();});
 document.getElementById('cfModal').addEventListener('click',e=>{if(e.target===document.getElementById('cfModal'))closeCreateFolder();});
 function renderAtf(){
   const body=document.getElementById('atfBody');
-  const file=allFiles.find(f=>f._id===atfFileId);
   if(!allFolders.length){
     body.innerHTML=`<div class="atf-empty">No folders yet.<br>Create one first from the <strong>Folders</strong> tab.</div>`;
     return;
   }
+  // Bulk mode (multiple files selected): every folder just offers "Add" —
+  // showing per-file "already in this folder" state for a mixed batch would
+  // need per-file rows, which isn't worth the complexity for this picker.
+  if(atfBulkIds){
+    body.innerHTML=allFolders.map(folder=>{
+      const cnt=folder.fileCount!==undefined?folder.fileCount:(folder.files?folder.files.length:0);
+      return`<div class="atf-item"><div class="atf-item-ico"><svg viewBox="0 0 24 24"><path d="M22 19a2 2 0 01-2 2H4a2 2 0 01-2-2V5a2 2 0 012-2h5l2 3h9a2 2 0 012 2z"/></svg></div><div class="atf-item-info"><div class="atf-item-name">${esc(folder.name)}</div><div class="atf-item-count">${cnt} file${cnt!==1?'s':''}</div></div><button class="atf-item-btn atf-btn-add" onclick="doAddToFolder('${folder._id}')">Add</button></div>`;
+    }).join('');
+    return;
+  }
+  const file=allFiles.find(f=>f._id===atfFileId);
   body.innerHTML=allFolders.map(folder=>{
     const inThis=file&&file.folderId&&file.folderId===folder._id;
     const cnt=folder.fileCount!==undefined?folder.fileCount:(folder.files?folder.files.length:0);
@@ -1213,7 +1303,26 @@ function renderAtf(){
     return`<div class="atf-item"><div class="atf-item-ico"><svg viewBox="0 0 24 24"><path d="M22 19a2 2 0 01-2 2H4a2 2 0 01-2-2V5a2 2 0 012-2h5l2 3h9a2 2 0 012 2z"/></svg></div><div class="atf-item-info"><div class="atf-item-name">${esc(folder.name)}</div><div class="atf-item-count">${cnt} file${cnt!==1?'s':''}</div></div>${btn}</div>`;
   }).join('');
 }
+async function showAtfBulk(ids){
+  atfBulkIds=ids;atfFileId=null;
+  if(!allFolders.length){
+    try{const res=await fetch(FOLDERS_API);if(res.ok){const d=await res.json();allFolders=d.folders;}}catch{}
+  }
+  renderAtf();
+  document.getElementById('atfModal').classList.add('open');
+}
 async function doAddToFolder(folderId){
+  if(atfBulkIds){
+    const ids=atfBulkIds;
+    const results=await Promise.allSettled(ids.map(id=>fetch(`${FOLDERS_API}/${folderId}/files`,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({fileId:id})})));
+    const okCount=results.filter(r=>r.status==='fulfilled'&&r.value.ok).length;
+    ids.forEach(id=>{const file=allFiles.find(f=>f._id===id);if(file)file.folderId=folderId;});
+    const folder=allFolders.find(f=>f._id===folderId);
+    if(folder)folder.fileCount=(folder.fileCount||0)+okCount;
+    closeAtf();clearSelection();loadFiles();
+    toast(okCount?`Added ${okCount} file${okCount!==1?'s':''} to folder`:'Failed to add files to folder',okCount?'success':'error');
+    return;
+  }
   const fileId=atfFileId;
   try{
     const res=await fetch(`${FOLDERS_API}/${folderId}/files`,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({fileId})});
@@ -1276,6 +1385,7 @@ async function toggleVis(id,currentVis){
     document.getElementById('prm-sub').textContent="Save this token — it\'s the only way to access this file";
     document.getElementById('prm-token').textContent=token;
     document.getElementById('prm-expiry-status').textContent='Never';
+    resetPrivRevealExtras(null,0);
     document.getElementById('privRevealModal').classList.add('open');
     try{await navigator.clipboard.writeText(token);}catch{/* user can copy manually */}
   }catch(e){toast(e.message||'Failed to update visibility','error');}
@@ -1308,6 +1418,39 @@ async function setPrivExpiry(minutes){
     document.getElementById('prm-expiry-status').textContent=minutes>0?`${fmtExpiry(minutes)} left`:'Never';
     toast(minutes>0?`Token now expires in ${fmtExpiry(minutes)}`:'Token will never expire','success');
   }catch{toast('Failed to update expiry','error');}
+}
+async function setPrivMaxViews(maxViews){
+  if(!privRevealCtx.id)return;
+  const apiBase=privRevealCtx.type==='folder'?FOLDERS_API:API;
+  try{
+    const res=await fetch(`${apiBase}/${privRevealCtx.id}/visibility`,{method:'PATCH',headers:{'Content-Type':'application/json'},body:JSON.stringify({visibility:'private',maxViews})});
+    if(!res.ok)throw new Error();
+    const d=await res.json();
+    const item=d.file||d.folder;
+    // Setting a new limit always resets the count server-side — mirror that here.
+    if(tokenModalFile&&tokenModalFile._id===privRevealCtx.id){tokenModalFile.maxViews=item?.maxViews??null;tokenModalFile.viewCount=0;}
+    if(tokenModalFolder&&tokenModalFolder._id===privRevealCtx.id){tokenModalFolder.maxViews=item?.maxViews??null;tokenModalFolder.viewCount=0;}
+    document.getElementById('prm-views-status').textContent=fmtViewsStatus(item?.maxViews,0);
+    toast(maxViews>0?`Link now self-destructs after ${maxViews} view${maxViews!==1?'s':''}`:'View limit removed — unlimited access','success');
+  }catch{toast('Failed to update view limit','error');}
+}
+function togglePrivQr(){
+  const wrap=document.getElementById('prm-qr-wrap'),img=document.getElementById('prm-qr-img');
+  const showing=wrap.style.display!=='none';
+  if(showing){wrap.style.display='none';return;}
+  const token=document.getElementById('prm-token').textContent;
+  if(!token)return;
+  let link=`${window.location.origin}${window.location.pathname}?token=${token}`;
+  // Encrypted files need the key in the link too, or the QR just points to a
+  // locked-file prompt instead of unlocking anything — same cached-key
+  // constraint copyPrivLink() already works under (see there for why).
+  if(privRevealCtx.encrypted){
+    const key=encKeyCache.get(privRevealCtx.id);
+    if(!key){toast("Decryption key isn't available in this session — use the link you saved when you encrypted this file",'error');return;}
+    link+=`#key=${key}`;
+  }
+  img.src=`/api/qr?text=${encodeURIComponent(link)}`;
+  wrap.style.display='flex';
 }
 async function regenPrivToken(){
   if(!privRevealCtx.id)return;
@@ -1362,6 +1505,7 @@ async function toggleFolderVis(id,currentVis){
     document.getElementById('prm-sub').textContent="Save this token — it\'s the only way to access this folder";
     document.getElementById('prm-token').textContent=token;
     document.getElementById('prm-expiry-status').textContent='Never';
+    resetPrivRevealExtras(null,0);
     document.getElementById('privRevealModal').classList.add('open');
     try{await navigator.clipboard.writeText(token);}catch{/* user can copy manually */}
   }catch(e){toast(e.message||'Failed to update folder visibility','error');}

@@ -31,6 +31,11 @@ const folderSchema = new mongoose.Schema(
     // Same expiry rule as File — null means never expires.
     tokenExpiresAt: { type: Date, default: null },
 
+    // Same view-count self-destruct rule as File — see models/File.js for
+    // the full reasoning.
+    maxViews:  { type: Number, default: null },
+    viewCount: { type: Number, default: 0 },
+
     // Array of File _ids that belong to this folder
     files: [
       {

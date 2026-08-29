@@ -103,6 +103,22 @@ the folder ZIP flow and the visibility/token-expiry HTTP routes end to end.
       in-memory, this should show "Decryption key isn't available in this
       session" rather than silently producing a broken link
 
+## Bulk actions, self-destructing links, QR, pagination (new)
+
+- [ ] Click "Select" in the files toolbar — checkboxes appear on every card
+- [ ] Select 2-3 files, floating toolbar slides up from the bottom showing the count
+- [ ] "Move" opens the folder picker, adds all selected files to the chosen folder
+- [ ] "Download ZIP" downloads a single .zip containing all selected files
+- [ ] Select an encrypted file alongside normal ones, download ZIP — the encrypted one is silently excluded, others download fine
+- [ ] "Delete" asks for confirmation, then removes all selected cards
+- [ ] Switch between grid/list view while in select mode — stays in select mode, checkboxes carry over
+- [ ] Click "Select" again (or the X in the toolbar) — exits select mode, toolbar hides
+- [ ] Make a file private, set "5 views" as the limit, open its token link 5 times — 6th attempt shows "reached its view limit"
+- [ ] Changing the view limit (or regenerating the token) resets the count — verify the status line updates
+- [ ] Click "Show QR code" in the private-file panel — a scannable QR renders inline; scanning it with a phone opens the share link
+- [ ] `GET /api/files?page=1&limit=5` returns a bounded page with `total`/`hasMore`; plain `GET /api/files` still returns everything (unchanged legacy behavior)
+- [ ] Visit `/api-docs` — Swagger UI loads and lists all the routes
+
 ## Mobile (resize browser or use a real phone)
 
 - [ ] Upload progress bar doesn't overflow horizontally on a narrow screen

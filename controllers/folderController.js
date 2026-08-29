@@ -17,7 +17,7 @@ const sanitizeFolderName = (name) =>
 // zip entry path could escape the extraction folder on whoever downloads and
 // unzips it. Strip any directory components and traversal sequences, keeping
 // only a flat, safe basename.
-const sanitizeZipEntryName = (name) => {
+export const sanitizeZipEntryName = (name) => {
   // Take just the last path segment, stripping any / or \ separators —
   // discards "../" and any other directory traversal entirely.
   const base = String(name).split(/[\\/]/).pop() || "file";
@@ -109,6 +109,19 @@ export const getFolderByToken = async (req, res) => {
     if (folder.tokenExpiresAt && folder.tokenExpiresAt < new Date()) {
       return res.status(410).json({ message: "This token has expired" });
     }
+    // Same atomic view-limit enforcement as getFileByToken — see there for
+    // why the check and increment happen in one update.
+    if (folder.maxViews) {
+      const updated = await Folder.findOneAndUpdate(
+        { _id: folder._id, viewCount: { $lt: folder.maxViews } },
+        { $inc: { viewCount: 1 } },
+        { new: true }
+      ).populate({ path: "files", match: { visibility: { $ne: "private" } } });
+      if (!updated) {
+        return res.status(410).json({ message: "This link has reached its view limit and is no longer available" });
+      }
+      return res.status(200).json({ folder: updated });
+    }
 
     res.status(200).json({ folder });
   } catch (e) { res.status(500).json({ message: e.message }); }
@@ -137,7 +150,7 @@ export const renameFolder = async (req, res) => {
 // Body: { visibility: "public" | "private" }
 export const setFolderVisibility = async (req, res) => {
   try {
-    const { visibility, expiresIn, regenerateToken } = req.body;
+    const { visibility, expiresIn, maxViews, regenerateToken } = req.body;
     if (!["public", "private"].includes(visibility)) {
       return res.status(400).json({ message: "visibility must be 'public' or 'private'" });
     }
@@ -145,10 +158,21 @@ export const setFolderVisibility = async (req, res) => {
     const update = { visibility };
     if (visibility === "public") {
       update.tokenExpiresAt = null;
-    } else if (expiresIn !== undefined) {
-      update.tokenExpiresAt = expiresIn > 0 ? new Date(Date.now() + expiresIn * 60000) : null;
+      update.maxViews = null;
+      update.viewCount = 0;
+    } else {
+      if (expiresIn !== undefined) {
+        update.tokenExpiresAt = expiresIn > 0 ? new Date(Date.now() + expiresIn * 60000) : null;
+      }
+      if (maxViews !== undefined) {
+        update.maxViews = maxViews > 0 ? maxViews : null;
+        update.viewCount = 0;
+      }
     }
-    if (regenerateToken) update.shareToken = generateToken();
+    if (regenerateToken) {
+      update.shareToken = generateToken();
+      update.viewCount = 0;
+    }
 
     const folder = await Folder.findByIdAndUpdate(
       req.params.id,

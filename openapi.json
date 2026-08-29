@@ -1,0 +1,170 @@
+{
+  "openapi": "3.0.3",
+  "info": {
+    "title": "Cryptex API",
+    "version": "1.0.0",
+    "description": "Token-based, optionally end-to-end-encrypted file sharing. No accounts — visibility and share tokens are the entire access-control model. See the project README for the full encrypted-upload contract (multipart fields for AES-256-GCM ciphertext + per-field IVs)."
+  },
+  "servers": [{ "url": "/api" }],
+  "tags": [
+    { "name": "Files" },
+    { "name": "Folders" },
+    { "name": "Utility" }
+  ],
+  "components": {
+    "schemas": {
+      "File": {
+        "type": "object",
+        "properties": {
+          "_id": { "type": "string" },
+          "originalName": { "type": "string" },
+          "itemType": { "type": "string", "enum": ["file", "link"] },
+          "fileUrl": { "type": "string" },
+          "fileType": { "type": "string" },
+          "fileSize": { "type": "number" },
+          "encrypted": { "type": "boolean" },
+          "visibility": { "type": "string", "enum": ["public", "private"] },
+          "shareToken": { "type": "string" },
+          "tokenExpiresAt": { "type": "string", "format": "date-time", "nullable": true },
+          "maxViews": { "type": "integer", "nullable": true },
+          "viewCount": { "type": "integer" },
+          "folderId": { "type": "string", "nullable": true }
+        }
+      },
+      "Folder": {
+        "type": "object",
+        "properties": {
+          "_id": { "type": "string" },
+          "name": { "type": "string" },
+          "visibility": { "type": "string", "enum": ["public", "private"] },
+          "shareToken": { "type": "string" },
+          "tokenExpiresAt": { "type": "string", "format": "date-time", "nullable": true },
+          "maxViews": { "type": "integer", "nullable": true },
+          "viewCount": { "type": "integer" },
+          "files": { "type": "array", "items": { "$ref": "#/components/schemas/File" } },
+          "fileCount": { "type": "integer" }
+        }
+      },
+      "VisibilityUpdate": {
+        "type": "object",
+        "required": ["visibility"],
+        "properties": {
+          "visibility": { "type": "string", "enum": ["public", "private"] },
+          "expiresIn": { "type": "integer", "description": "Minutes until the token expires. 0 or omitted = never." },
+          "maxViews": { "type": "integer", "description": "Self-destruct after N successful token accesses. 0 or omitted = unlimited. Resets viewCount to 0 whenever changed." },
+          "regenerateToken": { "type": "boolean", "description": "Rotate the share token, invalidating the old one. Also resets viewCount." }
+        }
+      },
+      "Error": {
+        "type": "object",
+        "properties": { "message": { "type": "string" } }
+      }
+    }
+  },
+  "paths": {
+    "/files/upload": {
+      "post": {
+        "tags": ["Files"],
+        "summary": "Upload a file (plaintext or client-side encrypted)",
+        "description": "Standard multipart upload. For an encrypted upload, additionally send `encrypted=true`, `iv`, `encryptedName`, `encryptedNameIV`, `encryptedMimeType`, `encryptedMimeTypeIV` as multipart fields BEFORE the `file` field, with `file` itself being AES-256-GCM ciphertext typed `application/octet-stream`. Encrypted uploads are always forced private server-side.",
+        "requestBody": {
+          "required": true,
+          "content": { "multipart/form-data": { "schema": { "type": "object", "properties": { "file": { "type": "string", "format": "binary" } } } } }
+        },
+        "responses": {
+          "201": { "description": "Uploaded", "content": { "application/json": { "schema": { "type": "object", "properties": { "file": { "$ref": "#/components/schemas/File" } } } } } },
+          "400": { "description": "Rejected — bad content/type mismatch, missing encryption metadata, or flagged by the malware pre-screen", "content": { "application/json": { "schema": { "$ref": "#/components/schemas/Error" } } } }
+        }
+      }
+    },
+    "/files": {
+      "get": {
+        "tags": ["Files"],
+        "summary": "List public files",
+        "description": "Omit page/limit for the full unbounded list (legacy behavior). Provide either to get a bounded page back instead.",
+        "parameters": [
+          { "name": "page", "in": "query", "schema": { "type": "integer", "default": 1 } },
+          { "name": "limit", "in": "query", "schema": { "type": "integer", "default": 20, "maximum": 100 } }
+        ],
+        "responses": { "200": { "description": "OK" } }
+      }
+    },
+    "/files/batch-zip": {
+      "post": {
+        "tags": ["Files"],
+        "summary": "Download multiple files as a single ZIP",
+        "description": "Encrypted and private files are silently excluded from the archive.",
+        "requestBody": { "required": true, "content": { "application/json": { "schema": { "type": "object", "properties": { "ids": { "type": "array", "items": { "type": "string" }, "maxItems": 200 } } } } } },
+        "responses": { "200": { "description": "ZIP stream", "content": { "application/zip": {} } } }
+      }
+    },
+    "/files/token/{token}": {
+      "get": {
+        "tags": ["Files"],
+        "summary": "Access a file by its share token",
+        "parameters": [{ "name": "token", "in": "path", "required": true, "schema": { "type": "string" } }],
+        "responses": {
+          "200": { "description": "OK", "content": { "application/json": { "schema": { "type": "object", "properties": { "file": { "$ref": "#/components/schemas/File" } } } } } },
+          "404": { "description": "Invalid token" },
+          "410": { "description": "Token expired or view limit reached" }
+        }
+      }
+    },
+    "/files/{id}": {
+      "get": { "tags": ["Files"], "summary": "Get a file by ID", "parameters": [{ "name": "id", "in": "path", "required": true, "schema": { "type": "string" } }], "responses": { "200": { "description": "OK" } } },
+      "patch": { "tags": ["Files"], "summary": "Rename a file", "description": "Rejected for encrypted files — the real filename only exists as ciphertext.", "parameters": [{ "name": "id", "in": "path", "required": true, "schema": { "type": "string" } }], "responses": { "200": { "description": "Renamed" }, "400": { "description": "Encrypted file, or empty name" } } },
+      "delete": { "tags": ["Files"], "summary": "Delete a file", "parameters": [{ "name": "id", "in": "path", "required": true, "schema": { "type": "string" } }], "responses": { "200": { "description": "Deleted" } } }
+    },
+    "/files/{id}/visibility": {
+      "patch": {
+        "tags": ["Files"],
+        "summary": "Set visibility, expiry, and/or view limit",
+        "description": "Encrypted files can never be set public — enforced server-side regardless of what the request claims.",
+        "parameters": [{ "name": "id", "in": "path", "required": true, "schema": { "type": "string" } }],
+        "requestBody": { "required": true, "content": { "application/json": { "schema": { "$ref": "#/components/schemas/VisibilityUpdate" } } } },
+        "responses": { "200": { "description": "Updated" }, "400": { "description": "Invalid value, or attempted to publicize an encrypted file" } }
+      }
+    },
+    "/files/{id}/download": { "get": { "tags": ["Files"], "summary": "Download the raw file bytes", "parameters": [{ "name": "id", "in": "path", "required": true, "schema": { "type": "string" } }], "responses": { "200": { "description": "File stream" } } } },
+    "/files/{id}/preview": { "get": { "tags": ["Files"], "summary": "Inline preview (images/video/PDF)", "parameters": [{ "name": "id", "in": "path", "required": true, "schema": { "type": "string" } }], "responses": { "200": { "description": "File stream, inline disposition" } } } },
+    "/files/link": {
+      "post": {
+        "tags": ["Files"],
+        "summary": "Save an external URL as a shareable link item",
+        "description": "Server fetches the URL server-side to extract an OG title/image, with SSRF protections (private IP ranges, redirect re-validation) — see controllers/linkPreview.js.",
+        "requestBody": { "required": true, "content": { "application/json": { "schema": { "type": "object", "required": ["url"], "properties": { "url": { "type": "string" } } } } } },
+        "responses": { "201": { "description": "Saved" }, "400": { "description": "Unsafe or unreachable URL" } }
+      }
+    },
+    "/folders": {
+      "get": { "tags": ["Folders"], "summary": "List public folders", "responses": { "200": { "description": "OK" } } },
+      "post": { "tags": ["Folders"], "summary": "Create a folder", "requestBody": { "required": true, "content": { "application/json": { "schema": { "type": "object", "required": ["name"], "properties": { "name": { "type": "string" } } } } } }, "responses": { "201": { "description": "Created" } } }
+    },
+    "/folders/{id}": {
+      "get": { "tags": ["Folders"], "summary": "Get a folder by ID", "parameters": [{ "name": "id", "in": "path", "required": true, "schema": { "type": "string" } }], "responses": { "200": { "description": "OK" } } },
+      "patch": { "tags": ["Folders"], "summary": "Rename a folder", "parameters": [{ "name": "id", "in": "path", "required": true, "schema": { "type": "string" } }], "responses": { "200": { "description": "Renamed" } } },
+      "delete": { "tags": ["Folders"], "summary": "Delete a folder (files inside are not deleted)", "parameters": [{ "name": "id", "in": "path", "required": true, "schema": { "type": "string" } }], "responses": { "200": { "description": "Deleted" } } }
+    },
+    "/folders/{id}/visibility": {
+      "patch": {
+        "tags": ["Folders"],
+        "summary": "Set visibility, expiry, and/or view limit",
+        "parameters": [{ "name": "id", "in": "path", "required": true, "schema": { "type": "string" } }],
+        "requestBody": { "required": true, "content": { "application/json": { "schema": { "$ref": "#/components/schemas/VisibilityUpdate" } } } },
+        "responses": { "200": { "description": "Updated" } }
+      }
+    },
+    "/folders/{id}/zip": { "get": { "tags": ["Folders"], "summary": "Download every file in a folder as a ZIP", "description": "Encrypted files are silently excluded.", "parameters": [{ "name": "id", "in": "path", "required": true, "schema": { "type": "string" } }], "responses": { "200": { "description": "ZIP stream" } } } },
+    "/folders/token/{token}": { "get": { "tags": ["Folders"], "summary": "Access a folder by its share token", "parameters": [{ "name": "token", "in": "path", "required": true, "schema": { "type": "string" } }], "responses": { "200": { "description": "OK" }, "410": { "description": "Expired or view limit reached" } } } },
+    "/folders/{id}/files": { "post": { "tags": ["Folders"], "summary": "Add a file to a folder", "parameters": [{ "name": "id", "in": "path", "required": true, "schema": { "type": "string" } }], "responses": { "200": { "description": "Added" } } } },
+    "/folders/{id}/files/{fileId}": { "delete": { "tags": ["Folders"], "summary": "Remove a file from a folder", "parameters": [{ "name": "id", "in": "path", "required": true, "schema": { "type": "string" } }, { "name": "fileId", "in": "path", "required": true, "schema": { "type": "string" } }], "responses": { "200": { "description": "Removed" } } } },
+    "/qr": {
+      "get": {
+        "tags": ["Utility"],
+        "summary": "Generate a QR code PNG for any text (e.g. a share link)",
+        "parameters": [{ "name": "text", "in": "query", "required": true, "schema": { "type": "string", "maxLength": 500 } }],
+        "responses": { "200": { "description": "PNG image", "content": { "image/png": {} } }, "400": { "description": "Missing or too-long text" } }
+      }
+    }
+  }
+}
