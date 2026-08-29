@@ -319,6 +319,16 @@
 
 /* Lightbox */
 .lb{position:fixed;inset:0;z-index:10000;background:rgba(0,0,0,.94);backdrop-filter:blur(24px);-webkit-backdrop-filter:blur(24px);display:flex;align-items:center;justify-content:center;padding:24px;opacity:0;pointer-events:none;transition:opacity .22s var(--ease)}
+/* backdrop-filter blur is one of the more expensive things to composite on
+   phone-class GPUs — reducing the radius on the heaviest few (lightbox,
+   modal overlay, upload zone) keeps the visual language intact while
+   cutting a real chunk of that cost specifically where mobile hardware
+   feels it most. */
+@media(max-width:640px){
+  .lb{backdrop-filter:blur(12px);-webkit-backdrop-filter:blur(12px)}
+  .modal-bg{backdrop-filter:blur(6px);-webkit-backdrop-filter:blur(6px)}
+  .uzone{backdrop-filter:blur(8px)}
+}
 .lb.open{opacity:1;pointer-events:all}
 .lb-inner{position:relative;max-width:92vw;max-height:90vh}
 .lb.open .lb-inner{animation:lbIn .28s var(--spring) both}
@@ -345,7 +355,7 @@
    instead of a pill once there isn't room for one line. */
 @media(max-width:480px){
   #toasts{left:14px;right:14px;transform:none;width:auto}
-  .toast{white-space:normal;max-width:100%;text-align:left;border-radius:16px;align-items:flex-start}
+  .toast{white-space:normal;max-width:100%;text-align:left;border-radius:16px;align-items:flex-start;backdrop-filter:blur(14px)}
   .toast .td{margin-top:5px}
 }
 .toast.out{animation:toastOut .2s var(--ease) forwards}

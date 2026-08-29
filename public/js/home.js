@@ -67,6 +67,30 @@ function scrambleReveal(el,duration=750){
   setTimeout(()=>scrambleReveal(l2,700),120);
 })();
 
+// ── Pause decorative illustration animations when they can't be seen ───────
+// Both illustrations run a couple dozen infinite CSS animations combined
+// (orbits, rings, sparks, shine sweeps, glow pulses...). None of that
+// compositing work is worth paying for while the illustration is scrolled
+// out of view or the tab itself isn't visible — pausing it then is a real,
+// measurable saving, and it's exactly the kind of cost mobile hardware
+// feels hardest. IntersectionObserver tracks per-element visibility; the
+// Page Visibility API additionally catches "tab is in the background",
+// which IntersectionObserver alone does not.
+(function(){
+  const illos=document.querySelectorAll('.hero-illo, .feat-illo-wrap');
+  if(!illos.length)return;
+  const inView=new Map(illos.length?[...illos].map(el=>[el,false]):[]);
+  const applyState=()=>{
+    illos.forEach(el=>el.classList.toggle('illo-paused',document.hidden||!inView.get(el)));
+  };
+  const io=new IntersectionObserver((entries)=>{
+    entries.forEach(entry=>inView.set(entry.target,entry.isIntersecting));
+    applyState();
+  },{threshold:0});
+  illos.forEach(el=>io.observe(el));
+  document.addEventListener('visibilitychange',applyState);
+})();
+
 // ── Hero illustration: token flicker ────────────────────────────────────────
 // The token text on the front card briefly re-scrambles one character every
 // couple seconds, then resolves back — reads as a live cipher feed rather
@@ -78,7 +102,11 @@ function scrambleReveal(el,duration=750){
   if(window.matchMedia('(prefers-reduced-motion: reduce)').matches)return;
   const base=el.textContent;
   const chars='0123456789ABCDEF';
+  const illo=document.querySelector('.hero-illo');
   setInterval(()=>{
+    // Skip the work entirely while paused (off-screen / tab hidden) rather
+    // than just hiding the result — no point touching the DOM at all.
+    if(illo&&illo.classList.contains('illo-paused'))return;
     const pos=Math.floor(Math.random()*base.length);
     const scrambled=base.split('');
     scrambled[pos]=chars[Math.floor(Math.random()*chars.length)];

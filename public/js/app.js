@@ -100,8 +100,22 @@ async function decryptString(key,cipherB64,ivB64){
   return new TextDecoder().decode(plain);
 }
 // ── Search ─────────────────────────────────────────────────────────────────
-document.getElementById('sInput').addEventListener('input',e=>{searchQ=e.target.value.trim();renderAll();});
-document.getElementById('folderSearchInput').addEventListener('input',e=>{folderSearchQ=e.target.value.trim();renderFolders();});
+// Debounced: without this, every single keystroke was tearing down and
+// rebuilding the ENTIRE file grid from scratch (renderAll does c.innerHTML='';
+// then re-creates every card, replaying its entrance animation) — the single
+// biggest source of typing-lag in the app, especially on a large library or
+// on mobile hardware. 180ms is short enough to still feel instant.
+let searchDebounceT=null,folderSearchDebounceT=null;
+document.getElementById('sInput').addEventListener('input',e=>{
+  searchQ=e.target.value.trim();
+  clearTimeout(searchDebounceT);
+  searchDebounceT=setTimeout(renderAll,180);
+});
+document.getElementById('folderSearchInput').addEventListener('input',e=>{
+  folderSearchQ=e.target.value.trim();
+  clearTimeout(folderSearchDebounceT);
+  folderSearchDebounceT=setTimeout(renderFolders,180);
+});
 document.getElementById('tInput').addEventListener('keydown',e=>{if(e.key==='Enter')accessByToken();});
 document.getElementById('tokenModal').addEventListener('click',e=>{if(e.target===document.getElementById('tokenModal'))closeTokenModal();});
 document.getElementById('privRevealModal').addEventListener('click',e=>{if(e.target===document.getElementById('privRevealModal'))document.getElementById('privRevealModal').classList.remove('open');});
