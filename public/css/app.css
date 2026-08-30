@@ -397,13 +397,6 @@
 .privrev-expiry-btns{display:flex;gap:6px}
 .privrev-expiry-btns button{flex:1;padding:6px 0;border-radius:8px;border:.5px solid var(--b2);background:var(--surf2);color:var(--t2);font-size:12px;font-weight:700;cursor:pointer;transition:all .15s var(--ease);font-family:var(--font)}
 .privrev-expiry-btns button:hover{background:var(--acc);color:#fff;border-color:var(--acc)}
-.tmod-act{width:38px;height:38px;border-radius:10px;border:.5px solid var(--b2);background:transparent;color:var(--t3);cursor:pointer;display:flex;align-items:center;justify-content:center;transition:all .18s var(--ease);flex-shrink:0}
-.tmod-act svg{width:15px;height:15px;stroke:currentColor;fill:none;stroke-width:2;stroke-linecap:round;stroke-linejoin:round}
-.tmod-act:active{transform:scale(.9)}
-.tmod-dl:hover{background:var(--grns);color:var(--grn);border-color:rgba(34,197,94,.25)}
-.tmod-pub:hover{background:var(--accs);color:var(--acc);border-color:var(--accg)}
-.tmod-del:hover{background:var(--reds);color:var(--red);border-color:rgba(232,64,64,.25)}
-.tmod-sep{flex:1}
 /* ── Token bar ─────────────────────────────────────────────────────────── */
 .tbar{display:flex;align-items:center;gap:12px;background:var(--surf);border:.5px solid var(--b1);border-radius:var(--r4);padding:14px 20px;margin-bottom:32px;box-shadow:var(--sh1);animation:fadeUp .5s var(--ease) .07s both}
 .tbar>svg{width:18px;height:18px;stroke:var(--blu);fill:none;stroke-width:2;stroke-linecap:round;stroke-linejoin:round;flex-shrink:0}
@@ -430,23 +423,55 @@
 #linkAddBtn:active{transform:scale(.96)}
 #linkAddBtn:disabled{opacity:.5;pointer-events:none;transform:none}
 /* ── Token access modal ────────────────────────────────────────────────── */
-.tmodal-box{background:var(--surf2);border:.5px solid var(--b2);border-radius:var(--r3);max-width:480px;width:100%;box-shadow:var(--sh3);overflow:hidden;position:relative}
-.modal-bg.open .tmodal-box{animation:lbIn .25s var(--spring) both}
-.tmodal-head{padding:20px 22px 16px;border-bottom:.5px solid var(--b1);display:flex;align-items:center;gap:14px}
-.tmodal-ico{width:48px;height:48px;border-radius:var(--r2);display:flex;align-items:center;justify-content:center;flex-shrink:0}
-.tmodal-head-info{flex:1;min-width:0;padding-right:28px}
-.tmodal-title{font-size:15px;font-weight:700;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;letter-spacing:-.2px}
-.tmodal-sub{font-size:13px;color:var(--t2);margin-top:4px;display:flex;align-items:center;gap:8px;flex-wrap:wrap}
-.tmodal-close{position:absolute;top:14px;right:14px;width:28px;height:28px;border-radius:50%;border:none;background:var(--bg2);color:var(--t2);cursor:pointer;display:flex;align-items:center;justify-content:center;transition:all .15s var(--ease)}
-.tmodal-close:hover{background:var(--surfh);color:var(--t1)}
+.tmodal-box{background:var(--surf2);border:.5px solid var(--b2);border-radius:var(--r3);max-width:560px;width:100%;max-height:88vh;box-shadow:var(--sh3);overflow:hidden;position:relative;display:flex;flex-direction:column}
+/* Hero banner — a real image thumbnail for actual images (including a
+   decrypted preview once an encrypted image is unlocked), a large icon on a
+   type-colored gradient for everything else. This is the "small popup"
+   modal's biggest visual upgrade: it reads as a proper file preview now,
+   not just a labeled icon chip. */
+.tmodal-hero{position:relative;width:100%;height:168px;flex-shrink:0;overflow:hidden;display:flex;align-items:center;justify-content:center}
+.tmodal-hero img{width:100%;height:100%;object-fit:cover}
+.tmodal-hero svg{width:52px;height:52px}
+.tmodal-close{position:absolute;top:14px;right:14px;width:30px;height:30px;border-radius:50%;border:none;background:rgba(0,0,0,.4);color:#fff;cursor:pointer;display:flex;align-items:center;justify-content:center;transition:all .15s var(--ease);backdrop-filter:blur(6px);-webkit-backdrop-filter:blur(6px);z-index:2}
+.tmodal-close:hover{background:rgba(0,0,0,.6)}
 .tmodal-close svg{width:14px;height:14px;stroke:currentColor;fill:none;stroke-width:2.5;stroke-linecap:round}
-.tmodal-body{padding:14px 22px;max-height:260px;overflow-y:auto}
+.tmodal-scroll{overflow-y:auto;flex:1;min-height:0;padding:0 24px 18px}
+.tmodal-titlebar{padding:18px 24px 2px}
+.tmodal-title-lg{font-size:17px;font-weight:800;letter-spacing:-.3px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.tmodal-badges{display:flex;align-items:center;gap:7px;margin-top:9px;flex-wrap:wrap}
+/* Key/value info grid — replaces the old 3-line list with a fuller picture:
+   size, type, upload date, visibility, the share token itself (copyable),
+   and expiry/view-limit status when set. Everything a viewer might want to
+   know about what they're looking at, in one glance. */
+.tmodal-info-grid{display:grid;grid-template-columns:1fr 1fr;gap:1px;background:var(--b1);border:.5px solid var(--b1);border-radius:var(--r2);margin-top:14px;overflow:hidden}
+.tinfo-item{background:var(--surf2);padding:10px 13px}
+.tinfo-item.full{grid-column:1/-1}
+.tinfo-label{font-size:9.5px;font-weight:700;text-transform:uppercase;letter-spacing:.5px;color:var(--t3);margin-bottom:3px}
+.tinfo-value{font-size:13px;font-weight:600;color:var(--t1);word-break:break-word;display:flex;align-items:center;gap:6px}
+.tinfo-value.mono{font-family:var(--font-mono);font-size:12px;letter-spacing:.3px}
+.tinfo-copy-btn{background:none;border:none;padding:2px;cursor:pointer;color:var(--t3);display:flex;flex-shrink:0;transition:color .15s var(--ease)}
+.tinfo-copy-btn:hover{color:var(--acc)}
+.tinfo-copy-btn svg{width:13px;height:13px;stroke:currentColor;fill:none;stroke-width:2;stroke-linecap:round;stroke-linejoin:round}
+/* Actions — one full-width primary action, then labeled (not icon-only)
+   secondary actions in a row, reads as deliberate hierarchy rather than a
+   crowded strip of unlabeled icon buttons. */
+.tmodal-actions-v2{padding:16px 24px 22px;display:flex;flex-direction:column;gap:9px;flex-shrink:0}
+.tmodal-primary-btn{width:100%;padding:12.5px;border-radius:var(--r2);border:none;background:var(--acc);color:#fff;font-weight:700;font-size:14px;font-family:var(--font);display:flex;align-items:center;justify-content:center;gap:8px;cursor:pointer;transition:all .15s var(--ease)}
+.tmodal-primary-btn:hover{background:var(--acc2)}
+.tmodal-primary-btn svg{width:16px;height:16px;stroke:currentColor;fill:none;stroke-width:2;stroke-linecap:round;stroke-linejoin:round}
+.tmodal-secondary-row{display:flex;gap:8px}
+.tmodal-sec-btn{flex:1;padding:10px 8px;border-radius:var(--r2);border:.5px solid var(--b2);background:var(--bg2);color:var(--t2);font-weight:600;font-size:12px;font-family:var(--font);display:flex;align-items:center;justify-content:center;gap:6px;cursor:pointer;transition:all .15s var(--ease);white-space:nowrap}
+.tmodal-sec-btn:hover{background:var(--surfh);color:var(--t1)}
+.tmodal-sec-btn svg{width:14px;height:14px;stroke:currentColor;fill:none;stroke-width:2;stroke-linecap:round;stroke-linejoin:round;flex-shrink:0}
+.tmodal-sec-btn.danger{color:var(--red)}
+.tmodal-sec-btn.danger:hover{background:var(--reds);border-color:rgba(232,64,64,.25)}
+.modal-bg.open .tmodal-box{animation:lbIn .25s var(--spring) both}
+.enc-unlock{margin-top:14px}
 .enc-unlock p{font-size:13px;color:var(--t2);line-height:1.55;margin-bottom:12px}
 .enc-unlock input{width:100%;padding:11px 14px;border-radius:var(--r2);border:.5px solid var(--b2);background:var(--bg2);color:var(--t1);font-size:13px;font-family:var(--font-mono);outline:none;transition:all .18s var(--ease)}
 .enc-unlock input:focus{border-color:var(--acc);box-shadow:0 0 0 3px var(--accg)}
 .enc-unlock input::placeholder{color:var(--t3);font-family:var(--font)}
-.tmodal-foot{padding:10px 22px 16px;display:flex;align-items:center;gap:8px;border-top:.5px solid var(--b1)}
-.tmodal-file-list{display:flex;flex-direction:column;gap:7px}
+.tmodal-file-list{display:flex;flex-direction:column;gap:7px;margin-top:14px}
 .tmodal-file-row{display:flex;align-items:center;gap:10px;padding:8px 12px;background:var(--bg);border-radius:var(--r1);border:.5px solid var(--b1)}
 .tmodal-file-name{flex:1;font-size:13px;font-weight:500;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .tmodal-file-meta{font-size:11px;color:var(--t3);white-space:nowrap;flex-shrink:0}

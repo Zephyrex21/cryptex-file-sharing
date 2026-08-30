@@ -893,6 +893,40 @@ async function accessByToken(){
   }catch{toast('Network error — check your connection','error');}
   finally{btn.innerHTML='Access '+ICONS.arrowRight;btn.disabled=false;}
 }
+// ── Token-modal v2: shared building blocks ──────────────────────────────────
+// One set of hero colors/icons/info-grid builders reused across all 4
+// population paths below (file, link, folder, encrypted) so the modal reads
+// as one consistent design rather than four separately-built ones.
+const fileIconPaths={
+  img:'<rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="8.5" cy="8.5" r="1.5"/><polyline points="21 15 16 10 5 21"/>',
+  vid:'<polygon points="23 7 16 12 23 17 23 7"/><rect x="1" y="5" width="15" height="14" rx="2"/>',
+  pdf:'<path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/><polyline points="14 2 14 8 20 8"/>',
+  zip:'<path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/>',
+  doc:'<path d="M13 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V9z"/><polyline points="13 2 13 9 20 9"/><line x1="8" y1="13" x2="16" y2="13"/><line x1="8" y1="17" x2="16" y2="17"/>',
+  sheet:'<rect x="3" y="4" width="18" height="16" rx="2"/><line x1="3" y1="10" x2="21" y2="10"/><line x1="9" y1="10" x2="9" y2="20"/><line x1="15" y1="10" x2="15" y2="20"/>',
+  slide:'<rect x="2" y="5" width="20" height="13" rx="2"/><line x1="8" y1="21" x2="16" y2="21"/><line x1="12" y1="18" x2="12" y2="21"/>',
+  code:'<polyline points="16 18 22 12 16 6"/><polyline points="8 6 2 12 8 18"/>',
+  link:'<path d="M10 13a5 5 0 007.54.54l3-3a5 5 0 00-7.07-7.07l-1.72 1.71"/><path d="M14 11a5 5 0 00-7.54-.54l-3 3a5 5 0 007.07 7.07l1.71-1.71"/>',
+  folder:'<path d="M22 19a2 2 0 01-2 2H4a2 2 0 01-2-2V5a2 2 0 012-2h5l2 3h9a2 2 0 012 2z"/>',
+  lock:'<rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0110 0v4"/>',
+  file:'<path d="M13 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V9z"/><polyline points="13 2 13 9 20 9"/>'
+};
+const heroBgMap={img:'linear-gradient(135deg,#60a5fa,#3b82f6)',vid:'linear-gradient(135deg,#4b5563,#1f2937)',pdf:'linear-gradient(135deg,#f87171,#ef4444)',zip:'linear-gradient(135deg,#fbbf24,#f59e0b)',doc:'linear-gradient(135deg,#22d3ee,#06b6d4)',sheet:'linear-gradient(135deg,#2dd4bf,#0d9488)',slide:'linear-gradient(135deg,#fb923c,#ea580c)',code:'linear-gradient(135deg,#a78bfa,#7c3aed)',link:'linear-gradient(135deg,#f472b6,#db2777)',folder:'linear-gradient(135deg,#fbbf24,#d97706)',lock:'linear-gradient(135deg,#8b8fa3,#5b5f73)',file:'linear-gradient(135deg,#9ca3af,#6b7280)'};
+const svgIcon=(type,color='rgba(255,255,255,0.95)',sw=1.7)=>`<svg viewBox="0 0 24 24" fill="none" stroke="${color}" stroke-width="${sw}" stroke-linecap="round" stroke-linejoin="round">${fileIconPaths[type]||fileIconPaths.file}</svg>`;
+// Sets the hero banner: a real image for actual images, a big icon on a
+// type-colored gradient for everything else.
+function setTmodalHero(type,imgUrl){
+  const hero=document.getElementById('tmodalHero');
+  hero.style.background=heroBgMap[type]||heroBgMap.file;
+  hero.innerHTML=(type==='img'&&imgUrl)?`<img src="${esc(imgUrl)}" alt="">`:svgIcon(type);
+}
+const tinfo=(label,value,full)=>`<div class="tinfo-item${full?' full':''}"><div class="tinfo-label">${label}</div><div class="tinfo-value">${value}</div></div>`;
+const tinfoToken=(token)=>`<div class="tinfo-item full"><div class="tinfo-label">Share Token</div><div class="tinfo-value mono">${esc(token||'-')}${token?`<button class="tinfo-copy-btn" onclick="copyToken('${esc(token)}')" title="Copy token"><svg viewBox="0 0 24 24"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 01-2-2V4a2 2 0 012-2h9a2 2 0 012 2v1"/></svg></button>`:''}</div></div>`;
+// Expiry + view-limit + token rows only make sense once something is
+// actually gated behind a token — i.e. once it's private.
+const privacyInfoRows=(item)=>(item.visibility||'public')!=='private'?'':
+  tinfo('Expiry',fmtExpiryStatus(item.tokenExpiresAt))+tinfo('View Limit',fmtViewsStatus(item.maxViews,item.viewCount))+tinfoToken(item.shareToken);
+
 function openTokenModal(data,kind){
   const hd=document.getElementById('tmodalHead');
   const bd=document.getElementById('tmodalBody');
@@ -901,42 +935,30 @@ function openTokenModal(data,kind){
   if(kind==='file'){
     const f=data;
     const t=tc(f.fileType);
-    const canP=isImg(f.fileType)||isVid(f.fileType)||isPdf(f.fileType);
-    const bgMap={img:'var(--blus)',vid:'rgba(0,0,0,.07)',pdf:'var(--reds)',zip:'var(--ylws)',doc:'var(--cyns)',sheet:'var(--tels)',slide:'var(--orgs)',code:'var(--cods)',link:'var(--pnks)',file:'var(--bg2)'};
-    const stMap={img:'var(--blu)',vid:'var(--t2)',pdf:'var(--red)',zip:'var(--ylw)',doc:'var(--cyn)',sheet:'var(--tel)',slide:'var(--org)',code:'var(--cod)',link:'var(--pnk)',file:'var(--t3)'};
-    const svgMap={
-      img:`<svg viewBox="0 0 24 24" fill="none" stroke="${stMap[t]}" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="8.5" cy="8.5" r="1.5"/><polyline points="21 15 16 10 5 21"/></svg>`,
-      vid:`<svg viewBox="0 0 24 24" fill="none" stroke="${stMap[t]}" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><polygon points="23 7 16 12 23 17 23 7"/><rect x="1" y="5" width="15" height="14" rx="2"/></svg>`,
-      pdf:`<svg viewBox="0 0 24 24" fill="none" stroke="${stMap[t]}" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>`,
-      zip:`<svg viewBox="0 0 24 24" fill="none" stroke="${stMap[t]}" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>`,
-      doc:`<svg viewBox="0 0 24 24" fill="none" stroke="${stMap[t]}" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M13 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V9z"/><polyline points="13 2 13 9 20 9"/><line x1="8" y1="13" x2="16" y2="13"/><line x1="8" y1="17" x2="16" y2="17"/></svg>`,
-      sheet:`<svg viewBox="0 0 24 24" fill="none" stroke="${stMap[t]}" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="16" rx="2"/><line x1="3" y1="10" x2="21" y2="10"/><line x1="9" y1="10" x2="9" y2="20"/><line x1="15" y1="10" x2="15" y2="20"/></svg>`,
-      slide:`<svg viewBox="0 0 24 24" fill="none" stroke="${stMap[t]}" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="5" width="20" height="13" rx="2"/><line x1="8" y1="21" x2="16" y2="21"/><line x1="12" y1="18" x2="12" y2="21"/></svg>`,
-      code:`<svg viewBox="0 0 24 24" fill="none" stroke="${stMap[t]}" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><polyline points="16 18 22 12 16 6"/><polyline points="8 6 2 12 8 18"/></svg>`,
-      link:`<svg viewBox="0 0 24 24" fill="none" stroke="${stMap[t]}" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M10 13a5 5 0 007.54.54l3-3a5 5 0 00-7.07-7.07l-1.72 1.71"/><path d="M14 11a5 5 0 00-7.54-.54l-3 3a5 5 0 007.07 7.07l1.71-1.71"/></svg>`,
-      file:`<svg viewBox="0 0 24 24" fill="none" stroke="${stMap[t]}" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M13 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V9z"/><polyline points="13 2 13 9 20 9"/></svg>`
-    };
     const v=f.visibility||'public';
-    hd.innerHTML=`<div class="tmodal-ico" style="background:${bgMap[t]||bgMap.file}">${svgMap[t]||svgMap.file}</div><div class="tmodal-head-info"><div class="tmodal-title" title="${esc(f.originalName)}">${esc(stripExt(f.originalName))}</div><div class="tmodal-sub">${typeHuman(f.fileType)}<span class="vis-badge vis-${v==='public'?'pub':'priv'}">${v==='public'?'Public':'Private'}</span></div></div>`;
+    setTmodalHero(t,f.fileUrl);
+    hd.innerHTML=`<div class="tmodal-title-lg" title="${esc(f.originalName)}">${esc(stripExt(f.originalName))}</div><div class="tmodal-badges"><span class="vis-badge vis-${v==='public'?'pub':'priv'}">${v==='public'?'Public':'Private'}</span><span style="font-size:12px;color:var(--t2)">${typeHuman(f.fileType)}</span></div>`;
     bd.innerHTML=isLink(f.fileType)
-      ?`<div class="prop-row"><span class="prop-key">Domain</span><span class="prop-val">${esc(f.linkDomain||'')}</span></div><div class="prop-row"><span class="prop-key">Type</span><span class="prop-val">${typeHuman(f.fileType)}</span></div><div class="prop-row"><span class="prop-key">Added</span><span class="prop-val">${f.createdAt?new Date(f.createdAt).toLocaleString('en',{dateStyle:'medium',timeStyle:'short'}):'-'}</span></div>`
-      :`<div class="prop-row"><span class="prop-key">Size</span><span class="prop-val">${fmtSz(f.fileSize)}</span></div><div class="prop-row"><span class="prop-key">Type</span><span class="prop-val">${typeHuman(f.fileType)}</span></div><div class="prop-row"><span class="prop-key">Uploaded</span><span class="prop-val">${f.createdAt?new Date(f.createdAt).toLocaleString('en',{dateStyle:'medium',timeStyle:'short'}):'-'}</span></div>`;
-    const primaryTmodBtn=isLink(f.fileType)
-      ?`<button class="tmod-act tmod-dl" title="Open Link" onclick="window.open('${esc(f.linkUrl)}','_blank','noopener')"><svg viewBox="0 0 24 24"><path d="M18 13v6a2 2 0 01-2 2H5a2 2 0 01-2-2V8a2 2 0 012-2h6"/><polyline points="15 3 21 3 21 9"/><line x1="10" y1="14" x2="21" y2="3"/></svg></button>`
-      :`<button class="tmod-act tmod-dl" title="Download" onclick="dlFile('${f._id}','${esc(f.originalName)}')"><svg viewBox="0 0 24 24"><polyline points="8 17 12 21 16 17"/><line x1="12" y1="12" x2="12" y2="21"/><path d="M20.88 18.09A5 5 0 0018 9h-1.26A8 8 0 103 16.29"/></svg></button>`;
-    ft.innerHTML=`${primaryTmodBtn}${f.visibility==='private'?`<button class="tmod-act" title="Manage Sharing" onclick="openSharePanel('file')"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"/><path d="M12 1v6m0 10v6M4.22 4.22l4.24 4.24m7.08 7.08l4.24 4.24M1 12h6m10 0h6M4.22 19.78l4.24-4.24m7.08-7.08l4.24-4.24"/></svg></button><div class="tmod-sep"></div><button class="tmod-act tmod-pub" title="Make Public" onclick="makeFilePublic('${f._id}')"><svg viewBox="0 0 24 24"><rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 019.9-1"/></svg></button><button class="tmod-act tmod-del" title="Delete File" onclick="delFileFromModal('${f._id}')"><svg viewBox="0 0 24 24"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 01-2 2H8a2 2 0 01-2-2L5 6"/></svg></button>`:''}` ;
-    // Store in tokenModalFile so openPrev can access private file data without polluting allFiles
+      ?`<div class="tmodal-info-grid">${tinfo('Domain',esc(f.linkDomain||'-'))}${tinfo('Type',typeHuman(f.fileType))}${tinfo('Added',f.createdAt?new Date(f.createdAt).toLocaleString('en',{dateStyle:'medium',timeStyle:'short'}):'-',true)}${privacyInfoRows(f)}</div>`
+      :`<div class="tmodal-info-grid">${tinfo('Size',fmtSz(f.fileSize))}${tinfo('Type',typeHuman(f.fileType))}${tinfo('Uploaded',f.createdAt?new Date(f.createdAt).toLocaleString('en',{dateStyle:'medium',timeStyle:'short'}):'-',true)}${privacyInfoRows(f)}</div>`;
+    const primaryBtn=isLink(f.fileType)
+      ?`<button class="tmodal-primary-btn" onclick="window.open('${esc(f.linkUrl)}','_blank','noopener')"><svg viewBox="0 0 24 24"><path d="M18 13v6a2 2 0 01-2 2H5a2 2 0 01-2-2V8a2 2 0 012-2h6"/><polyline points="15 3 21 3 21 9"/><line x1="10" y1="14" x2="21" y2="3"/></svg>Open Link</button>`
+      :`<button class="tmodal-primary-btn" onclick="dlFile('${f._id}','${esc(f.originalName)}')"><svg viewBox="0 0 24 24"><polyline points="8 17 12 21 16 17"/><line x1="12" y1="12" x2="12" y2="21"/><path d="M20.88 18.09A5 5 0 0018 9h-1.26A8 8 0 103 16.29"/></svg>Download</button>`;
+    ft.innerHTML=primaryBtn+(v==='private'?`<div class="tmodal-secondary-row"><button class="tmodal-sec-btn" onclick="openSharePanel('file')"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"/><path d="M12 1v6m0 10v6M4.22 4.22l4.24 4.24m7.08 7.08l4.24 4.24M1 12h6m10 0h6M4.22 19.78l4.24-4.24m7.08-7.08l4.24-4.24"/></svg>Manage</button><button class="tmodal-sec-btn" onclick="makeFilePublic('${f._id}')"><svg viewBox="0 0 24 24"><rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 019.9-1"/></svg>Make Public</button><button class="tmodal-sec-btn danger" onclick="delFileFromModal('${f._id}')"><svg viewBox="0 0 24 24"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 01-2 2H8a2 2 0 01-2-2L5 6"/></svg>Delete</button></div>`:'');
     tokenModalFile=f;
   }else{
     const folder=data;
     // Defensive filter: backend populate match already excludes private files,
     // but we filter again here in case of any stale cached data.
     const files=(folder.files||[]).filter(x=>(x.visibility||'public')!=='private');
-    hd.innerHTML=`<div class="tmodal-ico" style="background:var(--ylws)"><svg viewBox="0 0 24 24" fill="none" stroke="var(--ylw)" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><path d="M22 19a2 2 0 01-2 2H4a2 2 0 01-2-2V5a2 2 0 012-2h5l2 3h9a2 2 0 012 2z"/></svg></div><div class="tmodal-head-info"><div class="tmodal-title">${esc(folder.name)}</div><div class="tmodal-sub">${files.length} file${files.length!==1?'s':''}<span class="vis-badge vis-${folder.visibility==='public'?'pub':'priv'}">${folder.visibility==='public'?'Public':'Private'}</span></div></div>`;
-    bd.innerHTML=files.length
+    const v=folder.visibility||'public';
+    setTmodalHero('folder');
+    hd.innerHTML=`<div class="tmodal-title-lg" title="${esc(folder.name)}">${esc(folder.name)}</div><div class="tmodal-badges"><span class="vis-badge vis-${v==='public'?'pub':'priv'}">${v==='public'?'Public':'Private'}</span><span style="font-size:12px;color:var(--t2)">${files.length} file${files.length!==1?'s':''}</span></div>`;
+    const infoGrid=`<div class="tmodal-info-grid">${tinfo('Files',files.length,true)}${privacyInfoRows(folder)}</div>`;
+    bd.innerHTML=infoGrid+(files.length
       ?`<div class="tmodal-file-list">${files.map(f=>`<div class="tmodal-file-row"><span class="tmodal-file-name" title="${esc(f.originalName)}">${esc(stripExt(f.originalName))}</span><span class="tmodal-file-meta">${isLink(f.fileType)?esc(f.linkDomain||'Link'):fmtSz(f.fileSize)}</span><button class="tmodal-dl-btn" onclick="${isLink(f.fileType)?`window.open('${esc(f.linkUrl)}','_blank','noopener')`:`dlFile('${f._id}','${esc(f.originalName)}')`}" title="${isLink(f.fileType)?'Open Link':'Download'}">${isLink(f.fileType)?`<svg viewBox="0 0 24 24" stroke-linecap="round" stroke-linejoin="round"><path d="M18 13v6a2 2 0 01-2 2H5a2 2 0 01-2-2V8a2 2 0 012-2h6"/><polyline points="15 3 21 3 21 9"/><line x1="10" y1="14" x2="21" y2="3"/></svg>`:`<svg viewBox="0 0 24 24" stroke-linecap="round" stroke-linejoin="round"><polyline points="8 17 12 21 16 17"/><line x1="12" y1="12" x2="12" y2="21"/></svg>`}</button></div>`).join('')}</div>`
-      :`<div style="text-align:center;padding:24px;color:var(--t3);font-size:14px">This folder is empty</div>`;
-    ft.innerHTML=`${files.length?`<button class="tmod-act" title="Download All as ZIP" onclick="downloadFolderZipFromModal()"><svg viewBox="0 0 24 24"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg></button>`:''}${folder.visibility==='private'?`<button class="tmod-act" title="Manage Sharing" onclick="openSharePanel('folder')"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"/><path d="M12 1v6m0 10v6M4.22 4.22l4.24 4.24m7.08 7.08l4.24 4.24M1 12h6m10 0h6M4.22 19.78l4.24-4.24m7.08-7.08l4.24-4.24"/></svg></button><div class="tmod-sep"></div><button class="tmod-act tmod-pub" title="Make Folder Public" onclick="makeFolderPublic('${folder._id}')"><svg viewBox="0 0 24 24"><rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 019.9-1"/></svg></button><button class="tmod-act tmod-del" title="Delete Folder" onclick="delFolderFromModal('${folder._id}')"><svg viewBox="0 0 24 24"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 01-2 2H8a2 2 0 01-2-2L5 6"/></svg></button>`:''}`;
+      :`<div style="text-align:center;padding:24px 0;color:var(--t3);font-size:14px">This folder is empty</div>`);
+    ft.innerHTML=(files.length?`<button class="tmodal-primary-btn" onclick="downloadFolderZipFromModal()"><svg viewBox="0 0 24 24"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>Download All as ZIP</button>`:'')+(v==='private'?`<div class="tmodal-secondary-row"><button class="tmodal-sec-btn" onclick="openSharePanel('folder')"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"/><path d="M12 1v6m0 10v6M4.22 4.22l4.24 4.24m7.08 7.08l4.24 4.24M1 12h6m10 0h6M4.22 19.78l4.24-4.24m7.08-7.08l4.24-4.24"/></svg>Manage</button><button class="tmodal-sec-btn" onclick="makeFolderPublic('${folder._id}')"><svg viewBox="0 0 24 24"><rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 019.9-1"/></svg>Make Public</button><button class="tmodal-sec-btn danger" onclick="delFolderFromModal('${folder._id}')"><svg viewBox="0 0 24 24"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 01-2 2H8a2 2 0 01-2-2L5 6"/></svg>Delete</button></div>`:'');
     tokenModalFolder=folder; // store so delFolderFromModal can read folder name
   }
   document.getElementById('tokenModal').classList.add('open');
@@ -950,7 +972,6 @@ function openTokenModal(data,kind){
 async function openEncryptedTokenModal(f){
   tokenModalFile=f;
   const hd=document.getElementById('tmodalHead'),bd=document.getElementById('tmodalBody'),ft=document.getElementById('tmodalFoot');
-  const lockIco=`<div class="tmodal-ico" style="background:var(--surf2)"><svg viewBox="0 0 24 24" fill="none" stroke="var(--t2)" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0110 0v4"/></svg></div>`;
   // pendingDecryptKey is single-shot: it represents the key from THIS page
   // load's URL fragment (if any), meant for the one file that link points
   // to. Consume it here so it's never mistakenly retried against a
@@ -969,9 +990,10 @@ async function openEncryptedTokenModal(f){
     catch{ /* fall through to the manual-key prompt below — key was wrong/stale */ }
   }
 
-  hd.innerHTML=`${lockIco}<div class="tmodal-head-info"><div class="tmodal-title">${ICONS.lock} Encrypted File</div><div class="tmodal-sub">End-to-end encrypted<span class="vis-badge vis-priv">Private</span></div></div>`;
+  setTmodalHero('lock');
+  hd.innerHTML=`<div class="tmodal-title-lg">Encrypted File</div><div class="tmodal-badges"><span class="vis-badge vis-priv">${ICONS.lock} E2E Encrypted</span></div>`;
   bd.innerHTML=`<div class="enc-unlock"><p>This file is end-to-end encrypted — its name and contents are unreadable without the decryption key from its share link.</p><input id="encKeyInput" type="text" placeholder="Paste decryption key…" autocomplete="off" spellcheck="false" onkeydown="if(event.key==='Enter')unlockEncryptedFile('${f._id}')"/></div>`;
-  ft.innerHTML=`<button class="tmod-act tmod-dl" title="Unlock" onclick="unlockEncryptedFile('${f._id}')"><svg viewBox="0 0 24 24"><rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0110 0v4"/></svg></button><button class="tmod-act" title="Manage Sharing" onclick="openSharePanel('file')"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"/><path d="M12 1v6m0 10v6M4.22 4.22l4.24 4.24m7.08 7.08l4.24 4.24M1 12h6m10 0h6M4.22 19.78l4.24-4.24m7.08-7.08l4.24-4.24"/></svg></button><button class="tmod-act tmod-del" title="Delete File" onclick="delFileFromModal('${f._id}')"><svg viewBox="0 0 24 24"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 01-2 2H8a2 2 0 01-2-2L5 6"/></svg></button>`;
+  ft.innerHTML=`<button class="tmodal-primary-btn" onclick="unlockEncryptedFile('${f._id}')"><svg viewBox="0 0 24 24"><rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 019.9-1"/></svg>Unlock</button><div class="tmodal-secondary-row"><button class="tmodal-sec-btn" onclick="openSharePanel('file')"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"/><path d="M12 1v6m0 10v6M4.22 4.22l4.24 4.24m7.08 7.08l4.24 4.24M1 12h6m10 0h6M4.22 19.78l4.24-4.24m7.08-7.08l4.24-4.24"/></svg>Manage</button><button class="tmodal-sec-btn danger" onclick="delFileFromModal('${f._id}')"><svg viewBox="0 0 24 24"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 01-2 2H8a2 2 0 01-2-2L5 6"/></svg>Delete</button></div>`;
   document.getElementById('tokenModal').classList.add('open');
   setTimeout(()=>document.getElementById('encKeyInput')?.focus(),60);
 }
@@ -999,12 +1021,28 @@ async function renderUnlockedEncryptedModal(f,keyStr){
   const hd=document.getElementById('tmodalHead'),bd=document.getElementById('tmodalBody'),ft=document.getElementById('tmodalFoot');
   const t=tc(realType),label=tl(realType);
   const canP=isImg(realType)||isVid(realType)||isPdf(realType);
-  const bgMap={img:'var(--blus)',vid:'rgba(0,0,0,.07)',pdf:'var(--reds)',zip:'var(--ylws)',doc:'var(--cyns)',sheet:'var(--tels)',slide:'var(--orgs)',code:'var(--cods)',file:'var(--bg2)'};
 
-  hd.innerHTML=`<div class="tmodal-ico" style="background:${bgMap[t]||bgMap.file}"><svg viewBox="0 0 24 24" fill="none" stroke="var(--t1)" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 019.9-1"/></svg></div><div class="tmodal-head-info"><div class="tmodal-title" title="${esc(realName)}">${esc(stripExt(realName))}</div><div class="tmodal-sub">${esc(label)} · Decrypted in your browser<span class="vis-badge vis-priv">${ICONS.lock} E2E Encrypted</span></div></div>`;
-  bd.innerHTML=`<div class="prop-row"><span class="prop-key">Size</span><span class="prop-val">${fmtSz(f.fileSize)}</span></div><div class="prop-row"><span class="prop-key">Type</span><span class="prop-val">${typeHuman(realType)}</span></div><div class="prop-row"><span class="prop-key">Uploaded</span><span class="prop-val">${f.createdAt?new Date(f.createdAt).toLocaleString('en',{dateStyle:'medium',timeStyle:'short'}):'-'}</span></div><div style="margin-top:10px;font-size:12px;color:var(--t3)">${ICONS.lock} Decrypted locally — the server never sees the plaintext.</div>`;
-  const previewBtn=canP?`<button class="tmod-act" title="Decrypt & Preview" onclick="decryptAndPreviewEnc('${f._id}')"><svg viewBox="0 0 24 24"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg></button>`:'';
-  ft.innerHTML=`<button class="tmod-act tmod-dl" title="Decrypt & Download" onclick="decryptAndDownloadEnc('${f._id}')"><svg viewBox="0 0 24 24"><polyline points="8 17 12 21 16 17"/><line x1="12" y1="12" x2="12" y2="21"/></svg></button>${previewBtn}<div class="tmod-sep"></div><button class="tmod-act" title="Manage Sharing" onclick="openSharePanel('file')"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"/><path d="M12 1v6m0 10v6M4.22 4.22l4.24 4.24m7.08 7.08l4.24 4.24M1 12h6m10 0h6M4.22 19.78l4.24-4.24m7.08-7.08l4.24-4.24"/></svg></button><button class="tmod-act tmod-del" title="Delete File" onclick="delFileFromModal('${f._id}')"><svg viewBox="0 0 24 24"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 01-2 2H8a2 2 0 01-2-2L5 6"/></svg></button>`;
+  setTmodalHero(t);
+  hd.innerHTML=`<div class="tmodal-title-lg" title="${esc(realName)}">${esc(stripExt(realName))}</div><div class="tmodal-badges"><span class="vis-badge vis-priv">${ICONS.lock} E2E Encrypted</span><span style="font-size:12px;color:var(--t2)">${esc(label)}</span></div>`;
+  bd.innerHTML=`<div class="tmodal-info-grid">${tinfo('Size',fmtSz(f.fileSize))}${tinfo('Type',typeHuman(realType))}${tinfo('Uploaded',f.createdAt?new Date(f.createdAt).toLocaleString('en',{dateStyle:'medium',timeStyle:'short'}):'-',true)}${privacyInfoRows(f)}</div><div style="margin-top:12px;font-size:12px;color:var(--t3);text-align:center">${ICONS.lock} Decrypted locally — the server never sees the plaintext.</div>`;
+  const previewBtn=canP?`<button class="tmodal-sec-btn" onclick="decryptAndPreviewEnc('${f._id}')"><svg viewBox="0 0 24 24"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>Preview</button>`:'';
+  ft.innerHTML=`<button class="tmodal-primary-btn" onclick="decryptAndDownloadEnc('${f._id}')"><svg viewBox="0 0 24 24"><polyline points="8 17 12 21 16 17"/><line x1="12" y1="12" x2="12" y2="21"/></svg>Decrypt & Download</button><div class="tmodal-secondary-row">${previewBtn}<button class="tmodal-sec-btn" onclick="openSharePanel('file')"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"/><path d="M12 1v6m0 10v6M4.22 4.22l4.24 4.24m7.08 7.08l4.24 4.24M1 12h6m10 0h6M4.22 19.78l4.24-4.24m7.08-7.08l4.24-4.24"/></svg>Manage</button><button class="tmodal-sec-btn danger" onclick="delFileFromModal('${f._id}')"><svg viewBox="0 0 24 24"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 01-2 2H8a2 2 0 01-2-2L5 6"/></svg>Delete</button></div>`;
+
+  // Nice-to-have: if it's actually an image, decrypt it once more and swap
+  // the generic icon hero for the real picture. Best-effort — if this fails
+  // for any reason, the icon hero already rendered above stays as-is, so a
+  // failure here never blocks the (already-successful) unlock itself.
+  if(isImg(realType)){
+    try{
+      const res=await fetch(`${API}/${f._id}/download`);
+      if(res.ok){
+        const cipherBuf=await res.arrayBuffer();
+        const plainBuf=await decryptBuffer(key,cipherBuf,f.encryptionIV);
+        const blob=new Blob([plainBuf],{type:realType});
+        document.getElementById('tmodalHero').innerHTML=`<img src="${URL.createObjectURL(blob)}" alt="">`;
+      }
+    }catch{ /* keep the icon hero already shown — not worth surfacing an error for a nice-to-have */ }
+  }
 }
 // Fetches the raw ciphertext from the normal /download endpoint (it's just
 // bytes to the server — it doesn't know or care they're encrypted), decrypts
