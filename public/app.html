@@ -213,36 +213,34 @@
       <button class="privrev-copy" onclick="copyPrivToken()">Copy</button>
     </div>
     <div class="privrev-hint">Token was auto-copied. Share it to grant access via the token input — or send a ready-to-click link:</div>
-    <div class="privrev-foot" style="padding-top:0">
-      <button class="btn-cancel" style="flex:1" onclick="copyPrivLink()"><svg class="ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M10 13a5 5 0 007.54.54l3-3a5 5 0 00-7.07-7.07l-1.72 1.71"/><path d="M14 11a5 5 0 00-7.54-.54l-3 3a5 5 0 007.07 7.07l1.71-1.71"/></svg> Copy shareable link instead</button>
+    <div class="privrev-row2">
+      <button class="btn-cancel" onclick="copyPrivLink()"><svg class="ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M10 13a5 5 0 007.54.54l3-3a5 5 0 00-7.07-7.07l-1.72 1.71"/><path d="M14 11a5 5 0 00-7.54-.54l-3 3a5 5 0 007.07 7.07l1.71-1.71"/></svg> Copy link</button>
+      <button class="btn-cancel" onclick="togglePrivQr()"><svg class="ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/><line x1="14" y1="14" x2="14" y2="21"/><line x1="21" y1="14" x2="21" y2="21"/><line x1="14" y1="17.5" x2="21" y2="17.5"/></svg> Show QR code</button>
     </div>
-    <div class="privrev-expiry">
-      <div class="privrev-expiry-label">Token expiry: <strong id="prm-expiry-status">Never</strong></div>
-      <div class="privrev-expiry-btns">
-        <button onclick="setPrivExpiry(60)">1h</button>
-        <button onclick="setPrivExpiry(1440)">24h</button>
-        <button onclick="setPrivExpiry(10080)">7d</button>
-        <button onclick="setPrivExpiry(0)">Never</button>
+    <div class="privrev-qr" id="prm-qr-wrap" style="display:none"><img id="prm-qr-img" alt="QR code for this share link" width="180" height="180"/></div>
+    <div class="privrev-row2">
+      <div class="privrev-expiry">
+        <div class="privrev-expiry-label">Token expiry: <strong id="prm-expiry-status">Never</strong></div>
+        <div class="privrev-expiry-btns">
+          <button onclick="setPrivExpiry(60)">1h</button>
+          <button onclick="setPrivExpiry(1440)">24h</button>
+          <button onclick="setPrivExpiry(10080)">7d</button>
+          <button onclick="setPrivExpiry(0)">Never</button>
+        </div>
       </div>
-    </div>
-    <div class="privrev-expiry">
-      <div class="privrev-expiry-label">View limit: <strong id="prm-views-status">Unlimited</strong></div>
-      <div class="privrev-expiry-btns">
-        <button onclick="setPrivMaxViews(1)">1 view</button>
-        <button onclick="setPrivMaxViews(5)">5 views</button>
-        <button onclick="setPrivMaxViews(10)">10 views</button>
-        <button onclick="setPrivMaxViews(0)">Unlimited</button>
+      <div class="privrev-expiry">
+        <div class="privrev-expiry-label">View limit: <strong id="prm-views-status">Unlimited</strong></div>
+        <div class="privrev-expiry-btns">
+          <button onclick="setPrivMaxViews(1)">1 view</button>
+          <button onclick="setPrivMaxViews(5)">5 views</button>
+          <button onclick="setPrivMaxViews(10)">10 views</button>
+          <button onclick="setPrivMaxViews(0)">Unlimited</button>
+        </div>
       </div>
-    </div>
-    <div class="privrev-foot" style="padding-top:0">
-      <button class="btn-cancel" style="flex:1" onclick="togglePrivQr()"><svg class="ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/><line x1="14" y1="14" x2="14" y2="21"/><line x1="21" y1="14" x2="21" y2="21"/><line x1="14" y1="17.5" x2="21" y2="17.5"/></svg> Show QR code</button>
-    </div>
-    <div class="privrev-qr" id="prm-qr-wrap" style="display:none"><img id="prm-qr-img" alt="QR code for this share link" width="200" height="200"/></div>
-    <div class="privrev-foot" style="padding-top:0">
-      <button class="btn-cancel" style="flex:1" onclick="regenPrivToken()"><svg class="ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="23 4 23 10 17 10"/><polyline points="1 20 1 14 7 14"/><path d="M3.51 9a9 9 0 0114.13-3.36L23 10M1 14l5.36 4.36A9 9 0 0020.49 15"/></svg> Regenerate token (invalidates the old one)</button>
     </div>
     <div class="privrev-foot">
-      <button class="btn-acc" style="flex:1" onclick="document.getElementById('privRevealModal').classList.remove('open')">Got it <svg class="ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><polyline points="8 12.5 10.8 15.5 16 9"/></svg></button>
+      <button class="btn-cancel" onclick="regenPrivToken()"><svg class="ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="23 4 23 10 17 10"/><polyline points="1 20 1 14 7 14"/><path d="M3.51 9a9 9 0 0114.13-3.36L23 10M1 14l5.36 4.36A9 9 0 0020.49 15"/></svg> Regenerate token</button>
+      <button class="btn-acc" onclick="document.getElementById('privRevealModal').classList.remove('open')">Got it <svg class="ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"/><polyline points="8 12.5 10.8 15.5 16 9"/></svg></button>
     </div>
   </div>
 </div>
