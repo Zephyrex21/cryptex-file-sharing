@@ -167,12 +167,25 @@ export const uploadFile = async (req, res) => {
     // can't be used as a backdoor around content validation for *unencrypted*
     // uploads pretending to be octet-stream.
     if (isEncrypted) {
-      const { iv, encryptedName, encryptedNameIV, encryptedMimeType, encryptedMimeTypeIV } = req.body;
+      const { iv, encryptedName, encryptedNameIV, encryptedMimeType, encryptedMimeTypeIV, vaultFolderId } = req.body;
       if (!iv || !encryptedName || !encryptedNameIV || !encryptedMimeType || !encryptedMimeTypeIV) {
         return res.status(400).json({ message: "Missing encryption metadata for encrypted upload" });
       }
       if (req.file.mimetype !== "application/octet-stream") {
         return res.status(400).json({ message: "Encrypted uploads must be sent as application/octet-stream" });
+      }
+
+      // Uploading directly into a vault folder: the client already used
+      // that folder's shared key to encrypt (we have no way to check that —
+      // the key never reaches us — but we DO verify the target actually is
+      // an encrypted vault, so this can't be used to sneak a file into an
+      // arbitrary ordinary folder's file list under false pretenses).
+      let vaultFolder = null;
+      if (vaultFolderId) {
+        vaultFolder = await Folder.findById(vaultFolderId);
+        if (!vaultFolder || !vaultFolder.encrypted) {
+          return res.status(400).json({ message: "Target vault folder not found" });
+        }
       }
 
       const result = await uploadToSupabase(
@@ -201,7 +214,13 @@ export const uploadFile = async (req, res) => {
         encryptedNameIV,
         encryptedMimeType,
         encryptedMimeTypeIV,
+        folderId:     vaultFolder ? vaultFolder._id : null,
       });
+
+      if (vaultFolder) {
+        vaultFolder.files.push(file._id);
+        await vaultFolder.save();
+      }
 
       return res.status(201).json({ message: "Uploaded (end-to-end encrypted)!", file });
     }

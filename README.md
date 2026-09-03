@@ -17,6 +17,14 @@ Cryptex allows users to upload files, organize them into folders, generate uniqu
 - Encrypted files are always private, can't be renamed (the name is ciphertext), and can't be made public
 - **Trade-off, by design:** if a share link is lost, the file is permanently unrecoverable — there is no server-side reset, because there's nothing on the server that could reconstruct the key
 
+### 🗝️ Encrypted Vaults (folder-level encryption)
+- A folder can be created as an encrypted vault — every file added to it is encrypted under **one shared key**, generated once in the browser at vault creation
+- One link (`?token=...#key=...`) unlocks the entire vault, rather than needing a separate key per file
+- Each file still gets its own random IV even under the shared key — required for AES-GCM's safety guarantee regardless of key reuse
+- Vaults are always private and can never be made public, enforced server-side
+- Uploading into a vault and uploading a standalone encrypted file use the exact same client-side encryption code — only which key gets used differs
+- Known limitation: an existing plaintext (or differently-encrypted) file can't be added into a vault after the fact — vault membership is decided at upload time, not by moving files in later
+
 ### File Management
 - Upload files securely (with real magic-byte content verification for unencrypted uploads)
 - Download files

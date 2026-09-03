@@ -36,6 +36,13 @@ const folderSchema = new mongoose.Schema(
     maxViews:  { type: Number, default: null },
     viewCount: { type: Number, default: 0 },
 
+    // A "vault" folder: every file inside is encrypted client-side under
+    // ONE shared AES-256-GCM key (each file still gets its own random IV —
+    // GCM requires that regardless of key reuse). The key itself never
+    // reaches this server, same zero-knowledge rule as encrypted files.
+    // Always forced private — see setFolderVisibility.
+    encrypted: { type: Boolean, default: false },
+
     // Array of File _ids that belong to this folder
     files: [
       {

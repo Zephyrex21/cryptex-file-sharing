@@ -158,7 +158,19 @@ const fInputDefaultAccept=fInput.getAttribute('accept');
 document.getElementById('encToggle')?.addEventListener('change',e=>{
   if(e.target.checked)fInput.removeAttribute('accept');
   else fInput.setAttribute('accept',fInputDefaultAccept);
+  refreshVaultSelect();
+  document.getElementById('vaultSelectWrap').style.display=e.target.checked?'block':'none';
 });
+// Populated with encrypted folders we actually hold the key for this
+// session (encKeyCache) — a vault we don't have the key to can't be
+// uploaded into anyway, so it's never worth listing.
+function refreshVaultSelect(){
+  const sel=document.getElementById('vaultSelect');
+  const current=sel.value;
+  const vaults=allFolders.filter(f=>f.encrypted&&encKeyCache.has(f._id));
+  sel.innerHTML='<option value="">Standalone (its own key)</option>'+vaults.map(f=>`<option value="${f._id}">${esc(f.name)}</option>`).join('');
+  if(vaults.some(f=>f._id===current))sel.value=current;
+}
 
 // ── First-time celebration ───────────────────────────────────────────────────
 // A small confetti burst, reserved for the very FIRST successful upload and
@@ -230,6 +242,7 @@ let queue=[],busy=false,batchTotal=0;
 function doUpload(f){
   f=normalizeCodeFileType(f);
   const encrypt=document.getElementById('encToggle')?.checked||false;
+  const vaultFolderId=encrypt?(document.getElementById('vaultSelect')?.value||null):null;
   // The MIME allowlist exists so unencrypted content can be verified against
   // its claimed type server-side (see verifyMagicBytes in the backend). An
   // encrypted upload is opaque ciphertext by definition — the server can't
@@ -238,7 +251,7 @@ function doUpload(f){
   if(!encrypt&&!ALLOWED.includes(f.type))return toast(`"${f.type}" not supported`,'error');
   if(f.size>getLimit(f.type)*1024*1024)return toast(`${f.name} exceeds ${getLimit(f.type)}MB`,'error');
   if(!queue.length&&!busy)batchTotal=0; // starting a fresh batch
-  queue.push({file:f,encrypt});batchTotal++;proc();
+  queue.push({file:f,encrypt,vaultFolderId});batchTotal++;proc();
 }
 function proc(){
   if(busy||!queue.length)return;
@@ -248,7 +261,7 @@ function proc(){
   pn.textContent=batchTotal>1?`${f.name} · ${pos} of ${batchTotal}`:f.name;
   pf.classList.remove('success');pf.style.width='0%';pp.textContent='0%';pw.classList.add('show');uzone.classList.add('busy');
 
-  if(item.encrypt){uploadEncrypted(f,pos,{pw,pf,pn,pp,ptr});return;}
+  if(item.encrypt){uploadEncrypted(f,pos,{pw,pf,pn,pp,ptr},item.vaultFolderId);return;}
 
   const fd=new FormData();fd.append('file',f);
   const xhr=new XMLHttpRequest();
@@ -274,12 +287,16 @@ function proc(){
 // crypto helpers above and controllers/fileUpload.js for the matching
 // server-side contract (which skips content verification here on purpose,
 // since it structurally cannot inspect ciphertext).
-async function uploadEncrypted(f,pos,ui){
+async function uploadEncrypted(f,pos,ui,vaultFolderId){
   const{pw,pf,pn,pp,ptr}=ui;
   try{
     pn.textContent=batchTotal>1?`Encrypting ${f.name} · ${pos} of ${batchTotal}…`:`Encrypting ${f.name}…`;
     pp.textContent='';
-    const key=await genAesKey();
+    // Into a vault: reuse that vault's ONE shared key (cached at creation
+    // time) so every file inside decrypts under the same link. Standalone:
+    // generate a fresh key just for this file, same as before.
+    const vaultKeyStr=vaultFolderId?encKeyCache.get(vaultFolderId):null;
+    const key=vaultKeyStr?await importKeyB64url(vaultKeyStr):await genAesKey();
     const plainBuf=await f.arrayBuffer();
     const{ciphertext,ivB64}=await encryptBuffer(key,plainBuf);
     const{cipherB64:encryptedName,ivB64:encryptedNameIV}=await encryptString(key,f.name);
@@ -296,6 +313,7 @@ async function uploadEncrypted(f,pos,ui){
     fd.append('encryptedNameIV',encryptedNameIV);
     fd.append('encryptedMimeType',encryptedMimeType);
     fd.append('encryptedMimeTypeIV',encryptedMimeTypeIV);
+    if(vaultFolderId)fd.append('vaultFolderId',vaultFolderId);
     fd.append('file',new Blob([ciphertext],{type:'application/octet-stream'}),'encrypted.bin');
 
     const xhr=new XMLHttpRequest();
@@ -305,14 +323,22 @@ async function uploadEncrypted(f,pos,ui){
       if(xhr.status===201){
         let data={};try{data=JSON.parse(xhr.responseText);}catch{}
         const file=data.file;
-        if(file?._id)encKeyCache.set(file._id,await exportKeyB64url(key));
+        if(file?._id&&!vaultKeyStr)encKeyCache.set(file._id,await exportKeyB64url(key));
         pf.style.width='100%';pp.textContent='100%';
         const isLast=queue.length===0;
         if(isLast){pf.classList.add('success');pp.innerHTML=ICONS.check+' Done';ptr.classList.add('pop');}
         setTimeout(()=>{pw.classList.remove('show');uzone.classList.remove('busy');pf.classList.remove('success');ptr.classList.remove('pop');loadFiles();proc();},isLast?1000:750);
-        toast(`${f.name} encrypted & uploaded ${ICONS.lock}`,'success');
         celebrateIfFirstTime('cv-first-upload',uzone);
-        if(file)openEncryptedRevealModal(file);
+        if(vaultFolderId){
+          // The vault's own link (shown once, at creation) is what matters
+          // here — a fresh per-file reveal would just be noise since it'd
+          // show the exact same link/key every time.
+          const vault=allFolders.find(x=>x._id===vaultFolderId);
+          toast(`${f.name} added to ${vault?'"'+vault.name+'"':'vault'} ${ICONS.lock}`,'success');
+        }else{
+          toast(`${f.name} encrypted & uploaded ${ICONS.lock}`,'success');
+          if(file)openEncryptedRevealModal(file);
+        }
       }else{
         let m='Upload failed';try{m=JSON.parse(xhr.responseText).message||m;}catch{}
         toast(m,'error');pw.classList.remove('show');uzone.classList.remove('busy');proc();
@@ -948,6 +974,7 @@ function openTokenModal(data,kind){
     tokenModalFile=f;
   }else{
     const folder=data;
+    if(folder.encrypted){openEncryptedFolderTokenModal(folder);return;}
     // Defensive filter: backend populate match already excludes private files,
     // but we filter again here in case of any stale cached data.
     const files=(folder.files||[]).filter(x=>(x.visibility||'public')!=='private');
@@ -962,6 +989,93 @@ function openTokenModal(data,kind){
     tokenModalFolder=folder; // store so delFolderFromModal can read folder name
   }
   document.getElementById('tokenModal').classList.add('open');
+}
+
+// ── Encrypted folder (vault): token-modal flow ──────────────────────────
+// Mirrors the encrypted-file flow, but one key unlocks every file inside —
+// each file still has its OWN random IV (required for GCM safety even
+// under a shared key), so decryption happens per-file, just with the same
+// imported key reused across all of them.
+async function openEncryptedFolderTokenModal(folder){
+  tokenModalFolder=folder;
+  const hd=document.getElementById('tmodalHead'),bd=document.getElementById('tmodalBody'),ft=document.getElementById('tmodalFoot');
+  const key=pendingDecryptKey||encKeyCache.get(folder._id)||null;
+  pendingDecryptKey=null;
+
+  if(key){
+    try{
+      await renderUnlockedVaultModal(folder,key);
+      encKeyCache.set(folder._id,key);
+      document.getElementById('tokenModal').classList.add('open');
+      return;
+    }catch{ /* fall through to the manual-key prompt below — key was wrong/stale */ }
+  }
+
+  setTmodalHero('lock');
+  hd.innerHTML=`<div class="tmodal-title-lg">${esc(folder.name)}</div><div class="tmodal-badges"><span class="vis-badge vis-priv">${ICONS.lock} Encrypted Vault</span></div>`;
+  bd.innerHTML=`<div class="enc-unlock"><p>This is an encrypted vault — every file inside shares one key, unreadable without it.</p><input id="encKeyInput" type="text" placeholder="Paste decryption key…" autocomplete="off" spellcheck="false" onkeydown="if(event.key==='Enter')unlockEncryptedVault('${folder._id}')"/></div>`;
+  ft.innerHTML=`<button class="tmodal-primary-btn" onclick="unlockEncryptedVault('${folder._id}')"><svg viewBox="0 0 24 24"><rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 019.9-1"/></svg>Unlock Vault</button><div class="tmodal-secondary-row"><button class="tmodal-sec-btn" onclick="openSharePanel('folder')"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"/><path d="M12 1v6m0 10v6M4.22 4.22l4.24 4.24m7.08 7.08l4.24 4.24M1 12h6m10 0h6M4.22 19.78l4.24-4.24m7.08-7.08l4.24-4.24"/></svg>Manage</button><button class="tmodal-sec-btn danger" onclick="delFolderFromModal('${folder._id}')"><svg viewBox="0 0 24 24"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 01-2 2H8a2 2 0 01-2-2L5 6"/></svg>Delete</button></div>`;
+  document.getElementById('tokenModal').classList.add('open');
+  setTimeout(()=>document.getElementById('encKeyInput')?.focus(),60);
+}
+async function unlockEncryptedVault(id){
+  const input=document.getElementById('encKeyInput');
+  const keyStr=input?.value.trim();
+  if(!keyStr)return toast('Paste the decryption key first','error');
+  const folder=tokenModalFolder;
+  if(!folder||folder._id!==id)return;
+  try{
+    await renderUnlockedVaultModal(folder,keyStr);
+    encKeyCache.set(folder._id,keyStr);
+  }catch{
+    toast("That key doesn't decrypt this vault — check you copied it in full",'error');
+  }
+}
+// Throws if the key is wrong on the FIRST file (GCM's own auth check is the
+// verification) — an empty vault has nothing to verify against, so an empty
+// vault always "succeeds" here; there's no way to confirm a key against zero
+// ciphertext, which is an inherent limitation, not a bug.
+async function renderUnlockedVaultModal(folder,keyStr){
+  const key=await importKeyB64url(keyStr);
+  const files=(folder.files||[]).filter(x=>(x.visibility||'public')!=='private'&&x.encrypted);
+  const decrypted=[];
+  for(const f of files){
+    const realName=await decryptString(key,f.encryptedName,f.encryptedNameIV);
+    const realType=await decryptString(key,f.encryptedMimeType,f.encryptedMimeTypeIV);
+    decrypted.push({...f,_realName:realName,_realType:realType});
+  }
+  folder._vaultKeyStr=keyStr;
+  folder._decryptedFiles=decrypted;
+
+  const hd=document.getElementById('tmodalHead'),bd=document.getElementById('tmodalBody'),ft=document.getElementById('tmodalFoot');
+  setTmodalHero('folder');
+  hd.innerHTML=`<div class="tmodal-title-lg" title="${esc(folder.name)}">${esc(folder.name)}</div><div class="tmodal-badges"><span class="vis-badge vis-priv">${ICONS.unlock} Vault Unlocked</span><span style="font-size:12px;color:var(--t2)">${decrypted.length} file${decrypted.length!==1?'s':''}</span></div>`;
+  const infoGrid=`<div class="tmodal-info-grid">${tinfo('Files',decrypted.length,true)}${privacyInfoRows(folder)}</div>`;
+  bd.innerHTML=infoGrid+(decrypted.length
+    ?`<div class="tmodal-file-list">${decrypted.map(f=>`<div class="tmodal-file-row"><span class="tmodal-file-name" title="${esc(f._realName)}">${esc(stripExt(f._realName))}</span><span class="tmodal-file-meta">${fmtSz(f.fileSize)}</span><button class="tmodal-dl-btn" onclick="decryptAndDownloadVaultFile('${f._id}')" title="Decrypt & Download"><svg viewBox="0 0 24 24" stroke-linecap="round" stroke-linejoin="round"><polyline points="8 17 12 21 16 17"/><line x1="12" y1="12" x2="12" y2="21"/></svg></button></div>`).join('')}</div>`
+    :`<div style="text-align:center;padding:24px 0;color:var(--t3);font-size:14px">This vault is empty</div>`)
+    +`<div style="margin-top:12px;font-size:12px;color:var(--t3);text-align:center">${ICONS.lock} Decrypted locally — the server never sees the plaintext.</div>`;
+  ft.innerHTML=`<div class="tmodal-secondary-row"><button class="tmodal-sec-btn" onclick="openSharePanel('folder')"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"/><path d="M12 1v6m0 10v6M4.22 4.22l4.24 4.24m7.08 7.08l4.24 4.24M1 12h6m10 0h6M4.22 19.78l4.24-4.24m7.08-7.08l4.24-4.24"/></svg>Manage</button><button class="tmodal-sec-btn danger" onclick="delFolderFromModal('${folder._id}')"><svg viewBox="0 0 24 24"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 01-2 2H8a2 2 0 01-2-2L5 6"/></svg>Delete</button></div>`;
+}
+async function decryptAndDownloadVaultFile(id){
+  const folder=tokenModalFolder;
+  if(!folder||!folder._vaultKeyStr)return;
+  const f=(folder._decryptedFiles||[]).find(x=>x._id===id);
+  if(!f)return;
+  toast('Decrypting…','info');
+  try{
+    const key=await importKeyB64url(folder._vaultKeyStr);
+    const res=await fetch(`${API}/${id}/download`);
+    if(!res.ok)throw new Error();
+    const cipherBuf=await res.arrayBuffer();
+    const plainBuf=await decryptBuffer(key,cipherBuf,f.encryptionIV);
+    const blob=new Blob([plainBuf],{type:f._realType||'application/octet-stream'});
+    const url=URL.createObjectURL(blob);
+    const a=document.createElement('a');a.href=url;a.download=f._realName||'decrypted-file';
+    document.body.appendChild(a);a.click();document.body.removeChild(a);
+    setTimeout(()=>URL.revokeObjectURL(url),10000);
+    toast(`${f._realName} decrypted & downloaded ${ICONS.unlock}`,'success');
+  }catch{toast('Decryption failed — the key or file data may be corrupted','error');}
 }
 
 // ── Encrypted file: token-modal flow ────────────────────────────────────
@@ -1217,16 +1331,19 @@ function downloadCurFolderZip(){
 function mkFolderCard(f,i){
   const cnt=f.fileCount!==undefined?f.fileCount:(f.files?f.files.length:0);
   const d=document.createElement('div');
-  d.className='fol-card';d.id=`folder-${f._id}`;d.style.animationDelay=`${i*.05}s`;
+  d.className='fol-card'+(f.encrypted?' fol-vault':'');d.id=`folder-${f._id}`;d.style.animationDelay=`${i*.05}s`;
+  const visBtn=f.encrypted
+    ?`<button class="cact cact-vis-priv" title="Encrypted vaults always stay private" disabled style="opacity:.4;cursor:not-allowed"><svg viewBox="0 0 24 24"><rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0110 0v4"/></svg></button>`
+    :`<button class="cact cact-vis-${f.visibility==='public'?'pub':'priv'}" title="${f.visibility==='public'?'Make private':'Click to make public'}" onclick="toggleFolderVis('${f._id}','${f.visibility||'public'}')">${f.visibility==='public'?'<svg viewBox="0 0 24 24"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>':'<svg viewBox="0 0 24 24"><rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0110 0v4"/></svg>'}</button>`;
   d.innerHTML=`
     <div class="fol-top">
       <div class="fol-ico-wrap">
-        <div class="fol-ico"><svg viewBox="0 0 24 24"><path d="M22 19a2 2 0 01-2 2H4a2 2 0 01-2-2V5a2 2 0 012-2h5l2 3h9a2 2 0 012 2z"/></svg></div>
+        <div class="fol-ico">${f.encrypted?'<svg viewBox="0 0 24 24"><rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0110 0v4"/></svg>':'<svg viewBox="0 0 24 24"><path d="M22 19a2 2 0 01-2 2H4a2 2 0 01-2-2V5a2 2 0 012-2h5l2 3h9a2 2 0 012 2z"/></svg>'}</div>
         ${cnt>0?`<span class="fol-count">${cnt>99?'99+':cnt}</span>`:''}
       </div>
       <div class="fol-info">
         <div class="fol-name">${esc(f.name)}</div>
-        <div class="fol-meta"><span>${cnt} file${cnt!==1?'s':''}</span><span class="vis-badge vis-${f.visibility==='public'?'pub':'priv'}">${f.visibility==='public'?'Public':'Private'}</span></div>
+        <div class="fol-meta"><span>${cnt} file${cnt!==1?'s':''}</span><span class="vis-badge vis-${f.visibility==='public'?'pub':'priv'}">${f.visibility==='public'?'Public':'Private'}</span>${f.encrypted?'<span class="vis-badge vault-badge">'+ICONS.lock+' Vault</span>':''}</div>
       </div>
     </div>
     <div class="cact-row" style="padding:8px 14px 12px">
@@ -1234,7 +1351,7 @@ function mkFolderCard(f,i){
       <button class="cact" title="Copy Token" onclick="copyToken('${f.shareToken||''}')"><svg viewBox="0 0 24 24"><path d="M10 13a5 5 0 007.54.54l3-3a5 5 0 00-7.07-7.07l-1.72 1.71"/><path d="M14 11a5 5 0 00-7.54-.54l-3 3a5 5 0 007.07 7.07l1.71-1.71"/></svg></button>
       <button class="cact" title="Rename" onclick="renameFolderPr('${f._id}','${esc(f.name)}')"><svg viewBox="0 0 24 24"><path d="M11 4H4a2 2 0 00-2 2v14a2 2 0 002 2h14a2 2 0 002-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 013 3L12 15l-4 1 1-4 9.5-9.5z"/></svg></button>
       <div class="cact-sep"></div>
-      <button class="cact cact-vis-${f.visibility==='public'?'pub':'priv'}" title="${f.visibility==='public'?'Make private':'Click to make public'}" onclick="toggleFolderVis('${f._id}','${f.visibility||'public'}')">${f.visibility==='public'?'<svg viewBox="0 0 24 24"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>':'<svg viewBox="0 0 24 24"><rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0110 0v4"/></svg>'}</button>
+      ${visBtn}
       <button class="cact cact-del" title="Delete folder" onclick="delFolderConfirm('${f._id}','${esc(f.name)}')"><svg viewBox="0 0 24 24"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 01-2 2H8a2 2 0 01-2-2L5 6"/></svg></button>
     </div>`;
   return d;
@@ -1260,22 +1377,48 @@ function showCreateFolder(){
 function closeCreateFolder(){
   document.getElementById('cfModal').classList.remove('open');
   document.getElementById('cfInput').value='';
+  document.getElementById('cfEncrypted').checked=false;
 }
 async function submitCreateFolder(){
   const name=document.getElementById('cfInput').value.trim();
   if(!name)return toast('Enter a folder name','error');
+  const wantVault=document.getElementById('cfEncrypted').checked;
   const btn=document.getElementById('cfSubmit');
   btn.textContent='…';btn.disabled=true;
   try{
-    const res=await fetch(FOLDERS_API,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({name})});
+    const res=await fetch(FOLDERS_API,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({name,encrypted:wantVault})});
     if(!res.ok)throw new Error();
     const d=await res.json();
     allFolders.unshift(d.folder);
     closeCreateFolder();
     renderFolders();
-    toast(`"${name}" created!`,'success');
+    if(wantVault){
+      // Generate the vault's single shared key here, in the browser — this
+      // is the ONLY time it's ever created, and (like per-file encryption)
+      // it never touches the server. Every file added to this vault later
+      // reuses this same key from encKeyCache, each with its own fresh IV.
+      const key=await genAesKey();
+      encKeyCache.set(d.folder._id,await exportKeyB64url(key));
+      refreshVaultSelect(); // so this freshly-created vault is immediately selectable, without needing to re-toggle encryption
+      openEncryptedFolderRevealModal(d.folder);
+    }else{
+      toast(`"${name}" created!`,'success');
+    }
   }catch{toast('Failed to create folder','error');}
   finally{btn.textContent='Create';btn.disabled=false;}
+}
+// Shown right after creating a vault — same "save this now" urgency as the
+// per-file encrypted-upload reveal, since this key is the ONLY copy that
+// will ever exist outside this browser tab.
+function openEncryptedFolderRevealModal(folder){
+  privRevealCtx={id:folder._id,type:'folder',encrypted:true};
+  document.getElementById('prm-title').innerHTML='Vault Created '+ICONS.lock+ICONS.key;
+  document.getElementById('prm-sub').textContent="Save this link now — every file you add to this vault will be encrypted under this key, and we have no way to recover it if it's lost.";
+  document.getElementById('prm-token').textContent=folder.shareToken||'';
+  document.getElementById('prm-expiry-status').textContent='Never';
+  resetPrivRevealExtras(null,0);
+  document.getElementById('privRevealModal').classList.add('open');
+  copyPrivLink();
 }
 // ── Rename + delete folder ────────────────────────────────────────────────
 async function renameFolderPr(id,currentName){

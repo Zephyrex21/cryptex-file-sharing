@@ -83,6 +83,11 @@
       <span class="enc-toggle"><input type="checkbox" id="encToggle"/><span class="enc-toggle-track"><span class="enc-toggle-thumb"></span></span></span>
       <span class="enc-toggle-lbl"><svg class="ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0110 0v4"/></svg> End-to-end encrypt this upload</span>
     </label>
+    <div class="vault-select-wrap" id="vaultSelectWrap" style="display:none" onclick="event.stopPropagation()">
+      <select id="vaultSelect" title="Add to an encrypted vault — every file inside shares one key">
+        <option value="">Standalone (its own key)</option>
+      </select>
+    </div>
     <div class="prog" id="prog"><span class="prog-name" id="pName">Uploading…</span><div class="prog-track"><div class="prog-fill" id="pFill"></div></div><span class="prog-pct" id="pPct">0%</span></div>
   </div>
 
@@ -166,6 +171,10 @@
     <div class="cf-title">New Folder</div>
     <input class="cf-input" id="cfInput" type="text" placeholder="Folder name…" autocomplete="off" maxlength="80"
       onkeydown="if(event.key==='Enter')submitCreateFolder();if(event.key==='Escape')closeCreateFolder()"/>
+    <label class="cf-vault-toggle" title="Every file added to this folder is encrypted under one shared key — one link unlocks the whole vault">
+      <span class="enc-toggle"><input type="checkbox" id="cfEncrypted"/><span class="enc-toggle-track"><span class="enc-toggle-thumb"></span></span></span>
+      <span class="enc-toggle-lbl"><svg class="ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0110 0v4"/></svg> Encrypted vault — one key for every file inside</span>
+    </label>
     <div class="cf-foot">
       <button class="btn-close" onclick="closeCreateFolder()">Cancel</button>
       <button class="btn-acc" id="cfSubmit" onclick="submitCreateFolder()">Create</button>

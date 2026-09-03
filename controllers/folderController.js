@@ -28,14 +28,17 @@ export const sanitizeZipEntryName = (name) => {
 // ── CREATE ─────────────────────────────────────────────────────────────────
 export const createFolder = async (req, res) => {
   try {
-    const { name, visibility } = req.body;
+    const { name, visibility, encrypted } = req.body;
     if (!name?.trim()) {
       return res.status(400).json({ message: "Folder name is required" });
     }
 
     const folder = await Folder.create({
       name:        sanitizeFolderName(name),
-      visibility:  visibility || "public",
+      // An encrypted vault is always private — same reasoning as encrypted
+      // files: a public folder nobody has the key for has no purpose.
+      visibility:  encrypted ? "private" : (visibility || "public"),
+      encrypted:   !!encrypted,
       shareToken:  generateToken(),
     });
 
@@ -75,10 +78,15 @@ export const getFolderById = async (req, res) => {
     // match filter: individually-private files are NEVER returned through a
     // folder listing, regardless of the folder's own visibility. A private
     // file's only access path is its own token — folder access does not
-    // override that.
+    // override that. The one deliberate exception: encrypted files are
+    // ALWAYS private by design (see uploadFile), so excluding them here too
+    // would make every encrypted vault appear permanently empty — the `$or`
+    // lets an encrypted file through regardless of its visibility field,
+    // while still hiding an ordinary private file from a folder it happens
+    // to be linked to.
     const folder = await Folder.findById(req.params.id).populate({
       path: "files",
-      match: { visibility: { $ne: "private" } },
+      match: { $or: [{ visibility: { $ne: "private" } }, { encrypted: true }] },
     });
     if (!folder) return res.status(404).json({ message: "Folder not found" });
 
@@ -98,10 +106,12 @@ export const getFolderById = async (req, res) => {
 export const getFolderByToken = async (req, res) => {
   try {
     // Same rule as getFolderById: an individually-private file is hidden even
-    // when the folder itself is being unlocked correctly via its token.
+    // when the folder itself is being unlocked correctly via its token —
+    // except encrypted files, which are always private by design and would
+    // otherwise make every vault look empty (see the $or there for why).
     const folder = await Folder
       .findOne({ shareToken: req.params.token })
-      .populate({ path: "files", match: { visibility: { $ne: "private" } } });
+      .populate({ path: "files", match: { $or: [{ visibility: { $ne: "private" } }, { encrypted: true }] } });
 
     if (!folder) {
       return res.status(404).json({ message: "Invalid token — folder not found" });
@@ -116,7 +126,7 @@ export const getFolderByToken = async (req, res) => {
         { _id: folder._id, viewCount: { $lt: folder.maxViews } },
         { $inc: { viewCount: 1 } },
         { new: true }
-      ).populate({ path: "files", match: { visibility: { $ne: "private" } } });
+      ).populate({ path: "files", match: { $or: [{ visibility: { $ne: "private" } }, { encrypted: true }] } });
       if (!updated) {
         return res.status(410).json({ message: "This link has reached its view limit and is no longer available" });
       }
@@ -153,6 +163,17 @@ export const setFolderVisibility = async (req, res) => {
     const { visibility, expiresIn, maxViews, regenerateToken } = req.body;
     if (!["public", "private"].includes(visibility)) {
       return res.status(400).json({ message: "visibility must be 'public' or 'private'" });
+    }
+
+    if (visibility === "public") {
+      const existing = await Folder.findById(req.params.id);
+      if (!existing) return res.status(404).json({ message: "Folder not found" });
+      // Same rule as encrypted files: an encrypted vault nobody outside has
+      // the key for has no purpose being public, and enforcing it
+      // server-side means the rule holds even against a hand-crafted request.
+      if (existing.encrypted) {
+        return res.status(400).json({ message: "Encrypted vaults must stay private — share via the encrypted link instead" });
+      }
     }
 
     const update = { visibility };
@@ -268,11 +289,12 @@ export const removeFileFromFolder = async (req, res) => {
 // files written to disk, everything is piped straight through. Same access
 // rule as opening the folder: private folders need their token.
 //
-// Encrypted files are always visibility:"private" (see uploadFile in
-// fileUpload.js), so the populate match below excludes them from every
-// folder listing automatically — they're never silently bundled into a zip
-// with ciphertext and no key. Bulk sharing of encrypted files would need a
-// folder-level key exchange, which is a deliberately separate future feature.
+// Encrypted files are excluded here on purpose, even now that vault folders
+// exist (see models/Folder.js): this endpoint streams raw bytes straight
+// into the archive with no decryption step, so a zip full of ciphertext
+// would be useless even to someone who has the vault's key. The populate
+// match below is intentionally NOT given the vault's $or exception used
+// elsewhere, so it still excludes every encrypted file automatically.
 export const downloadFolderZip = async (req, res) => {
   try {
     const folder = await Folder.findById(req.params.id).populate({

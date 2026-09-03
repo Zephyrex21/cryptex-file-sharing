@@ -63,6 +63,8 @@
 .enc-toggle input:checked+.enc-toggle-track .enc-toggle-thumb{transform:translateX(14px)}
 .enc-toggle input:focus-visible+.enc-toggle-track{box-shadow:0 0 0 3px var(--accg)}
 .enc-toggle-lbl{font-size:12.5px;font-weight:600;color:var(--t2)}
+.vault-select-wrap{margin-top:10px}
+.vault-select-wrap select{padding:7px 12px;border-radius:99px;background:var(--surf2);border:.5px solid var(--b2);color:var(--t2);font-size:12px;font-weight:600;font-family:var(--font);cursor:pointer;max-width:240px}
 @media(max-width:480px){
   /* .uzone's 40px side padding eats nearly a quarter of a 320-375px phone
      screen; tighten it so headings/hint text don't wrap awkwardly. */
@@ -216,6 +218,9 @@
 .cacts3{display:grid;grid-template-columns:1fr 1fr;gap:7px;margin-top:7px}
 .cmeta{flex-wrap:wrap}
 .vis-badge{font-size:10px;font-weight:700;letter-spacing:.4px;text-transform:uppercase;padding:2px 8px;border-radius:6px;flex-shrink:0}
+.vault-badge{background:var(--accs);color:var(--acc);display:inline-flex;align-items:center;gap:3px}
+.vault-badge svg{width:9px;height:9px}
+.fol-card.fol-vault{border-color:var(--accg)}
 .vis-pub{background:var(--grns);color:var(--grn)}.vis-priv{background:var(--ylws);color:var(--ylw)}
 .a-tok{background:var(--blus);color:var(--blu)}.a-tok:hover{background:var(--blu);color:#fff}
 .a-vis-pub{background:var(--grns);color:var(--grn)}.a-vis-pub:hover{background:var(--grn);color:#fff}
@@ -563,7 +568,7 @@
 .atf-btn-rm{background:var(--reds);color:var(--red)}.atf-btn-rm:hover{background:var(--red);color:#fff}
 .atf-empty{padding:24px 16px;text-align:center;color:var(--t3);font-size:13px;line-height:1.6}
 /* ── Create folder modal ──────────────────────────────────────────────── */
-.cf-box{background:var(--surf2);border:.5px solid var(--b2);border-radius:var(--r3);max-width:340px;width:100%;box-shadow:var(--sh3);padding:24px}
+.cf-box{background:var(--surf2);border:.5px solid var(--b2);border-radius:var(--r3);max-width:380px;width:100%;box-shadow:var(--sh3);padding:24px}
 .shortcuts-box{max-width:300px}
 .confetti-piece{position:fixed;width:6px;height:6px;border-radius:1px;pointer-events:none;z-index:99998;animation:confettiBurst .85s cubic-bezier(.25,.8,.35,1) forwards}
 @keyframes confettiBurst{0%{transform:translate(0,0) rotate(0deg);opacity:1}100%{transform:translate(var(--tx),var(--ty)) rotate(var(--rot));opacity:0}}
@@ -575,3 +580,5 @@
 .cf-input{width:100%;padding:10px 14px;border-radius:var(--r1);border:.5px solid var(--b2);background:var(--bg);color:var(--t1);font-size:14px;font-family:var(--font);outline:none;box-sizing:border-box;transition:all .18s var(--ease)}
 .cf-input:focus{border-color:var(--acc);box-shadow:0 0 0 3px var(--accs)}
 .cf-foot{display:flex;gap:10px;margin-top:16px}
+.cf-vault-toggle{display:flex;align-items:center;gap:9px;margin-top:14px;padding:10px 12px;border-radius:var(--r2);background:var(--bg2);border:.5px solid var(--b1);cursor:pointer}
+.cf-vault-toggle .enc-toggle-lbl{font-size:12px;line-height:1.4}
