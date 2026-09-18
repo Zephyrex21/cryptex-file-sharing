@@ -8,6 +8,7 @@ import { ZipArchive } from "archiver";
 import { isSafeUrl, safeFetchHtml, extractMeta } from "./linkPreview.js";
 import { checkKnownMalwareHash } from "../utils/malwareScan.js";
 import { sanitizeZipEntryName } from "./folderController.js";
+import { canAccessFile } from "../middleware/auth.js";
 
 const BUCKET = process.env.SUPABASE_BUCKET || "cloudvault-files";
 
@@ -411,6 +412,13 @@ export const getSingleFile = async (req, res) => {
   try {
     const file = await File.findById(req.params.id);
     if (!file) return res.status(404).json({ message: "Not found" });
+    // Private + unencrypted: bare id access used to work forever, even after
+    // the token expired or was regenerated. Now it needs the current token
+    // (or the owner key) same as any other private access path. See
+    // middleware/auth.js for why encrypted files are exempt from this.
+    if (!canAccessFile(req, file)) {
+      return res.status(403).json({ message: "This file is private — a valid share token is required" });
+    }
     res.status(200).json({ file });
   } catch (e) { res.status(500).json({ message: e.message }); }
 };
@@ -500,6 +508,13 @@ export const setVisibility = async (req, res) => {
 const streamFile = async (req, res, disposition) => {
   const file = await File.findById(req.params.id);
   if (!file) return res.status(404).json({ message: "Not found" });
+  // Same rule as getSingleFile: a private, unencrypted file's bytes now
+  // require the owner key or that file's own current, unexpired token —
+  // this was the actual hole that let a leaked/old _id keep downloading a
+  // "private" file forever, expiry and token regeneration notwithstanding.
+  if (!canAccessFile(req, file)) {
+    return res.status(403).json({ message: "This file is private — a valid share token is required" });
+  }
 
   const sourceUrl = file.fileUrl || file.cloudinaryUrl;
   if (!sourceUrl) return res.status(404).json({ message: "File URL missing" });

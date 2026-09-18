@@ -7,15 +7,18 @@ stale versions and make things look broken when they aren't.
 
 ## Automated tests
 
-`npm test` runs 48 Vitest cases covering the security-critical logic that's
+`npm test` runs 101 Vitest cases covering the security-critical logic that's
 otherwise easy to silently break: magic-byte content verification (every
 supported file type, plus mismatch/tampering cases), the SSRF protections in
 `isSafeUrl` (private IPs, IPv6, cloud metadata address, mixed-resolution,
 DNS-failure — all with `dns.lookup` mocked, so it needs no network access),
-and the encrypted-file business rules (`renameFile`/`setVisibility` rejecting
-encrypted files, expiry-date math). Everything below this point is still a
-manual walkthrough — a good next step would be extending this suite to cover
-the folder ZIP flow and the visibility/token-expiry HTTP routes end to end.
+the encrypted-file business rules (`renameFile`/`setVisibility` rejecting
+encrypted files, expiry-date math), and — new this round — the owner-key
+gate and the direct-by-id access checks on private files/folders
+(`tests/auth.test.js`, `tests/directAccessGuard.test.js`). Everything below
+this point is still a manual walkthrough — a good next step would be
+extending this suite to cover the folder ZIP flow and the visibility/token-
+expiry HTTP routes end to end.
 
 ## Homepage (`/`)
 
@@ -127,6 +130,38 @@ the folder ZIP flow and the visibility/token-expiry HTTP routes end to end.
 - [ ] The 3-step encryption flow on the homepage stacks vertically with a
       rotated arrow between steps, rather than staying side-by-side
 
+## Access-control fixes (this round)
+
+Set `OWNER_KEY` in `.env` before testing this section — without it, every
+check below trivially "passes" because the gate is a no-op by design
+(see README → Security Considerations). Restart the server after setting it.
+
+- [ ] With no owner key entered in the app yet, try to rename or delete a
+      file/folder — fails, and a prompt appears asking for the owner key
+- [ ] Paste the correct key (from the server console/logs, or your `.env`)
+      into the prompt — the action you were doing completes automatically
+      without needing to click it again
+- [ ] Click the key icon in the nav bar directly — same prompt, pre-filled
+      with whatever's currently saved; clearing it and saving blank logs you
+      back out of management actions
+- [ ] Refresh the page — the saved key persists (it's in localStorage), so
+      you don't have to re-enter it every visit
+- [ ] Make a file private, copy its share link, open it in a private/
+      incognito window (no owner key there) — download and preview both
+      work with just the link, no key needed
+- [ ] In that same incognito window, try hitting the file's plain `/api/
+      files/:id` or `/:id/download` URL with the `?token=...` chopped off —
+      should now fail (403), where it used to just serve the file
+- [ ] Regenerate a private file's token, then try the OLD share link — should
+      fail now (previously, the old link's `_id` kept working forever even
+      after "revoking" it this way)
+- [ ] Set a private folder's link to expire in 1 minute, wait, then try
+      opening the folder directly by clicking into it from a place that still
+      has the old link cached — should be rejected as expired
+- [ ] Open the "Show QR code" panel for a private/encrypted file, then check
+      your browser's Network tab — there should be NO request to `/api/qr`
+      (or anywhere else) when the QR renders; it's drawn entirely in-page
+
 ## Things I could NOT verify myself (no live browser or database in my sandbox)
 
 - Actual visual rendering of anything — every animation/layout claim above
@@ -139,6 +174,20 @@ the folder ZIP flow and the visibility/token-expiry HTTP routes end to end.
   I verified the logic by reading it carefully and syntax-checked every file
   with `node --check`, but I have no browser in this sandbox to click through
   it myself. Test this section first.
+- The owner-key prompt/retry flow and the QR code rendering above — same
+  reason, no browser here. I did confirm (by reading the code) that
+  `togglePrivQr()` no longer calls `/api/qr` or any network endpoint at all
+  for the key-bearing link, but I'd still watch the Network tab yourself the
+  first time to be sure.
+- One thing I deliberately did NOT fix: `controllers/linkPreview.js`'s SSRF
+  guard has a narrow DNS-rebinding gap (documented in the README) — the
+  check and the actual fetch each resolve DNS independently, so there's a
+  small race window a very well-timed attacker with control of their own DNS
+  could in theory exploit. Closing it properly means pinning the validated
+  IP for the real connection instead of a second independent lookup, which
+  is more invasive than I wanted to do to a working, tested module without
+  being able to browser-test the result. Flagging it here rather than
+  quietly leaving it out.
 
 If anything on this list doesn't do what it says, that's the most useful
 possible bug report you could give me — exact item + what actually happened.

@@ -34,7 +34,7 @@ app.use((req, res, next) => {
   if (allowedOrigin) {
     res.setHeader("Access-Control-Allow-Origin", allowedOrigin);
     res.setHeader("Access-Control-Allow-Methods", "GET, POST, PATCH, DELETE, OPTIONS");
-    res.setHeader("Access-Control-Allow-Headers", "Content-Type");
+    res.setHeader("Access-Control-Allow-Headers", "Content-Type, X-Owner-Key, X-Share-Token");
   }
   // Clickjacking protection — this app has no legitimate reason to ever be framed.
   res.setHeader("X-Frame-Options", "DENY");

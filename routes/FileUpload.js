@@ -15,6 +15,7 @@ import {
   deleteFile,
   downloadFilesZip,
 } from "../controllers/fileUpload.js";
+import { requireOwner } from "../middleware/auth.js";
 
 const router = express.Router();
 
@@ -120,9 +121,14 @@ router.get("/:id/download",       downloadFile);
 router.get("/:id",                getSingleFile);
 
 // Visibility toggle — must come before /:id (PATCH) to avoid swallowing it
-router.patch("/:id/visibility",   setVisibility);
-router.patch("/:id",              renameFile);
+// These four mutate an existing item, so — unlike everything above, which
+// only ever *reads* something that's either already public or gated by its
+// own token — they need the owner key regardless of visibility: a public
+// gallery item shouldn't be deletable/renameable by any random visitor
+// either. See middleware/auth.js.
+router.patch("/:id/visibility",   requireOwner, setVisibility);
+router.patch("/:id",              requireOwner, renameFile);
 
-router.delete("/:id",             deleteFile);
+router.delete("/:id",             requireOwner, deleteFile);
 
 export default router;

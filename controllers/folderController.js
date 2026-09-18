@@ -3,6 +3,7 @@ import File   from "../models/File.js";
 import { randomUUID } from "crypto";
 import { ZipArchive } from "archiver";
 import { Readable } from "stream";
+import { canAccessFolder } from "../middleware/auth.js";
 
 const generateToken = () => randomUUID().replace(/-/g, "").slice(0, 16);
 
@@ -90,11 +91,11 @@ export const getFolderById = async (req, res) => {
     });
     if (!folder) return res.status(404).json({ message: "Folder not found" });
 
-    if (folder.visibility === "private") {
-      const provided = req.query.token || req.headers["x-share-token"];
-      if (!provided || provided !== folder.shareToken) {
-        return res.status(403).json({ message: "Private folder — valid token required" });
-      }
+    // canAccessFolder also re-checks tokenExpiresAt, which this endpoint used
+    // to skip entirely — an expired folder link kept working forever through
+    // this path even though the token-lookup route correctly rejected it.
+    if (!canAccessFolder(req, folder)) {
+      return res.status(403).json({ message: "Private folder — a valid, unexpired token is required" });
     }
 
     res.status(200).json({ folder });
@@ -303,14 +304,8 @@ export const downloadFolderZip = async (req, res) => {
     });
     if (!folder) return res.status(404).json({ message: "Folder not found" });
 
-    if (folder.visibility === "private") {
-      const provided = req.query.token || req.headers["x-share-token"];
-      if (!provided || provided !== folder.shareToken) {
-        return res.status(403).json({ message: "Private folder — valid token required" });
-      }
-    }
-    if (folder.tokenExpiresAt && folder.tokenExpiresAt < new Date() && folder.visibility === "private") {
-      return res.status(410).json({ message: "This token has expired" });
+    if (!canAccessFolder(req, folder)) {
+      return res.status(403).json({ message: "Private folder — a valid, unexpired token is required" });
     }
 
     const files = folder.files || [];

@@ -110,6 +110,12 @@ SUPABASE_BUCKET=
 
 # Backend Port
 PORT=3000
+
+# Owner key — required (as an X-Owner-Key header) to rename, delete, or
+# re-share any file/folder. Leave unset and the server generates one at
+# startup and prints it to the console; set it explicitly to keep the same
+# key across restarts. See "Security Considerations" below.
+OWNER_KEY=
 ```
 ---
 
@@ -125,10 +131,12 @@ PORT=3000
 | GET | `/api/files/:id` | Get file details |
 | GET | `/api/files/:id/download` | Download file |
 | GET | `/api/files/:id/preview` | Preview file |
-| PATCH | `/api/files/:id` | Rename file |
-| PATCH | `/api/files/:id/visibility` | Change visibility |
-| DELETE | `/api/files/:id` | Delete file |
+| PATCH | `/api/files/:id` | Rename file 🔒 |
+| PATCH | `/api/files/:id/visibility` | Change visibility 🔒 |
+| DELETE | `/api/files/:id` | Delete file 🔒 |
 | GET | `/api/files/token/:token` | Access via token |
+
+> 🔒 = requires the `X-Owner-Key` header (see "Environment Variables"). A private/encrypted file's `:id` routes above also require its own valid `?token=` (or the owner key) if it's not public — see "Security Considerations".
 
 > `POST /api/files/upload` accepts an optional encrypted-upload contract: multipart fields `encrypted=true`, `iv`, `encryptedName`, `encryptedNameIV`, `encryptedMimeType`, `encryptedMimeTypeIV` alongside `file` (sent as ciphertext, `application/octet-stream`). See `controllers/fileUpload.js` and `public/js/app.js` for the client/server contract.
 
@@ -141,11 +149,11 @@ PORT=3000
 | POST | `/api/folders` | Create folder |
 | GET | `/api/folders` | Get folders |
 | GET | `/api/folders/:id` | Folder details |
-| PATCH | `/api/folders/:id` | Rename folder |
-| PATCH | `/api/folders/:id/visibility` | Change visibility |
-| DELETE | `/api/folders/:id` | Delete folder |
-| POST | `/api/folders/:id/files` | Add file to folder |
-| DELETE | `/api/folders/:id/files/:fileId` | Remove file from folder |
+| PATCH | `/api/folders/:id` | Rename folder 🔒 |
+| PATCH | `/api/folders/:id/visibility` | Change visibility 🔒 |
+| DELETE | `/api/folders/:id` | Delete folder 🔒 |
+| POST | `/api/folders/:id/files` | Add file to folder 🔒 |
+| DELETE | `/api/folders/:id/files/:fileId` | Remove file from folder 🔒 |
 | GET | `/api/folders/token/:token` | Access via token |
 
 ---
@@ -173,14 +181,20 @@ PORT=3000
 ## Security Considerations
 
 - Sensitive credentials are stored in environment variables.
-- Database IDs are never exposed for sharing.
+- **Rename, delete, visibility changes, and folder membership all require the owner key** (`OWNER_KEY`, sent as `X-Owner-Key`) — see "Environment Variables" above. Reading a public item, or a private item via its own valid token, never needs it.
 - Supabase Service Role Key remains server-side.
-- Private files can only be accessed through their token.
+- Private, unencrypted files/folders can only be read through their own current, unexpired share token (or the owner key) — this is enforced on every access path, including direct-by-id requests, not just the token-lookup endpoint. A file/folder's `_id` is not itself a secret (it's returned alongside the token in several responses), so it's the token check that matters, and it's now checked everywhere the id is.
+- Encrypted files are the one exception to the point above: their content is ciphertext either way, so the server has nothing meaningful to gate — the client-side AES key is the real (and only) protection, exactly as the zero-knowledge design intends. An encrypted vault *folder's* own name/metadata is still plain text, though, and still requires its token like any other private folder.
+- Regenerating a share token immediately invalidates the old one everywhere it's checked, including direct-by-id access — not just the token-lookup route.
+- Token-lookup routes (`GET /files/token/:token`, `GET /folders/token/:token`, and `GET /folders/:id` — the other way a private folder's token gets checked) are all rate-limited against brute-forcing.
+- QR codes for share links are generated entirely client-side (see `public/js/vendor/qrcode.js`). This matters specifically for encrypted items, whose link includes the decryption key as a `#key=...` fragment — that fragment is never sent to any server, by anyone, for any reason, including rendering its own QR code.
 - Uploaded file content is verified against its declared type using magic-byte signatures, not just the client-reported MIME type (see `verifyMagicBytes` in `controllers/fileUpload.js`).
 - Unencrypted uploads get a best-effort malware pre-screen via VirusTotal's hash-lookup API — see `utils/malwareScan.js` for exactly what this does and doesn't catch (it's a known-hash lookup, not a full scan, and fails open if VirusTotal is unreachable or no API key is configured).
 - **Encrypted uploads are zero-knowledge by construction**, not just policy: the AES key never appears in any request body, response, log line, or database row this server controls. This also means magic-byte content verification is skipped for encrypted uploads — the server has no plaintext to check, which is the expected cost of not being able to read the file at all.
 - Known limitation: encryption happens at upload time only. There's currently no way to encrypt a file that's already been uploaded in plain — that would require downloading, encrypting, and re-uploading it, which isn't implemented yet.
 - Known limitation: encrypted files are excluded from folder ZIP downloads (bulk decryption would need a folder-level key exchange, which is a separate future feature, not a silent omission).
+- Known limitation: `controllers/linkPreview.js`'s SSRF guard re-validates the target IP on every redirect hop, but there's a narrow window between that check and the actual fetch where a DNS answer could theoretically change (DNS rebinding). Closing this fully needs pinning the validated IP for the actual connection instead of letting the HTTP client re-resolve it, which isn't implemented yet.
+- Upload, folder/link creation, and the public gallery/listing endpoints are intentionally left open (no owner key) — this app is designed as a personal drop-box where anyone with the link can contribute, not a walled garden. Lock those down too (wrap them in `requireOwner` from `middleware/auth.js`) if that's not the model you want.
 
 ---
 
