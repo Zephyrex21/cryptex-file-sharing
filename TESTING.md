@@ -7,15 +7,15 @@ stale versions and make things look broken when they aren't.
 
 ## Automated tests
 
-`npm test` runs 101 Vitest cases covering the security-critical logic that's
+`npm test` runs 106 Vitest cases covering the security-critical logic that's
 otherwise easy to silently break: magic-byte content verification (every
 supported file type, plus mismatch/tampering cases), the SSRF protections in
 `isSafeUrl` (private IPs, IPv6, cloud metadata address, mixed-resolution,
 DNS-failure — all with `dns.lookup` mocked, so it needs no network access),
 the encrypted-file business rules (`renameFile`/`setVisibility` rejecting
-encrypted files, expiry-date math), and — new this round — the owner-key
-gate and the direct-by-id access checks on private files/folders
-(`tests/auth.test.js`, `tests/directAccessGuard.test.js`). Everything below
+encrypted files, expiry-date math), and — new this round — the silent
+owner-key cookie handshake and the direct-by-id access checks on private
+files/folders (`tests/auth.test.js`, `tests/directAccessGuard.test.js`). Everything below
 this point is still a manual walkthrough — a good next step would be
 extending this suite to cover the folder ZIP flow and the visibility/token-
 expiry HTTP routes end to end.
@@ -136,18 +136,25 @@ Set `OWNER_KEY` in `.env` before testing this section — without it, every
 check below trivially "passes" because the gate is a no-op by design
 (see README → Security Considerations). Restart the server after setting it.
 
-- [ ] With no owner key entered in the app yet, try to rename or delete a
-      file/folder — fails, and a prompt appears asking for the owner key
-- [ ] Paste the correct key (from the server console/logs, or your `.env`)
-      into the prompt — the action you were doing completes automatically
-      without needing to click it again
-- [ ] Click the key icon in the nav bar directly — same prompt, pre-filled
-      with whatever's currently saved; clearing it and saving blank logs you
-      back out of management actions
-- [ ] Refresh the page — the saved key persists (it's in localStorage), so
-      you don't have to re-enter it every visit
+- [ ] With no ownerkey link visited yet, try to rename or delete a
+      file/folder in the app — fails (check Network tab: 401 on the
+      PATCH/DELETE call). No prompt appears — it should just silently fail;
+      that's correct, not a bug
+- [ ] Open `http://localhost:3000/app?ownerkey=<your OWNER_KEY>` once — check
+      DevTools → Application → Cookies: a `cv_owner_key` cookie should now be
+      set, `HttpOnly` checked, ~1 year expiry
+- [ ] Now retry rename/delete — succeeds, with zero extra UI, and the
+      `?ownerkey=` param doesn't need to be on the URL again after this
+- [ ] Refresh the page, close and reopen the tab — still works (cookie
+      persists across sessions, unlike a per-tab thing)
+- [ ] Open the app in a private/incognito window (no cookie there) — confirm
+      rename/delete fail there, while downloading/previewing a public or
+      token-shared item still works fine
+- [ ] Visit the ownerkey link with a WRONG value appended — no cookie gets
+      set (check Application → Cookies again), and management actions still
+      fail
 - [ ] Make a file private, copy its share link, open it in a private/
-      incognito window (no owner key there) — download and preview both
+      incognito window (no owner cookie there) — download and preview both
       work with just the link, no key needed
 - [ ] In that same incognito window, try hitting the file's plain `/api/
       files/:id` or `/:id/download` URL with the `?token=...` chopped off —
@@ -174,11 +181,13 @@ check below trivially "passes" because the gate is a no-op by design
   I verified the logic by reading it carefully and syntax-checked every file
   with `node --check`, but I have no browser in this sandbox to click through
   it myself. Test this section first.
-- The owner-key prompt/retry flow and the QR code rendering above — same
+- The `?ownerkey=` cookie handshake and the QR code rendering above — same
   reason, no browser here. I did confirm (by reading the code) that
   `togglePrivQr()` no longer calls `/api/qr` or any network endpoint at all
-  for the key-bearing link, but I'd still watch the Network tab yourself the
-  first time to be sure.
+  for the key-bearing link, and that the cookie middleware only sets
+  `Set-Cookie` when the query param actually matches `OWNER_KEY` — but I'd
+  still watch DevTools → Application → Cookies yourself the first time to
+  confirm it's actually `HttpOnly` and actually persists.
 - One thing I deliberately did NOT fix: `controllers/linkPreview.js`'s SSRF
   guard has a narrow DNS-rebinding gap (documented in the README) — the
   check and the actual fetch each resolve DNS independently, so there's a

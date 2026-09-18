@@ -111,10 +111,12 @@ SUPABASE_BUCKET=
 # Backend Port
 PORT=3000
 
-# Owner key — required (as an X-Owner-Key header) to rename, delete, or
-# re-share any file/folder. Leave unset and the server generates one at
-# startup and prints it to the console; set it explicitly to keep the same
-# key across restarts. See "Security Considerations" below.
+# Owner key — required to rename, delete, or re-share any file/folder.
+# Picked up silently: visit /app?ownerkey=<this value> once and the server
+# sets a cookie, no prompts or UI involved from then on. Leave unset and the
+# server generates one at startup and prints it (and the ready-to-open link)
+# to the console; set it explicitly to keep the same key/link across
+# restarts. See "Security Considerations" below.
 OWNER_KEY=
 ```
 ---
@@ -136,7 +138,7 @@ OWNER_KEY=
 | DELETE | `/api/files/:id` | Delete file 🔒 |
 | GET | `/api/files/token/:token` | Access via token |
 
-> 🔒 = requires the `X-Owner-Key` header (see "Environment Variables"). A private/encrypted file's `:id` routes above also require its own valid `?token=` (or the owner key) if it's not public — see "Security Considerations".
+> 🔒 = requires the owner key — a cookie set silently via `/app?ownerkey=...` once (or an `X-Owner-Key` header for scripts/curl), see "Environment Variables". A private/encrypted file's `:id` routes above also require its own valid `?token=` (or the owner key) if it's not public — see "Security Considerations".
 
 > `POST /api/files/upload` accepts an optional encrypted-upload contract: multipart fields `encrypted=true`, `iv`, `encryptedName`, `encryptedNameIV`, `encryptedMimeType`, `encryptedMimeTypeIV` alongside `file` (sent as ciphertext, `application/octet-stream`). See `controllers/fileUpload.js` and `public/js/app.js` for the client/server contract.
 
@@ -181,7 +183,7 @@ OWNER_KEY=
 ## Security Considerations
 
 - Sensitive credentials are stored in environment variables.
-- **Rename, delete, visibility changes, and folder membership all require the owner key** (`OWNER_KEY`, sent as `X-Owner-Key`) — see "Environment Variables" above. Reading a public item, or a private item via its own valid token, never needs it.
+- **Rename, delete, visibility changes, and folder membership all require the owner key** (`OWNER_KEY`). It's picked up with zero UI: open `/app?ownerkey=<key>` once from your browser and the server sets a long-lived, HttpOnly cookie (unreadable by page JS, sent automatically after that) — no button, no prompt, nothing to re-enter. Scripts/curl/Postman can use an `X-Owner-Key` header instead. Reading a public item, or a private item via its own valid token, never needs either.
 - Supabase Service Role Key remains server-side.
 - Private, unencrypted files/folders can only be read through their own current, unexpired share token (or the owner key) — this is enforced on every access path, including direct-by-id requests, not just the token-lookup endpoint. A file/folder's `_id` is not itself a secret (it's returned alongside the token in several responses), so it's the token check that matters, and it's now checked everywhere the id is.
 - Encrypted files are the one exception to the point above: their content is ciphertext either way, so the server has nothing meaningful to gate — the client-side AES key is the real (and only) protection, exactly as the zero-knowledge design intends. An encrypted vault *folder's* own name/metadata is still plain text, though, and still requires its token like any other private folder.

@@ -1,10 +1,11 @@
 import { describe, it, expect, vi } from "vitest";
-import { OWNER_KEY, requireOwner, canAccessFile, canAccessFolder } from "../middleware/auth.js";
+import { OWNER_KEY, requireOwner, canAccessFile, canAccessFolder, pickUpOwnerKeyFromQuery } from "../middleware/auth.js";
 
 const mockRes = () => {
   const res = {};
   res.status = vi.fn().mockReturnValue(res);
   res.json = vi.fn().mockReturnValue(res);
+  res.setHeader = vi.fn();
   return res;
 };
 
@@ -27,13 +28,60 @@ describe("requireOwner", () => {
     expect(next).not.toHaveBeenCalled();
   });
 
-  it("allows a request with the correct owner key", () => {
+  it("allows a request with the correct owner key header", () => {
     const req = { headers: { "x-owner-key": OWNER_KEY } };
     const res = mockRes();
     const next = vi.fn();
     requireOwner(req, res, next);
     expect(next).toHaveBeenCalled();
     expect(res.status).not.toHaveBeenCalled();
+  });
+
+  it("allows a request carrying the owner cookie instead of the header — this is the silent, no-UI path", () => {
+    const req = { headers: { cookie: `cv_owner_key=${encodeURIComponent(OWNER_KEY)}; theme=dark` } };
+    const res = mockRes();
+    const next = vi.fn();
+    requireOwner(req, res, next);
+    expect(next).toHaveBeenCalled();
+  });
+
+  it("rejects a request with an unrelated or wrong cookie", () => {
+    const req = { headers: { cookie: "cv_owner_key=not-the-real-key; theme=dark" } };
+    const res = mockRes();
+    const next = vi.fn();
+    requireOwner(req, res, next);
+    expect(res.status).toHaveBeenCalledWith(401);
+    expect(next).not.toHaveBeenCalled();
+  });
+});
+
+describe("pickUpOwnerKeyFromQuery — the magic-link handshake", () => {
+  it("sets the owner cookie when ?ownerkey= matches", () => {
+    const req = { query: { ownerkey: OWNER_KEY } };
+    const res = mockRes();
+    const next = vi.fn();
+    pickUpOwnerKeyFromQuery(req, res, next);
+    expect(res.setHeader).toHaveBeenCalledWith("Set-Cookie", expect.stringContaining(`cv_owner_key=${encodeURIComponent(OWNER_KEY)}`));
+    expect(res.setHeader.mock.calls[0][1]).toMatch(/HttpOnly/);
+    expect(next).toHaveBeenCalled();
+  });
+
+  it("does nothing on a request with no ownerkey param", () => {
+    const req = { query: {} };
+    const res = mockRes();
+    const next = vi.fn();
+    pickUpOwnerKeyFromQuery(req, res, next);
+    expect(res.setHeader).not.toHaveBeenCalled();
+    expect(next).toHaveBeenCalled();
+  });
+
+  it("does nothing when ?ownerkey= is present but wrong — never sets a cookie for a guess", () => {
+    const req = { query: { ownerkey: "a-random-guess" } };
+    const res = mockRes();
+    const next = vi.fn();
+    pickUpOwnerKeyFromQuery(req, res, next);
+    expect(res.setHeader).not.toHaveBeenCalled();
+    expect(next).toHaveBeenCalled();
   });
 });
 

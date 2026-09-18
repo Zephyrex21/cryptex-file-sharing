@@ -100,37 +100,6 @@ async function decryptString(key,cipherB64,ivB64){
   return new TextDecoder().decode(plain);
 }
 
-// ═══════════════════════════════════════════════════════════════════════
-// Owner key — rename/delete/visibility/folder-membership all require this
-// (see middleware/auth.js) once the server has OWNER_KEY configured. Stored
-// locally only, sent as X-Owner-Key on the app's own management requests.
-// A visitor who only ever downloads/previews public or token-shared items
-// never needs this — it's purely for the person managing their own vault.
-// ═══════════════════════════════════════════════════════════════════════
-function getOwnerKey(){return localStorage.getItem('cv-owner-key')||'';}
-function setOwnerKey(k){if(k)localStorage.setItem('cv-owner-key',k);else localStorage.removeItem('cv-owner-key');}
-function promptOwnerKey(){
-  const k=prompt('Owner key — printed in the server console/logs, or set via OWNER_KEY.\nRequired to rename, delete, or change sharing on your files/folders:',getOwnerKey());
-  if(k===null)return; // cancelled
-  setOwnerKey(k.trim());
-  toast(k.trim()?'Owner key saved '+ICONS.check:'Owner key cleared','success');
-}
-// Drop-in replacement for fetch() on management (write) endpoints: attaches
-// the owner key if one is set, and — if the server comes back 401 because
-// it's missing or wrong — prompts for it once and retries automatically
-// instead of just failing.
-async function apiFetch(url,opts={}){
-  const withKey=(k)=>({...opts,headers:{...(opts.headers||{}),...(k?{'X-Owner-Key':k}:{})}});
-  let res=await fetch(url,withKey(getOwnerKey()));
-  if(res.status===401){
-    const k=prompt('This action needs the owner key (server console/logs, or OWNER_KEY):');
-    if(k&&k.trim()){
-      setOwnerKey(k.trim());
-      res=await fetch(url,withKey(k.trim()));
-    }
-  }
-  return res;
-}
 // Looks up a file object we already have somewhere in local state — the
 // gallery, the folder currently open, a single-file token modal, or a
 // shared folder opened via token — so download/preview calls can attach
@@ -623,7 +592,7 @@ async function bulkDelete(){
   if(!selectedIds.size)return;
   const ids=[...selectedIds];
   if(!confirm(`Delete ${ids.length} selected file${ids.length!==1?'s':''}? This can't be undone.`))return;
-  const results=await Promise.allSettled(ids.map(id=>apiFetch(`${API}/${id}`,{method:'DELETE'})));
+  const results=await Promise.allSettled(ids.map(id=>fetch(`${API}/${id}`,{method:'DELETE'})));
   const failed=results.filter(r=>r.status==='rejected'||!r.value.ok).length;
   const okCount=ids.length-failed;
   toast(failed?`Deleted ${okCount}, ${failed} failed`:`Deleted ${okCount} file${okCount!==1?'s':''}`,failed?'error':'success');
@@ -793,7 +762,7 @@ document.getElementById('delConfirm').onclick=()=>{
   toastUndo(`"${fname}" deleted`,
     async()=>{ // window expired — commit the real delete now
       try{
-        const res=await apiFetch(`${API}/${id}`,{method:'DELETE'});
+        const res=await fetch(`${API}/${id}`,{method:'DELETE'});
         if(!res.ok){const d=await res.json().catch(()=>({}));throw new Error(d.message||'Failed');}
       }catch(e){toast(e.message||'Delete failed','error');}
     },
@@ -1475,7 +1444,7 @@ async function renameFolderPr(id,currentName){
   openRename('Rename Folder',currentName,async(name)=>{
     if(name===currentName)return;
     try{
-      const res=await apiFetch(`${FOLDERS_API}/${id}`,{method:'PATCH',headers:{'Content-Type':'application/json'},body:JSON.stringify({name})});
+      const res=await fetch(`${FOLDERS_API}/${id}`,{method:'PATCH',headers:{'Content-Type':'application/json'},body:JSON.stringify({name})});
       if(!res.ok)throw new Error();
       const f=allFolders.find(x=>x._id===id);if(f)f.name=name;
       if(curFolder&&curFolder._id===id)curFolder.name=name;
@@ -1486,7 +1455,7 @@ async function renameFolderPr(id,currentName){
 async function delFolderConfirm(id,name){
   openFolderDelConfirm(name,async()=>{
     try{
-      const res=await apiFetch(`${FOLDERS_API}/${id}`,{method:'DELETE'});
+      const res=await fetch(`${FOLDERS_API}/${id}`,{method:'DELETE'});
       if(!res.ok)throw new Error();
       allFolders=allFolders.filter(f=>f._id!==id);
       if(curFolder&&curFolder._id===id){curFolder=null;folderCtx=null;}
@@ -1501,7 +1470,7 @@ async function delFolderConfirm(id,name){
 // ── Remove from folder (when in folder detail view) ───────────────────────
 async function removeFromFolder(folderId,fileId){
   try{
-    const res=await apiFetch(`${FOLDERS_API}/${folderId}/files/${fileId}`,{method:'DELETE'});
+    const res=await fetch(`${FOLDERS_API}/${folderId}/files/${fileId}`,{method:'DELETE'});
     if(!res.ok)throw new Error();
     const file=allFiles.find(f=>f._id===fileId);if(file)file.folderId=null;
     if(curFolder&&curFolder._id===folderId)curFolder.files=curFolder.files.filter(f=>f._id!==fileId);
@@ -1559,7 +1528,7 @@ async function showAtfBulk(ids){
 async function doAddToFolder(folderId){
   if(atfBulkIds){
     const ids=atfBulkIds;
-    const results=await Promise.allSettled(ids.map(id=>apiFetch(`${FOLDERS_API}/${folderId}/files`,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({fileId:id})})));
+    const results=await Promise.allSettled(ids.map(id=>fetch(`${FOLDERS_API}/${folderId}/files`,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({fileId:id})})));
     const okCount=results.filter(r=>r.status==='fulfilled'&&r.value.ok).length;
     ids.forEach(id=>{const file=allFiles.find(f=>f._id===id);if(file)file.folderId=folderId;});
     const folder=allFolders.find(f=>f._id===folderId);
@@ -1570,7 +1539,7 @@ async function doAddToFolder(folderId){
   }
   const fileId=atfFileId;
   try{
-    const res=await apiFetch(`${FOLDERS_API}/${folderId}/files`,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({fileId})});
+    const res=await fetch(`${FOLDERS_API}/${folderId}/files`,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({fileId})});
     if(!res.ok)throw new Error();
     const file=allFiles.find(f=>f._id===fileId);if(file)file.folderId=folderId;
     const folder=allFolders.find(f=>f._id===folderId);
@@ -1581,7 +1550,7 @@ async function doAddToFolder(folderId){
 async function doRemoveFromFolder(folderId){
   const fileId=atfFileId;
   try{
-    const res=await apiFetch(`${FOLDERS_API}/${folderId}/files/${fileId}`,{method:'DELETE'});
+    const res=await fetch(`${FOLDERS_API}/${folderId}/files/${fileId}`,{method:'DELETE'});
     if(!res.ok)throw new Error();
     const file=allFiles.find(f=>f._id===fileId);if(file)file.folderId=null;
     const folder=allFolders.find(f=>f._id===folderId);
@@ -1613,7 +1582,7 @@ async function copyToken(token){
 async function toggleVis(id,currentVis){
   if(currentVis!=='public')return;
   try{
-    const res=await apiFetch(`${API}/${id}/visibility`,{method:'PATCH',headers:{'Content-Type':'application/json'},body:JSON.stringify({visibility:'private'})});
+    const res=await fetch(`${API}/${id}/visibility`,{method:'PATCH',headers:{'Content-Type':'application/json'},body:JSON.stringify({visibility:'private'})});
     if(!res.ok)throw new Error('Server error: '+res.status);
     const d=await res.json();
     // Use the token from the SERVER response — this is the authoritative token
@@ -1651,7 +1620,7 @@ async function setPrivExpiry(minutes){
   if(!privRevealCtx.id)return;
   const apiBase=privRevealCtx.type==='folder'?FOLDERS_API:API;
   try{
-    const res=await apiFetch(`${apiBase}/${privRevealCtx.id}/visibility`,{method:'PATCH',headers:{'Content-Type':'application/json'},body:JSON.stringify({visibility:'private',expiresIn:minutes})});
+    const res=await fetch(`${apiBase}/${privRevealCtx.id}/visibility`,{method:'PATCH',headers:{'Content-Type':'application/json'},body:JSON.stringify({visibility:'private',expiresIn:minutes})});
     if(!res.ok)throw new Error();
     const d=await res.json();
     const newExpiry=(d.file||d.folder)?.tokenExpiresAt??null;
@@ -1668,7 +1637,7 @@ async function setPrivMaxViews(maxViews){
   if(!privRevealCtx.id)return;
   const apiBase=privRevealCtx.type==='folder'?FOLDERS_API:API;
   try{
-    const res=await apiFetch(`${apiBase}/${privRevealCtx.id}/visibility`,{method:'PATCH',headers:{'Content-Type':'application/json'},body:JSON.stringify({visibility:'private',maxViews})});
+    const res=await fetch(`${apiBase}/${privRevealCtx.id}/visibility`,{method:'PATCH',headers:{'Content-Type':'application/json'},body:JSON.stringify({visibility:'private',maxViews})});
     if(!res.ok)throw new Error();
     const d=await res.json();
     const item=d.file||d.folder;
@@ -1716,7 +1685,7 @@ async function regenPrivToken(){
   if(!privRevealCtx.id)return;
   const apiBase=privRevealCtx.type==='folder'?FOLDERS_API:API;
   try{
-    const res=await apiFetch(`${apiBase}/${privRevealCtx.id}/visibility`,{method:'PATCH',headers:{'Content-Type':'application/json'},body:JSON.stringify({visibility:'private',regenerateToken:true})});
+    const res=await fetch(`${apiBase}/${privRevealCtx.id}/visibility`,{method:'PATCH',headers:{'Content-Type':'application/json'},body:JSON.stringify({visibility:'private',regenerateToken:true})});
     if(!res.ok)throw new Error();
     const d=await res.json();
     const item=d.file||d.folder;
@@ -1750,7 +1719,7 @@ function copyPrivLink(){
 async function toggleFolderVis(id,currentVis){
   if(currentVis!=='public')return;
   try{
-    const res=await apiFetch(`${FOLDERS_API}/${id}/visibility`,{method:'PATCH',headers:{'Content-Type':'application/json'},body:JSON.stringify({visibility:'private'})});
+    const res=await fetch(`${FOLDERS_API}/${id}/visibility`,{method:'PATCH',headers:{'Content-Type':'application/json'},body:JSON.stringify({visibility:'private'})});
     if(!res.ok)throw new Error('Server error: '+res.status);
     const d=await res.json();
     const token=d.folder?.shareToken||'';
@@ -1787,7 +1756,7 @@ async function renameFilePr(id,currentName){
     if(newBase===base)return;
     const fullName=newBase+ext;
     try{
-      const res=await apiFetch(`${API}/${id}`,{method:'PATCH',headers:{'Content-Type':'application/json'},body:JSON.stringify({name:fullName})});
+      const res=await fetch(`${API}/${id}`,{method:'PATCH',headers:{'Content-Type':'application/json'},body:JSON.stringify({name:fullName})});
       if(!res.ok)throw new Error();
       const f1=allFiles.find(x=>x._id===id);if(f1)f1.originalName=fullName;
       if(curFolder){const f2=(curFolder.files||[]).find(x=>x._id===id);if(f2)f2.originalName=fullName;}
@@ -1799,7 +1768,7 @@ async function renameFilePr(id,currentName){
 }
 async function makeFilePublic(id){
   try{
-    const res=await apiFetch(`${API}/${id}/visibility`,{method:'PATCH',headers:{'Content-Type':'application/json'},body:JSON.stringify({visibility:'public'})});
+    const res=await fetch(`${API}/${id}/visibility`,{method:'PATCH',headers:{'Content-Type':'application/json'},body:JSON.stringify({visibility:'public'})});
     if(!res.ok)throw new Error();
     // Use loadFiles() — the server is the single source of truth.
     // This correctly handles the edge case where the file's parent folder is private
@@ -1818,7 +1787,7 @@ function delFolderFromModal(id){
 // Restore a private folder to public — reloads the folders list
 async function makeFolderPublic(id){
   try{
-    const res=await apiFetch(`${FOLDERS_API}/${id}/visibility`,{method:'PATCH',headers:{'Content-Type':'application/json'},body:JSON.stringify({visibility:'public'})});
+    const res=await fetch(`${FOLDERS_API}/${id}/visibility`,{method:'PATCH',headers:{'Content-Type':'application/json'},body:JSON.stringify({visibility:'public'})});
     if(!res.ok)throw new Error();
     closeTokenModal();
     // Reload both: folders list + gallery (folder's files now need to appear)

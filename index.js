@@ -8,6 +8,7 @@ import connectDB from "./config/database.js";
 import fileUploadRoutes from "./routes/FileUpload.js";
 import folderRoutes     from "./routes/folder.js";
 import { generateQr }   from "./controllers/qrController.js";
+import { pickUpOwnerKeyFromQuery } from "./middleware/auth.js";
 
 const require = createRequire(import.meta.url);
 const openapiSpec = require("./openapi.json");
@@ -23,6 +24,12 @@ const __dirname  = path.dirname(__filename);
 connectDB();
 
 app.use(express.json());
+
+// Silent owner-key pickup — see middleware/auth.js. Runs on every request;
+// a no-op unless the URL happens to carry a matching ?ownerkey=. Deliberately
+// global (not just on /app) so the magic link works no matter which page it
+// lands on.
+app.use(pickUpOwnerKeyFromQuery);
 
 // ── Security headers & CORS ─────────────────────────────────────────────────
 // CORS is intentionally restrictive: the frontend is served same-origin via
