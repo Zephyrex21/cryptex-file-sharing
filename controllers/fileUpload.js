@@ -8,7 +8,7 @@ import { ZipArchive } from "archiver";
 import { isSafeUrl, safeFetchHtml, extractMeta } from "./linkPreview.js";
 import { checkKnownMalwareHash } from "../utils/malwareScan.js";
 import { sanitizeZipEntryName } from "./folderController.js";
-import { canAccessFile } from "../middleware/auth.js";
+import { canAccessFile, canMutateFile } from "../middleware/auth.js";
 
 const BUCKET = process.env.SUPABASE_BUCKET || "cloudvault-files";
 
@@ -413,9 +413,8 @@ export const getSingleFile = async (req, res) => {
     const file = await File.findById(req.params.id);
     if (!file) return res.status(404).json({ message: "Not found" });
     // Private + unencrypted: bare id access used to work forever, even after
-    // the token expired or was regenerated. Now it needs the current token
-    // (or the owner key) same as any other private access path. See
-    // middleware/auth.js for why encrypted files are exempt from this.
+    // the token expired or was regenerated. Now it needs the item's current
+    // token. See middleware/auth.js for why encrypted files are exempt.
     if (!canAccessFile(req, file)) {
       return res.status(403).json({ message: "This file is private — a valid share token is required" });
     }
@@ -431,6 +430,12 @@ export const renameFile = async (req, res) => {
 
     const existing = await File.findById(req.params.id);
     if (!existing) return res.status(404).json({ message: "Not found" });
+    // A public file can be renamed by anyone (see middleware/auth.js) — a
+    // private one needs its own current, unexpired share token. This used
+    // to be completely unchecked here.
+    if (!canMutateFile(req, existing)) {
+      return res.status(403).json({ message: "This file is private — a valid share token is required" });
+    }
     // The real name of an encrypted file only exists as ciphertext the server
     // can't read — writing a plaintext name here would leak exactly the
     // metadata the encryption is meant to hide, so renaming is disabled.
@@ -457,9 +462,22 @@ export const setVisibility = async (req, res) => {
       return res.status(400).json({ message: "visibility must be 'public' or 'private'" });
     }
 
+    // Always fetch first now — not just for the "going public" encrypted
+    // check below, but because auth depends on the CURRENT (pre-mutation)
+    // state: a public file can be freely made private by anyone (that's
+    // what "public" means here), but changing anything about an ALREADY
+    // private file — including flipping it back to public — needs that
+    // file's own current, unexpired token. Checking against `existing`
+    // rather than the target state is what stops a stranger from quietly
+    // privatizing someone else's public file and keeping the new token for
+    // themselves.
+    const existing = await File.findById(req.params.id);
+    if (!existing) return res.status(404).json({ message: "Not found" });
+    if (!canMutateFile(req, existing)) {
+      return res.status(403).json({ message: "This file is private — a valid share token is required" });
+    }
+
     if (visibility === "public") {
-      const existing = await File.findById(req.params.id);
-      if (!existing) return res.status(404).json({ message: "Not found" });
       // An encrypted file can never usefully be "public" — nobody browsing
       // the gallery has the key, so it would just be an inert, unlabeled
       // entry. Keeping this server-enforced (not just hidden in the UI)
@@ -509,9 +527,9 @@ const streamFile = async (req, res, disposition) => {
   const file = await File.findById(req.params.id);
   if (!file) return res.status(404).json({ message: "Not found" });
   // Same rule as getSingleFile: a private, unencrypted file's bytes now
-  // require the owner key or that file's own current, unexpired token —
-  // this was the actual hole that let a leaked/old _id keep downloading a
-  // "private" file forever, expiry and token regeneration notwithstanding.
+  // require that file's own current, unexpired token — this was the actual
+  // hole that let a leaked/old _id keep downloading a "private" file
+  // forever, expiry and token regeneration notwithstanding.
   if (!canAccessFile(req, file)) {
     return res.status(403).json({ message: "This file is private — a valid share token is required" });
   }
@@ -565,6 +583,9 @@ export const deleteFile = async (req, res) => {
   try {
     const file = await File.findById(req.params.id);
     if (!file) return res.status(404).json({ message: "Not found" });
+    if (!canMutateFile(req, file)) {
+      return res.status(403).json({ message: "This file is private — a valid share token is required" });
+    }
 
     // If this file belongs to a folder, pull its own id out of that folder's
     // files array BEFORE deleting — otherwise the Folder document keeps a

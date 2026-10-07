@@ -110,8 +110,9 @@ describe("getFileByToken — view-limit self-destruct", () => {
 
 describe("setVisibility — maxViews handling", () => {
   it("resets viewCount to 0 whenever maxViews is changed", async () => {
+    File.findById.mockResolvedValue({ encrypted: false, visibility: "public" });
     File.findByIdAndUpdate.mockImplementation((id, update) => Promise.resolve({ _id: id, ...update }));
-    const req = { params: { id: "abc" }, body: { visibility: "private", maxViews: 5 } };
+    const req = { params: { id: "abc" }, headers: {}, query: {}, body: { visibility: "private", maxViews: 5 } };
     const res = mockRes();
     await setVisibility(req, res);
     const [, update] = File.findByIdAndUpdate.mock.calls[0];
@@ -120,8 +121,9 @@ describe("setVisibility — maxViews handling", () => {
   });
 
   it("clears maxViews when set to 0", async () => {
+    File.findById.mockResolvedValue({ encrypted: false, visibility: "public" });
     File.findByIdAndUpdate.mockImplementation((id, update) => Promise.resolve({ _id: id, ...update }));
-    const req = { params: { id: "abc" }, body: { visibility: "private", maxViews: 0 } };
+    const req = { params: { id: "abc" }, headers: {}, query: {}, body: { visibility: "private", maxViews: 0 } };
     const res = mockRes();
     await setVisibility(req, res);
     const [, update] = File.findByIdAndUpdate.mock.calls[0];
@@ -131,7 +133,7 @@ describe("setVisibility — maxViews handling", () => {
   it("clears maxViews and resets viewCount when going public", async () => {
     File.findById.mockResolvedValue({ encrypted: false });
     File.findByIdAndUpdate.mockImplementation((id, update) => Promise.resolve({ _id: id, ...update }));
-    const req = { params: { id: "abc" }, body: { visibility: "public" } };
+    const req = { params: { id: "abc" }, headers: {}, query: {}, body: { visibility: "public" } };
     const res = mockRes();
     await setVisibility(req, res);
     const [, update] = File.findByIdAndUpdate.mock.calls[0];
@@ -140,8 +142,9 @@ describe("setVisibility — maxViews handling", () => {
   });
 
   it("regenerating the token also resets viewCount", async () => {
+    File.findById.mockResolvedValue({ encrypted: false, visibility: "public" });
     File.findByIdAndUpdate.mockImplementation((id, update) => Promise.resolve({ _id: id, ...update }));
-    const req = { params: { id: "abc" }, body: { visibility: "private", regenerateToken: true } };
+    const req = { params: { id: "abc" }, headers: {}, query: {}, body: { visibility: "private", regenerateToken: true } };
     const res = mockRes();
     await setVisibility(req, res);
     const [, update] = File.findByIdAndUpdate.mock.calls[0];

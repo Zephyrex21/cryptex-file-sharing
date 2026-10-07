@@ -113,9 +113,24 @@ function findKnownFile(id){
     || (tokenModalFolder&&(tokenModalFolder.files||[]).find(f=>f._id===id))
     || null;
 }
+// Same idea as findKnownFile, but for folders: allFolders only ever holds
+// PUBLIC folders (getAllFolders excludes private ones), so a private
+// folder's shareToken has to come from wherever we're currently looking at
+// it — the folder itself if we're inside it, or the token-access modal.
+function findKnownFolder(id){
+  return allFolders.find(f=>f._id===id)
+    || (curFolder&&curFolder._id===id?curFolder:null)
+    || (tokenModalFolder&&tokenModalFolder._id===id?tokenModalFolder:null)
+    || null;
+}
 function withFileToken(url,f){
   return f&&f.shareToken?`${url}${url.includes('?')?'&':'?'}token=${encodeURIComponent(f.shareToken)}`:url;
 }
+// The private-reveal panel (privRevealCtx) always has the item's current
+// token sitting right there on screen — reading it straight from the DOM is
+// simpler and more reliably fresh than looking the item up in local state,
+// especially right after regenerating it.
+function privToken(){return document.getElementById('prm-token')?.textContent||'';}
 
 // ── Search ─────────────────────────────────────────────────────────────────
 // Debounced: without this, every single keystroke was tearing down and
@@ -592,7 +607,7 @@ async function bulkDelete(){
   if(!selectedIds.size)return;
   const ids=[...selectedIds];
   if(!confirm(`Delete ${ids.length} selected file${ids.length!==1?'s':''}? This can't be undone.`))return;
-  const results=await Promise.allSettled(ids.map(id=>fetch(`${API}/${id}`,{method:'DELETE'})));
+  const results=await Promise.allSettled(ids.map(id=>fetch(withFileToken(`${API}/${id}`,findKnownFile(id)),{method:'DELETE'})));
   const failed=results.filter(r=>r.status==='rejected'||!r.value.ok).length;
   const okCount=ids.length-failed;
   toast(failed?`Deleted ${okCount}, ${failed} failed`:`Deleted ${okCount} file${okCount!==1?'s':''}`,failed?'error':'success');
@@ -762,7 +777,10 @@ document.getElementById('delConfirm').onclick=()=>{
   toastUndo(`"${fname}" deleted`,
     async()=>{ // window expired — commit the real delete now
       try{
-        const res=await fetch(`${API}/${id}`,{method:'DELETE'});
+        // Use the object captured BEFORE the optimistic removal above — by
+        // now it's already gone from allFiles/curFolder.files, so
+        // findKnownFile(id) would come up empty and lose the token.
+        const res=await fetch(withFileToken(`${API}/${id}`,fileObj||folderFileObj),{method:'DELETE'});
         if(!res.ok){const d=await res.json().catch(()=>({}));throw new Error(d.message||'Failed');}
       }catch(e){toast(e.message||'Delete failed','error');}
     },
@@ -1444,7 +1462,7 @@ async function renameFolderPr(id,currentName){
   openRename('Rename Folder',currentName,async(name)=>{
     if(name===currentName)return;
     try{
-      const res=await fetch(`${FOLDERS_API}/${id}`,{method:'PATCH',headers:{'Content-Type':'application/json'},body:JSON.stringify({name})});
+      const res=await fetch(withFileToken(`${FOLDERS_API}/${id}`,findKnownFolder(id)),{method:'PATCH',headers:{'Content-Type':'application/json'},body:JSON.stringify({name})});
       if(!res.ok)throw new Error();
       const f=allFolders.find(x=>x._id===id);if(f)f.name=name;
       if(curFolder&&curFolder._id===id)curFolder.name=name;
@@ -1455,7 +1473,7 @@ async function renameFolderPr(id,currentName){
 async function delFolderConfirm(id,name){
   openFolderDelConfirm(name,async()=>{
     try{
-      const res=await fetch(`${FOLDERS_API}/${id}`,{method:'DELETE'});
+      const res=await fetch(withFileToken(`${FOLDERS_API}/${id}`,findKnownFolder(id)),{method:'DELETE'});
       if(!res.ok)throw new Error();
       allFolders=allFolders.filter(f=>f._id!==id);
       if(curFolder&&curFolder._id===id){curFolder=null;folderCtx=null;}
@@ -1470,7 +1488,7 @@ async function delFolderConfirm(id,name){
 // ── Remove from folder (when in folder detail view) ───────────────────────
 async function removeFromFolder(folderId,fileId){
   try{
-    const res=await fetch(`${FOLDERS_API}/${folderId}/files/${fileId}`,{method:'DELETE'});
+    const res=await fetch(withFileToken(`${FOLDERS_API}/${folderId}/files/${fileId}`,findKnownFolder(folderId)),{method:'DELETE'});
     if(!res.ok)throw new Error();
     const file=allFiles.find(f=>f._id===fileId);if(file)file.folderId=null;
     if(curFolder&&curFolder._id===folderId)curFolder.files=curFolder.files.filter(f=>f._id!==fileId);
@@ -1528,7 +1546,7 @@ async function showAtfBulk(ids){
 async function doAddToFolder(folderId){
   if(atfBulkIds){
     const ids=atfBulkIds;
-    const results=await Promise.allSettled(ids.map(id=>fetch(`${FOLDERS_API}/${folderId}/files`,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({fileId:id})})));
+    const results=await Promise.allSettled(ids.map(id=>fetch(withFileToken(`${FOLDERS_API}/${folderId}/files`,findKnownFolder(folderId)),{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({fileId:id})})));
     const okCount=results.filter(r=>r.status==='fulfilled'&&r.value.ok).length;
     ids.forEach(id=>{const file=allFiles.find(f=>f._id===id);if(file)file.folderId=folderId;});
     const folder=allFolders.find(f=>f._id===folderId);
@@ -1539,7 +1557,7 @@ async function doAddToFolder(folderId){
   }
   const fileId=atfFileId;
   try{
-    const res=await fetch(`${FOLDERS_API}/${folderId}/files`,{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({fileId})});
+    const res=await fetch(withFileToken(`${FOLDERS_API}/${folderId}/files`,findKnownFolder(folderId)),{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({fileId})});
     if(!res.ok)throw new Error();
     const file=allFiles.find(f=>f._id===fileId);if(file)file.folderId=folderId;
     const folder=allFolders.find(f=>f._id===folderId);
@@ -1550,7 +1568,7 @@ async function doAddToFolder(folderId){
 async function doRemoveFromFolder(folderId){
   const fileId=atfFileId;
   try{
-    const res=await fetch(`${FOLDERS_API}/${folderId}/files/${fileId}`,{method:'DELETE'});
+    const res=await fetch(withFileToken(`${FOLDERS_API}/${folderId}/files/${fileId}`,findKnownFolder(folderId)),{method:'DELETE'});
     if(!res.ok)throw new Error();
     const file=allFiles.find(f=>f._id===fileId);if(file)file.folderId=null;
     const folder=allFolders.find(f=>f._id===folderId);
@@ -1620,7 +1638,7 @@ async function setPrivExpiry(minutes){
   if(!privRevealCtx.id)return;
   const apiBase=privRevealCtx.type==='folder'?FOLDERS_API:API;
   try{
-    const res=await fetch(`${apiBase}/${privRevealCtx.id}/visibility`,{method:'PATCH',headers:{'Content-Type':'application/json'},body:JSON.stringify({visibility:'private',expiresIn:minutes})});
+    const res=await fetch(`${apiBase}/${privRevealCtx.id}/visibility?token=${encodeURIComponent(privToken())}`,{method:'PATCH',headers:{'Content-Type':'application/json'},body:JSON.stringify({visibility:'private',expiresIn:minutes})});
     if(!res.ok)throw new Error();
     const d=await res.json();
     const newExpiry=(d.file||d.folder)?.tokenExpiresAt??null;
@@ -1637,7 +1655,7 @@ async function setPrivMaxViews(maxViews){
   if(!privRevealCtx.id)return;
   const apiBase=privRevealCtx.type==='folder'?FOLDERS_API:API;
   try{
-    const res=await fetch(`${apiBase}/${privRevealCtx.id}/visibility`,{method:'PATCH',headers:{'Content-Type':'application/json'},body:JSON.stringify({visibility:'private',maxViews})});
+    const res=await fetch(`${apiBase}/${privRevealCtx.id}/visibility?token=${encodeURIComponent(privToken())}`,{method:'PATCH',headers:{'Content-Type':'application/json'},body:JSON.stringify({visibility:'private',maxViews})});
     if(!res.ok)throw new Error();
     const d=await res.json();
     const item=d.file||d.folder;
@@ -1685,7 +1703,7 @@ async function regenPrivToken(){
   if(!privRevealCtx.id)return;
   const apiBase=privRevealCtx.type==='folder'?FOLDERS_API:API;
   try{
-    const res=await fetch(`${apiBase}/${privRevealCtx.id}/visibility`,{method:'PATCH',headers:{'Content-Type':'application/json'},body:JSON.stringify({visibility:'private',regenerateToken:true})});
+    const res=await fetch(`${apiBase}/${privRevealCtx.id}/visibility?token=${encodeURIComponent(privToken())}`,{method:'PATCH',headers:{'Content-Type':'application/json'},body:JSON.stringify({visibility:'private',regenerateToken:true})});
     if(!res.ok)throw new Error();
     const d=await res.json();
     const item=d.file||d.folder;
@@ -1756,7 +1774,7 @@ async function renameFilePr(id,currentName){
     if(newBase===base)return;
     const fullName=newBase+ext;
     try{
-      const res=await fetch(`${API}/${id}`,{method:'PATCH',headers:{'Content-Type':'application/json'},body:JSON.stringify({name:fullName})});
+      const res=await fetch(withFileToken(`${API}/${id}`,findKnownFile(id)),{method:'PATCH',headers:{'Content-Type':'application/json'},body:JSON.stringify({name:fullName})});
       if(!res.ok)throw new Error();
       const f1=allFiles.find(x=>x._id===id);if(f1)f1.originalName=fullName;
       if(curFolder){const f2=(curFolder.files||[]).find(x=>x._id===id);if(f2)f2.originalName=fullName;}
@@ -1768,7 +1786,7 @@ async function renameFilePr(id,currentName){
 }
 async function makeFilePublic(id){
   try{
-    const res=await fetch(`${API}/${id}/visibility`,{method:'PATCH',headers:{'Content-Type':'application/json'},body:JSON.stringify({visibility:'public'})});
+    const res=await fetch(withFileToken(`${API}/${id}/visibility`,findKnownFile(id)),{method:'PATCH',headers:{'Content-Type':'application/json'},body:JSON.stringify({visibility:'public'})});
     if(!res.ok)throw new Error();
     // Use loadFiles() — the server is the single source of truth.
     // This correctly handles the edge case where the file's parent folder is private
@@ -1787,7 +1805,7 @@ function delFolderFromModal(id){
 // Restore a private folder to public — reloads the folders list
 async function makeFolderPublic(id){
   try{
-    const res=await fetch(`${FOLDERS_API}/${id}/visibility`,{method:'PATCH',headers:{'Content-Type':'application/json'},body:JSON.stringify({visibility:'public'})});
+    const res=await fetch(withFileToken(`${FOLDERS_API}/${id}/visibility`,findKnownFolder(id)),{method:'PATCH',headers:{'Content-Type':'application/json'},body:JSON.stringify({visibility:'public'})});
     if(!res.ok)throw new Error();
     closeTokenModal();
     // Reload both: folders list + gallery (folder's files now need to appear)

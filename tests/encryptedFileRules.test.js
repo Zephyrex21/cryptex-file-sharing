@@ -67,25 +67,28 @@ describe("setVisibility — encrypted files must stay private", () => {
   });
 
   it("allows setting an encrypted file to private (no-op on the rule, but a valid request)", async () => {
+    // setVisibility now always fetches the existing doc first (needed for
+    // the auth check below), so this needs a File.findById mock too —
+    // previously this path skipped the lookup entirely.
+    File.findById.mockResolvedValue({ encrypted: true, visibility: "public" });
     File.findByIdAndUpdate.mockResolvedValue({ _id: "abc", visibility: "private" });
-    const req = { params: { id: "abc" }, body: { visibility: "private" } };
+    const req = { params: { id: "abc" }, headers: {}, query: {}, body: { visibility: "private" } };
     const res = mockRes();
     await setVisibility(req, res);
-    // Private doesn't need the existing-file lookup at all — only public does.
-    expect(File.findById).not.toHaveBeenCalled();
     expect(res.status).toHaveBeenCalledWith(200);
   });
 
   it("rejects an invalid visibility value", async () => {
-    const req = { params: { id: "abc" }, body: { visibility: "sort-of-public" } };
+    const req = { params: { id: "abc" }, headers: {}, query: {}, body: { visibility: "sort-of-public" } };
     const res = mockRes();
     await setVisibility(req, res);
     expect(res.status).toHaveBeenCalledWith(400);
   });
 
   it("converts expiresIn minutes into a future tokenExpiresAt date", async () => {
+    File.findById.mockResolvedValue({ encrypted: false, visibility: "public" });
     File.findByIdAndUpdate.mockImplementation((id, update) => Promise.resolve({ _id: id, ...update }));
-    const req = { params: { id: "abc" }, body: { visibility: "private", expiresIn: 60 } };
+    const req = { params: { id: "abc" }, headers: {}, query: {}, body: { visibility: "private", expiresIn: 60 } };
     const res = mockRes();
     await setVisibility(req, res);
     const [, update] = File.findByIdAndUpdate.mock.calls[0];
@@ -94,8 +97,9 @@ describe("setVisibility — encrypted files must stay private", () => {
   });
 
   it("expiresIn of 0 clears the expiry (never expires)", async () => {
+    File.findById.mockResolvedValue({ encrypted: false, visibility: "public" });
     File.findByIdAndUpdate.mockImplementation((id, update) => Promise.resolve({ _id: id, ...update }));
-    const req = { params: { id: "abc" }, body: { visibility: "private", expiresIn: 0 } };
+    const req = { params: { id: "abc" }, headers: {}, query: {}, body: { visibility: "private", expiresIn: 0 } };
     const res = mockRes();
     await setVisibility(req, res);
     const [, update] = File.findByIdAndUpdate.mock.calls[0];

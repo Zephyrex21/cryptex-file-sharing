@@ -7,18 +7,19 @@ stale versions and make things look broken when they aren't.
 
 ## Automated tests
 
-`npm test` runs 106 Vitest cases covering the security-critical logic that's
+`npm test` runs 110 Vitest cases covering the security-critical logic that's
 otherwise easy to silently break: magic-byte content verification (every
 supported file type, plus mismatch/tampering cases), the SSRF protections in
 `isSafeUrl` (private IPs, IPv6, cloud metadata address, mixed-resolution,
 DNS-failure — all with `dns.lookup` mocked, so it needs no network access),
 the encrypted-file business rules (`renameFile`/`setVisibility` rejecting
-encrypted files, expiry-date math), and — new this round — the silent
-owner-key cookie handshake and the direct-by-id access checks on private
-files/folders (`tests/auth.test.js`, `tests/directAccessGuard.test.js`). Everything below
-this point is still a manual walkthrough — a good next step would be
-extending this suite to cover the folder ZIP flow and the visibility/token-
-expiry HTTP routes end to end.
+encrypted files, expiry-date math), and — new this round — that a private
+item's token is required for mutations (rename/delete/visibility/folder
+membership) exactly as it already was for reading it, while a public item
+needs nothing at all (`tests/auth.test.js`, `tests/directAccessGuard.test.js`).
+Everything below this point is still a manual walkthrough — a good next step
+would be extending this suite to cover the folder ZIP flow and the
+visibility/token-expiry HTTP routes end to end.
 
 ## Homepage (`/`)
 
@@ -132,39 +133,36 @@ expiry HTTP routes end to end.
 
 ## Access-control fixes (this round)
 
-Set `OWNER_KEY` in `.env` before testing this section — without it, every
-check below trivially "passes" because the gate is a no-op by design
-(see README → Security Considerations). Restart the server after setting it.
+There's no owner login/key anymore — "public" items are openly manageable by
+anyone, and "private" items are gated by their own share token for
+everything, reading and mutating alike. See README → Security Considerations
+for the full reasoning.
 
-- [ ] With no ownerkey link visited yet, try to rename or delete a
-      file/folder in the app — fails (check Network tab: 401 on the
-      PATCH/DELETE call). No prompt appears — it should just silently fail;
-      that's correct, not a bug
-- [ ] Open `http://localhost:3000/app?ownerkey=<your OWNER_KEY>` once — check
-      DevTools → Application → Cookies: a `cv_owner_key` cookie should now be
-      set, `HttpOnly` checked, ~1 year expiry
-- [ ] Now retry rename/delete — succeeds, with zero extra UI, and the
-      `?ownerkey=` param doesn't need to be on the URL again after this
-- [ ] Refresh the page, close and reopen the tab — still works (cookie
-      persists across sessions, unlike a per-tab thing)
-- [ ] Open the app in a private/incognito window (no cookie there) — confirm
-      rename/delete fail there, while downloading/previewing a public or
-      token-shared item still works fine
-- [ ] Visit the ownerkey link with a WRONG value appended — no cookie gets
-      set (check Application → Cookies again), and management actions still
-      fail
-- [ ] Make a file private, copy its share link, open it in a private/
-      incognito window (no owner cookie there) — download and preview both
-      work with just the link, no key needed
+- [ ] Rename/delete/change visibility on a PUBLIC file or folder from the
+      gallery, with no special setup — just works, no prompts, no 401s
+- [ ] Make a file private, then (still in the same browser tab/session where
+      you have it open) rename it / change its expiry or max-views / make it
+      public again — all still work, because the app already has that file's
+      token in local state from when you made it private
+- [ ] Make a file private, copy its share link, open the link in a private/
+      incognito window — download and preview both work with just the link
 - [ ] In that same incognito window, try hitting the file's plain `/api/
       files/:id` or `/:id/download` URL with the `?token=...` chopped off —
-      should now fail (403), where it used to just serve the file
-- [ ] Regenerate a private file's token, then try the OLD share link — should
-      fail now (previously, the old link's `_id` kept working forever even
-      after "revoking" it this way)
+      fails (403): a private item's `_id` alone is not enough
+- [ ] In that incognito window — i.e. with only the share link, no "owner"
+      context at all — try PATCH/DELETE on that same file's `:id` with no
+      token: fails (403). With the file's own `?token=...` appended: succeeds.
+      This is the main thing this round changed — the recipient of a share
+      link, not just "the owner", can manage what they were given access to
+- [ ] Regenerate a private file's token, then try the OLD share link, OR the
+      old token on a PATCH/DELETE call — both should fail now (previously,
+      the old link's `_id` kept working forever even after "revoking" it)
 - [ ] Set a private folder's link to expire in 1 minute, wait, then try
       opening the folder directly by clicking into it from a place that still
       has the old link cached — should be rejected as expired
+- [ ] Try to flip a PRIVATE file back to public using only its `_id` (no
+      token) — fails (403); this is the "stranger can't hijack your private
+      file" case, not just "can't read it"
 - [ ] Open the "Show QR code" panel for a private/encrypted file, then check
       your browser's Network tab — there should be NO request to `/api/qr`
       (or anywhere else) when the QR renders; it's drawn entirely in-page
@@ -181,13 +179,13 @@ check below trivially "passes" because the gate is a no-op by design
   I verified the logic by reading it carefully and syntax-checked every file
   with `node --check`, but I have no browser in this sandbox to click through
   it myself. Test this section first.
-- The `?ownerkey=` cookie handshake and the QR code rendering above — same
-  reason, no browser here. I did confirm (by reading the code) that
-  `togglePrivQr()` no longer calls `/api/qr` or any network endpoint at all
-  for the key-bearing link, and that the cookie middleware only sets
-  `Set-Cookie` when the query param actually matches `OWNER_KEY` — but I'd
-  still watch DevTools → Application → Cookies yourself the first time to
-  confirm it's actually `HttpOnly` and actually persists.
+- The access-control checklist above and the QR code rendering — same
+  reason, no browser here. I did confirm (by reading the code, and with
+  unit tests against the actual controller functions) that a private item's
+  mutating routes now 403 without a matching token and succeed with one, and
+  that `togglePrivQr()` no longer calls `/api/qr` or any network endpoint at
+  all for the key-bearing link — but I'd still click through the checklist
+  yourself at least once.
 - One thing I deliberately did NOT fix: `controllers/linkPreview.js`'s SSRF
   guard has a narrow DNS-rebinding gap (documented in the README) — the
   check and the actual fetch each resolve DNS independently, so there's a

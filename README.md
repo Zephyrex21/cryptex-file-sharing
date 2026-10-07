@@ -110,14 +110,6 @@ SUPABASE_BUCKET=
 
 # Backend Port
 PORT=3000
-
-# Owner key — required to rename, delete, or re-share any file/folder.
-# Picked up silently: visit /app?ownerkey=<this value> once and the server
-# sets a cookie, no prompts or UI involved from then on. Leave unset and the
-# server generates one at startup and prints it (and the ready-to-open link)
-# to the console; set it explicitly to keep the same key/link across
-# restarts. See "Security Considerations" below.
-OWNER_KEY=
 ```
 ---
 
@@ -138,7 +130,7 @@ OWNER_KEY=
 | DELETE | `/api/files/:id` | Delete file 🔒 |
 | GET | `/api/files/token/:token` | Access via token |
 
-> 🔒 = requires the owner key — a cookie set silently via `/app?ownerkey=...` once (or an `X-Owner-Key` header for scripts/curl), see "Environment Variables". A private/encrypted file's `:id` routes above also require its own valid `?token=` (or the owner key) if it's not public — see "Security Considerations".
+> 🔒 = open for a **public** file, no questions asked; for a **private** one, needs that file's own current, unexpired `?token=` (as a query param or an `X-Share-Token` header) — see "Security Considerations". There's no separate owner login: a private item's token *is* the permission.
 
 > `POST /api/files/upload` accepts an optional encrypted-upload contract: multipart fields `encrypted=true`, `iv`, `encryptedName`, `encryptedNameIV`, `encryptedMimeType`, `encryptedMimeTypeIV` alongside `file` (sent as ciphertext, `application/octet-stream`). See `controllers/fileUpload.js` and `public/js/app.js` for the client/server contract.
 
@@ -157,6 +149,8 @@ OWNER_KEY=
 | POST | `/api/folders/:id/files` | Add file to folder 🔒 |
 | DELETE | `/api/folders/:id/files/:fileId` | Remove file from folder 🔒 |
 | GET | `/api/folders/token/:token` | Access via token |
+
+> Same 🔒 rule as files, with one difference: a folder's own name/metadata is never encrypted (only what's *inside* a vault folder is, per-file), so a private folder's token is always required — there's no ciphertext-based bypass the way there is for an individual encrypted file.
 
 ---
 
@@ -182,13 +176,14 @@ OWNER_KEY=
 
 ## Security Considerations
 
-- Sensitive credentials are stored in environment variables.
-- **Rename, delete, visibility changes, and folder membership all require the owner key** (`OWNER_KEY`). It's picked up with zero UI: open `/app?ownerkey=<key>` once from your browser and the server sets a long-lived, HttpOnly cookie (unreadable by page JS, sent automatically after that) — no button, no prompt, nothing to re-enter. Scripts/curl/Postman can use an `X-Owner-Key` header instead. Reading a public item, or a private item via its own valid token, never needs either.
-- Supabase Service Role Key remains server-side.
-- Private, unencrypted files/folders can only be read through their own current, unexpired share token (or the owner key) — this is enforced on every access path, including direct-by-id requests, not just the token-lookup endpoint. A file/folder's `_id` is not itself a secret (it's returned alongside the token in several responses), so it's the token check that matters, and it's now checked everywhere the id is.
-- Encrypted files are the one exception to the point above: their content is ciphertext either way, so the server has nothing meaningful to gate — the client-side AES key is the real (and only) protection, exactly as the zero-knowledge design intends. An encrypted vault *folder's* own name/metadata is still plain text, though, and still requires its token like any other private folder.
-- Regenerating a share token immediately invalidates the old one everywhere it's checked, including direct-by-id access — not just the token-lookup route.
-- Token-lookup routes (`GET /files/token/:token`, `GET /folders/token/:token`, and `GET /folders/:id` — the other way a private folder's token gets checked) are all rate-limited against brute-forcing.
+This app has no login/user system — it's a personal, share-by-link drop box, not a walled garden. **"Public" means exactly that**: anyone who can reach the API can see, download, rename, delete, or re-share a public file/folder, the same way they can already see it in the gallery. That's a deliberate trade-off for a zero-friction personal tool, not an oversight — if you want a real access boundary around the whole app (not just private items), put it in front at the infra level (a reverse-proxy auth gate, an IP allowlist, a private network) rather than in the app itself.
+
+- Sensitive credentials are stored in environment variables; the Supabase Service Role Key never leaves the server.
+- **Private is the one thing that's actually gated — and now consistently.** A private, unencrypted file/folder needs its own current, unexpired share token (`?token=...` as a query param, or an `X-Share-Token` header) for *everything*: reading it, downloading it, AND renaming/deleting/re-sharing it. Previously the token was only checked on the share-link lookup — a private item's `_id` (handed out the moment anyone opened its link) worked forever on almost every other route, including rename and delete, with no check at all. Regenerating or expiring the token didn't help, because nothing downstream was looking at it. A file/folder's `_id` was never actually secret (it's returned alongside the token in several responses) — the token is what matters, and it's now checked everywhere the id is used.
+- **A public item's mutations need no token at all** — same "public means public" rule as reading it. Specifically: going from public → private never needs a token (there isn't one yet), but anything touching an *already*-private item — including flipping it back to public — needs that item's current token, checked against the item's state as it exists right now in the database, not the state the request is trying to move it to. That specific ordering is what stops a stranger from quietly privatizing someone else's public file and keeping the new token for themselves.
+- Encrypted files are an exception to the "private needs a token" rule above, but only for *reading* them: their content is ciphertext either way, so the server has nothing meaningful to gate — the client-side AES key is the real (and only) protection, exactly as the zero-knowledge design intends. Mutating an encrypted file (renaming — which is blocked outright since the name is encrypted too — or deleting/re-sharing it) still needs the token: being unreadable doesn't make deleting it a free action. A vault *folder's* own name/metadata is always plain text (only what's inside is per-file encrypted), so folders get no encrypted exception anywhere, read or write.
+- Regenerating a share token immediately invalidates the old one everywhere it's checked, mutations included — not just the token-lookup route.
+- Every route that checks a token (`GET /files/token/:token`, `GET /folders/token/:token`, `GET /folders/:id`, and now every rename/delete/visibility/membership route too) is rate-limited against brute-forcing.
 - QR codes for share links are generated entirely client-side (see `public/js/vendor/qrcode.js`). This matters specifically for encrypted items, whose link includes the decryption key as a `#key=...` fragment — that fragment is never sent to any server, by anyone, for any reason, including rendering its own QR code.
 - Uploaded file content is verified against its declared type using magic-byte signatures, not just the client-reported MIME type (see `verifyMagicBytes` in `controllers/fileUpload.js`).
 - Unencrypted uploads get a best-effort malware pre-screen via VirusTotal's hash-lookup API — see `utils/malwareScan.js` for exactly what this does and doesn't catch (it's a known-hash lookup, not a full scan, and fails open if VirusTotal is unreachable or no API key is configured).
@@ -196,7 +191,7 @@ OWNER_KEY=
 - Known limitation: encryption happens at upload time only. There's currently no way to encrypt a file that's already been uploaded in plain — that would require downloading, encrypting, and re-uploading it, which isn't implemented yet.
 - Known limitation: encrypted files are excluded from folder ZIP downloads (bulk decryption would need a folder-level key exchange, which is a separate future feature, not a silent omission).
 - Known limitation: `controllers/linkPreview.js`'s SSRF guard re-validates the target IP on every redirect hop, but there's a narrow window between that check and the actual fetch where a DNS answer could theoretically change (DNS rebinding). Closing this fully needs pinning the validated IP for the actual connection instead of letting the HTTP client re-resolve it, which isn't implemented yet.
-- Upload, folder/link creation, and the public gallery/listing endpoints are intentionally left open (no owner key) — this app is designed as a personal drop-box where anyone with the link can contribute, not a walled garden. Lock those down too (wrap them in `requireOwner` from `middleware/auth.js`) if that's not the model you want.
+- Upload, folder/link creation, and the public gallery/listing endpoints are intentionally open to anyone — that's the "drop box" model this app is built around, not a gap in it.
 
 ---
 

@@ -146,6 +146,12 @@ export const renameFolder = async (req, res) => {
       return res.status(400).json({ message: "Name cannot be empty" });
     }
 
+    const existing = await Folder.findById(req.params.id);
+    if (!existing) return res.status(404).json({ message: "Folder not found" });
+    if (!canAccessFolder(req, existing)) {
+      return res.status(403).json({ message: "Private folder — a valid, unexpired token is required" });
+    }
+
     const folder = await Folder.findByIdAndUpdate(
       req.params.id,
       { name: sanitizeFolderName(name) },
@@ -166,9 +172,19 @@ export const setFolderVisibility = async (req, res) => {
       return res.status(400).json({ message: "visibility must be 'public' or 'private'" });
     }
 
+    // Always fetch first — auth depends on the CURRENT (pre-mutation) state,
+    // same reasoning as setVisibility in fileUpload.js: a public folder can
+    // be freely made private by anyone, but anything changing an already-
+    // private folder (including flipping it back to public) needs that
+    // folder's own current, unexpired token, checked against `existing`
+    // rather than the target visibility.
+    const existing = await Folder.findById(req.params.id);
+    if (!existing) return res.status(404).json({ message: "Folder not found" });
+    if (!canAccessFolder(req, existing)) {
+      return res.status(403).json({ message: "Private folder — a valid, unexpired token is required" });
+    }
+
     if (visibility === "public") {
-      const existing = await Folder.findById(req.params.id);
-      if (!existing) return res.status(404).json({ message: "Folder not found" });
       // Same rule as encrypted files: an encrypted vault nobody outside has
       // the key for has no purpose being public, and enforcing it
       // server-side means the rule holds even against a hand-crafted request.
@@ -213,6 +229,9 @@ export const deleteFolder = async (req, res) => {
   try {
     const folder = await Folder.findById(req.params.id);
     if (!folder) return res.status(404).json({ message: "Folder not found" });
+    if (!canAccessFolder(req, folder)) {
+      return res.status(403).json({ message: "Private folder — a valid, unexpired token is required" });
+    }
 
     // Unlink every file that was in this folder
     if (folder.files.length > 0) {
@@ -242,6 +261,11 @@ export const addFileToFolder = async (req, res) => {
 
     if (!folder) return res.status(404).json({ message: "Folder not found" });
     if (!file)   return res.status(404).json({ message: "File not found" });
+
+    // Gated by the FOLDER's own state — you're modifying its membership.
+    if (!canAccessFolder(req, folder)) {
+      return res.status(403).json({ message: "Private folder — a valid, unexpired token is required" });
+    }
 
     // Already in this exact folder?
     if (folder.files.some(f => f.toString() === fileId)) {
@@ -275,6 +299,9 @@ export const removeFileFromFolder = async (req, res) => {
 
     if (!folder) return res.status(404).json({ message: "Folder not found" });
     if (!file)   return res.status(404).json({ message: "File not found" });
+    if (!canAccessFolder(req, folder)) {
+      return res.status(403).json({ message: "Private folder — a valid, unexpired token is required" });
+    }
 
     folder.files = folder.files.filter(f => f.toString() !== fileId);
     file.folderId = null;

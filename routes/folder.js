@@ -12,7 +12,6 @@ import {
   removeFileFromFolder,
   downloadFolderZip,
 } from "../controllers/folderController.js";
-import { requireOwner } from "../middleware/auth.js";
 
 const router = express.Router();
 
@@ -41,16 +40,21 @@ router.get("/token/:token",         tokenLookupLimiter, getFolderByToken);
 router.get("/:id",                  tokenLookupLimiter, getFolderById);
 router.get("/:id/zip",               downloadFolderZip);
 
-// Visibility/rename/delete/membership all mutate an existing folder, so —
-// same reasoning as the file routes — they need the owner key regardless of
-// visibility, not just a token. See middleware/auth.js.
-router.patch("/:id/visibility",     requireOwner, setFolderVisibility);
-router.patch("/:id",                requireOwner, renameFolder);
+// Visibility/rename/delete/membership all mutate an existing folder.
+// setFolderVisibility/renameFolder/deleteFolder/addFileToFolder/
+// removeFileFromFolder now each check the folder's own private-token state
+// inside the controller (see canAccessFolder in middleware/auth.js) — a
+// public folder is open to anyone, a private one needs its current token.
+// Same rate limiter as the read routes above: with a token now checked
+// per-request here too, these are just as much a guessing target as GET
+// /:id is.
+router.patch("/:id/visibility",     tokenLookupLimiter, setFolderVisibility);
+router.patch("/:id",                tokenLookupLimiter, renameFolder);
 
-router.delete("/:id",               requireOwner, deleteFolder);
+router.delete("/:id",               tokenLookupLimiter, deleteFolder);
 
 // File membership
-router.post("/:id/files",           requireOwner, addFileToFolder);
-router.delete("/:id/files/:fileId", requireOwner, removeFileFromFolder);
+router.post("/:id/files",           tokenLookupLimiter, addFileToFolder);
+router.delete("/:id/files/:fileId", tokenLookupLimiter, removeFileFromFolder);
 
 export default router;

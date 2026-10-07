@@ -1,92 +1,8 @@
-import { describe, it, expect, vi } from "vitest";
-import { OWNER_KEY, requireOwner, canAccessFile, canAccessFolder, pickUpOwnerKeyFromQuery } from "../middleware/auth.js";
+import { describe, it, expect } from "vitest";
+import { canAccessFile, canMutateFile, canAccessFolder } from "../middleware/auth.js";
 
-const mockRes = () => {
-  const res = {};
-  res.status = vi.fn().mockReturnValue(res);
-  res.json = vi.fn().mockReturnValue(res);
-  res.setHeader = vi.fn();
-  return res;
-};
-
-describe("requireOwner", () => {
-  it("rejects a request with no owner key", () => {
-    const req = { headers: {} };
-    const res = mockRes();
-    const next = vi.fn();
-    requireOwner(req, res, next);
-    expect(res.status).toHaveBeenCalledWith(401);
-    expect(next).not.toHaveBeenCalled();
-  });
-
-  it("rejects a request with the wrong owner key", () => {
-    const req = { headers: { "x-owner-key": "definitely-not-it" } };
-    const res = mockRes();
-    const next = vi.fn();
-    requireOwner(req, res, next);
-    expect(res.status).toHaveBeenCalledWith(401);
-    expect(next).not.toHaveBeenCalled();
-  });
-
-  it("allows a request with the correct owner key header", () => {
-    const req = { headers: { "x-owner-key": OWNER_KEY } };
-    const res = mockRes();
-    const next = vi.fn();
-    requireOwner(req, res, next);
-    expect(next).toHaveBeenCalled();
-    expect(res.status).not.toHaveBeenCalled();
-  });
-
-  it("allows a request carrying the owner cookie instead of the header — this is the silent, no-UI path", () => {
-    const req = { headers: { cookie: `cv_owner_key=${encodeURIComponent(OWNER_KEY)}; theme=dark` } };
-    const res = mockRes();
-    const next = vi.fn();
-    requireOwner(req, res, next);
-    expect(next).toHaveBeenCalled();
-  });
-
-  it("rejects a request with an unrelated or wrong cookie", () => {
-    const req = { headers: { cookie: "cv_owner_key=not-the-real-key; theme=dark" } };
-    const res = mockRes();
-    const next = vi.fn();
-    requireOwner(req, res, next);
-    expect(res.status).toHaveBeenCalledWith(401);
-    expect(next).not.toHaveBeenCalled();
-  });
-});
-
-describe("pickUpOwnerKeyFromQuery — the magic-link handshake", () => {
-  it("sets the owner cookie when ?ownerkey= matches", () => {
-    const req = { query: { ownerkey: OWNER_KEY } };
-    const res = mockRes();
-    const next = vi.fn();
-    pickUpOwnerKeyFromQuery(req, res, next);
-    expect(res.setHeader).toHaveBeenCalledWith("Set-Cookie", expect.stringContaining(`cv_owner_key=${encodeURIComponent(OWNER_KEY)}`));
-    expect(res.setHeader.mock.calls[0][1]).toMatch(/HttpOnly/);
-    expect(next).toHaveBeenCalled();
-  });
-
-  it("does nothing on a request with no ownerkey param", () => {
-    const req = { query: {} };
-    const res = mockRes();
-    const next = vi.fn();
-    pickUpOwnerKeyFromQuery(req, res, next);
-    expect(res.setHeader).not.toHaveBeenCalled();
-    expect(next).toHaveBeenCalled();
-  });
-
-  it("does nothing when ?ownerkey= is present but wrong — never sets a cookie for a guess", () => {
-    const req = { query: { ownerkey: "a-random-guess" } };
-    const res = mockRes();
-    const next = vi.fn();
-    pickUpOwnerKeyFromQuery(req, res, next);
-    expect(res.setHeader).not.toHaveBeenCalled();
-    expect(next).toHaveBeenCalled();
-  });
-});
-
-describe("canAccessFile", () => {
-  it("always allows a public file, no token or key needed", () => {
+describe("canAccessFile — reading a file (getSingleFile/preview/download)", () => {
+  it("always allows a public file, no token needed", () => {
     const req = { headers: {}, query: {} };
     const file = { visibility: "public", encrypted: false, shareToken: "abc" };
     expect(canAccessFile(req, file)).toBe(true);
@@ -98,7 +14,7 @@ describe("canAccessFile", () => {
     expect(canAccessFile(req, file)).toBe(true);
   });
 
-  it("blocks a private, unencrypted file with no token and no owner key", () => {
+  it("blocks a private, unencrypted file with no token", () => {
     const req = { headers: {}, query: {} };
     const file = { visibility: "private", encrypted: false, shareToken: "abc" };
     expect(canAccessFile(req, file)).toBe(false);
@@ -128,14 +44,46 @@ describe("canAccessFile", () => {
     expect(canAccessFile(req, file)).toBe(false);
   });
 
-  it("allows a private file when the owner key is supplied, regardless of token", () => {
-    const req = { headers: { "x-owner-key": OWNER_KEY }, query: {} };
-    const file = { visibility: "private", encrypted: false, shareToken: "abc" };
+  it("accepts the token via the X-Share-Token header too, not just the query param", () => {
+    const req = { headers: { "x-share-token": "abc" }, query: {} };
+    const file = { visibility: "private", encrypted: false, shareToken: "abc", tokenExpiresAt: null };
     expect(canAccessFile(req, file)).toBe(true);
   });
 });
 
-describe("canAccessFolder", () => {
+describe("canMutateFile — rename/delete/visibility on a file", () => {
+  it("allows mutating a public file with no token at all — that's what public means here", () => {
+    const req = { headers: {}, query: {} };
+    const file = { visibility: "public", encrypted: false, shareToken: "abc" };
+    expect(canMutateFile(req, file)).toBe(true);
+  });
+
+  it("does NOT exempt encrypted files — unlike canAccessFile, being unreadable doesn't make deleting it free", () => {
+    const req = { headers: {}, query: {} };
+    const file = { visibility: "private", encrypted: true, shareToken: "abc" };
+    expect(canMutateFile(req, file)).toBe(false);
+  });
+
+  it("blocks mutating a private file with no token", () => {
+    const req = { headers: {}, query: {} };
+    const file = { visibility: "private", encrypted: false, shareToken: "abc" };
+    expect(canMutateFile(req, file)).toBe(false);
+  });
+
+  it("allows mutating a private file with its matching, unexpired token", () => {
+    const req = { headers: {}, query: { token: "abc" } };
+    const file = { visibility: "private", encrypted: false, shareToken: "abc", tokenExpiresAt: null };
+    expect(canMutateFile(req, file)).toBe(true);
+  });
+
+  it("blocks mutating a private file once its token has expired", () => {
+    const req = { headers: {}, query: { token: "abc" } };
+    const file = { visibility: "private", encrypted: false, shareToken: "abc", tokenExpiresAt: new Date(Date.now() - 1000) };
+    expect(canMutateFile(req, file)).toBe(false);
+  });
+});
+
+describe("canAccessFolder — reading AND mutating a folder", () => {
   it("always allows a public folder", () => {
     const req = { headers: {}, query: {} };
     const folder = { visibility: "public", shareToken: "abc" };
@@ -148,7 +96,7 @@ describe("canAccessFolder", () => {
     expect(canAccessFolder(req, folder)).toBe(false);
   });
 
-  it("blocks a private folder with no token and no owner key", () => {
+  it("blocks a private folder with no token", () => {
     const req = { headers: {}, query: {} };
     const folder = { visibility: "private", shareToken: "abc" };
     expect(canAccessFolder(req, folder)).toBe(false);
@@ -160,15 +108,15 @@ describe("canAccessFolder", () => {
     expect(canAccessFolder(req, folder)).toBe(true);
   });
 
-  it("blocks a private folder once its token has expired — this was previously never checked on this path", () => {
+  it("blocks a private folder once its token has expired — this was previously never checked on the by-id path", () => {
     const req = { headers: {}, query: { token: "abc" } };
     const folder = { visibility: "private", shareToken: "abc", tokenExpiresAt: new Date(Date.now() - 1000) };
     expect(canAccessFolder(req, folder)).toBe(false);
   });
 
-  it("allows a private folder when the owner key is supplied", () => {
-    const req = { headers: { "x-owner-key": OWNER_KEY }, query: {} };
-    const folder = { visibility: "private", shareToken: "abc" };
-    expect(canAccessFolder(req, folder)).toBe(true);
+  it("blocks a private folder whose token was regenerated (revoked)", () => {
+    const req = { headers: {}, query: { token: "old-token" } };
+    const folder = { visibility: "private", shareToken: "new-token", tokenExpiresAt: null };
+    expect(canAccessFolder(req, folder)).toBe(false);
   });
 });
