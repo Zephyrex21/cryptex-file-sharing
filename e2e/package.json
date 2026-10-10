@@ -1,0 +1,8 @@
+{
+  "name": "cryptex-e2e",
+  "private": true,
+  "type": "module",
+  "description": "Optional end-to-end smoke test for the Cryptex frontend. Kept separate so the main app's package.json is untouched.",
+  "scripts": { "test": "node scenarios.mjs" },
+  "devDependencies": { "jsdom": "^30.1.2" }
+}

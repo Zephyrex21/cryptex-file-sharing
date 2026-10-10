@@ -1,11 +1,10 @@
+import mongoose from "mongoose";
 import Folder from "../models/Folder.js";
 import File   from "../models/File.js";
-import { randomUUID } from "crypto";
 import { ZipArchive } from "archiver";
 import { Readable } from "stream";
-import { canAccessFolder } from "../middleware/auth.js";
-
-const generateToken = () => randomUUID().replace(/-/g, "").slice(0, 16);
+import { canAccessFolder, canLeaveFolder, canMutateFile } from "../middleware/auth.js";
+import { generateToken } from "../utils/token.js";
 
 // Same defense-in-depth as fileUpload.js's sanitizeOriginalName — strip
 // control characters and cap length before anything reaches storage.
@@ -233,15 +232,23 @@ export const deleteFolder = async (req, res) => {
       return res.status(403).json({ message: "Private folder — a valid, unexpired token is required" });
     }
 
-    // Unlink every file that was in this folder
-    if (folder.files.length > 0) {
-      await File.updateMany(
-        { _id: { $in: folder.files } },
-        { $set: { folderId: null } }
-      );
+    const session = await mongoose.startSession();
+    try {
+      await session.withTransaction(async () => {
+        // Unlink every file that was in this folder
+        if (folder.files.length > 0) {
+          await File.updateMany(
+            { _id: { $in: folder.files } },
+            { $set: { folderId: null } },
+            { session }
+          );
+        }
+        await folder.deleteOne({ session });
+      });
+    } finally {
+      await session.endSession();
     }
 
-    await folder.deleteOne();
     res.status(200).json({ message: "Folder deleted! Files are still in your vault." });
   } catch (e) { res.status(500).json({ message: e.message }); }
 };
@@ -266,21 +273,55 @@ export const addFileToFolder = async (req, res) => {
     if (!canAccessFolder(req, folder)) {
       return res.status(403).json({ message: "Private folder — a valid, unexpired token is required" });
     }
+    // ...and by the FILE's own state, since this also reassigns file.folderId.
+    if (!canMutateFile(req, file)) {
+      return res.status(403).json({ message: "This file is private — a valid share token is required" });
+    }
 
     // Already in this exact folder?
     if (folder.files.some(f => f.toString() === fileId)) {
       return res.status(400).json({ message: "File is already in this folder" });
     }
 
-    // File was in a different folder — remove it from there first
+    // File was in a different folder — moving it out requires permission on
+    // THAT folder too, not just the one it's moving into. Without this
+    // check, anyone who could write to ANY folder (a public one, or a
+    // private one they hold the token for) could silently pull a file out
+    // of someone ELSE's private folder just by knowing that file's bare
+    // _id — no token for the source folder needed at all. If the file
+    // itself happens to be visibility:'public' (kept out of the gallery
+    // only because its folder was private), this could also newly expose
+    // it the moment it lands in a folder the mover can see.
+    let sourceFolder = null;
     if (file.folderId && file.folderId.toString() !== req.params.id) {
-      await Folder.findByIdAndUpdate(file.folderId, { $pull: { files: fileId } });
+      sourceFolder = await Folder.findById(file.folderId);
+      if (sourceFolder && !canLeaveFolder(req, sourceFolder)) {
+        return res.status(403).json({
+          message: "That file's current folder is private — a valid, unexpired token for it is required to move the file out",
+        });
+      }
     }
 
-    folder.files.push(fileId);
-    file.folderId = folder._id;
-
-    await Promise.all([folder.save(), file.save()]);
+    // Three documents can be touched here (source folder, destination
+    // folder, file) — wrapped in a transaction so a failure partway through
+    // (a validation error, a dropped connection) can't leave them
+    // disagreeing with each other, e.g. the file listed in both folders'
+    // arrays, or in neither.
+    const session = await mongoose.startSession();
+    try {
+      await session.withTransaction(async () => {
+        if (sourceFolder) {
+          sourceFolder.files = sourceFolder.files.filter(f => f.toString() !== fileId);
+          await sourceFolder.save({ session });
+        }
+        folder.files.push(fileId);
+        file.folderId = folder._id;
+        await folder.save({ session });
+        await file.save({ session });
+      });
+    } finally {
+      await session.endSession();
+    }
 
     res.status(200).json({ message: "File added to folder!", folder });
   } catch (e) { res.status(500).json({ message: e.message }); }
@@ -303,14 +344,67 @@ export const removeFileFromFolder = async (req, res) => {
       return res.status(403).json({ message: "Private folder — a valid, unexpired token is required" });
     }
 
-    folder.files = folder.files.filter(f => f.toString() !== fileId);
-    file.folderId = null;
-
-    await Promise.all([folder.save(), file.save()]);
+    const session = await mongoose.startSession();
+    try {
+      await session.withTransaction(async () => {
+        folder.files = folder.files.filter(f => f.toString() !== fileId);
+        file.folderId = null;
+        await folder.save({ session });
+        await file.save({ session });
+      });
+    } finally {
+      await session.endSession();
+    }
 
     res.status(200).json({ message: "File removed from folder", folder });
   } catch (e) { res.status(500).json({ message: e.message }); }
 };
+
+// ── Shared ZIP assembly ────────────────────────────────────────────────────
+// Used by both the folder ZIP and the batch "download selected" ZIP. These
+// used to fetch each file's headers one at a time in a loop, so total wait
+// grew with the SUM of every file's round-trip. Now they're fetched a few at
+// a time (ZIP_FETCH_CONCURRENCY) and appended in the original order, so a big
+// folder of small files is a lot faster while the first bytes still start
+// flowing after the first batch rather than after everything has been
+// fetched. A small cap (not "all at once") keeps one request from opening
+// dozens of connections to storage simultaneously.
+const ZIP_FETCH_CONCURRENCY = 4;
+
+export const appendFilesToZip = async (archive, files) => {
+  // Guard against two files sharing the same name inside the zip
+  const usedNames = new Set();
+  for (let i = 0; i < files.length; i += ZIP_FETCH_CONCURRENCY) {
+    const batch = files.slice(i, i + ZIP_FETCH_CONCURRENCY);
+    const responses = await Promise.all(batch.map(async (file) => {
+      const sourceUrl = file.fileUrl || file.cloudinaryUrl;
+      if (!sourceUrl) return null;
+      try {
+        const response = await fetch(sourceUrl);
+        return response.ok && response.body ? response : null;
+      } catch {
+        // Skip a file that fails to fetch rather than aborting the whole zip
+        return null;
+      }
+    }));
+    batch.forEach((file, idx) => {
+      const response = responses[idx];
+      if (!response) return;
+      let name = sanitizeZipEntryName(file.originalName || "file");
+      if (usedNames.has(name)) {
+        const dot = name.lastIndexOf(".");
+        const ext = dot > 0 ? name.slice(dot) : "";
+        const base = dot > 0 ? name.slice(0, dot) : name;
+        let n = 2;
+        while (usedNames.has(`${base} (${n})${ext}`)) n++;
+        name = `${base} (${n})${ext}`;
+      }
+      usedNames.add(name);
+      archive.append(Readable.fromWeb(response.body), { name });
+    });
+  }
+};
+
 
 // ── DOWNLOAD AS ZIP ──────────────────────────────────────────────────────────
 // Streams every (non-private) file in the folder as a single .zip — no temp
@@ -344,36 +438,14 @@ export const downloadFolderZip = async (req, res) => {
     res.setHeader("Content-Type", "application/zip");
     res.setHeader("Content-Disposition", `attachment; filename="${safeName}.zip"`);
 
-    const archive = new ZipArchive({ zlib: { level: 9 } });
+    const archive = new ZipArchive({ zlib: { level: 6 } });
     archive.on("error", (err) => {
       if (!res.headersSent) res.status(500).json({ message: err.message });
       else res.destroy();
     });
     archive.pipe(res);
 
-    // Guard against two files sharing the same name inside the zip
-    const usedNames = new Set();
-    for (const file of files) {
-      const sourceUrl = file.fileUrl || file.cloudinaryUrl;
-      if (!sourceUrl) continue;
-      try {
-        const response = await fetch(sourceUrl);
-        if (!response.ok || !response.body) continue;
-        let name = sanitizeZipEntryName(file.originalName || "file");
-        if (usedNames.has(name)) {
-          const dot = name.lastIndexOf(".");
-          const ext = dot > 0 ? name.slice(dot) : "";
-          const base = dot > 0 ? name.slice(0, dot) : name;
-          let n = 2;
-          while (usedNames.has(`${base} (${n})${ext}`)) n++;
-          name = `${base} (${n})${ext}`;
-        }
-        usedNames.add(name);
-        archive.append(Readable.fromWeb(response.body), { name });
-      } catch {
-        // Skip a file that fails to fetch rather than aborting the whole zip
-      }
-    }
+    await appendFilesToZip(archive, files);
     await archive.finalize();
   } catch (e) {
     if (!res.headersSent) res.status(500).json({ message: e.message });

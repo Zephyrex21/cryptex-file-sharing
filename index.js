@@ -1,4 +1,5 @@
 import express from "express";
+import rateLimit from "express-rate-limit";
 import dotenv from "dotenv";
 import path from "path";
 import { fileURLToPath } from "url";
@@ -22,6 +23,19 @@ const __dirname  = path.dirname(__filename);
 
 connectDB();
 
+// Behind a reverse proxy / PaaS (Render, Heroku, nginx, Cloudflare...) every
+// request arrives from the proxy's IP, so every per-IP rate limit in this app
+// would silently become ONE shared bucket for all visitors — one noisy client
+// could lock everyone else out, and the limits would mean nothing per-person.
+// Set TRUST_PROXY to the number of proxy hops in front of the app (almost
+// always 1 on a PaaS) so req.ip reflects the real client. Left unset by
+// default on purpose: trusting X-Forwarded-For when there ISN'T a proxy lets
+// any client spoof its IP and sidestep the limiters entirely.
+if (process.env.TRUST_PROXY) {
+  const hops = Number(process.env.TRUST_PROXY);
+  app.set("trust proxy", Number.isNaN(hops) ? process.env.TRUST_PROXY : hops);
+}
+
 app.use(express.json());
 
 // ── Security headers & CORS ─────────────────────────────────────────────────
@@ -34,7 +48,7 @@ app.use((req, res, next) => {
   if (allowedOrigin) {
     res.setHeader("Access-Control-Allow-Origin", allowedOrigin);
     res.setHeader("Access-Control-Allow-Methods", "GET, POST, PATCH, DELETE, OPTIONS");
-    res.setHeader("Access-Control-Allow-Headers", "Content-Type, X-Share-Token");
+    res.setHeader("Access-Control-Allow-Headers", "Content-Type, X-Share-Token, X-Source-Token");
   }
   // Clickjacking protection — this app has no legitimate reason to ever be framed.
   res.setHeader("X-Frame-Options", "DENY");
@@ -43,6 +57,13 @@ app.use((req, res, next) => {
   // Content-Type we declare — relevant since uploaded-file MIME types
   // ultimately come from the client at upload time.
   res.setHeader("X-Content-Type-Options", "nosniff");
+  // Share links carry their token in the URL (?token=...) — never let that
+  // leak to another site via the Referer header when someone follows a link
+  // out of the app (e.g. a saved link's preview card).
+  res.setHeader("Referrer-Policy", "no-referrer");
+  // Tells browsers to only ever use HTTPS for this site once they've seen it
+  // over HTTPS (ignored over plain http://, so harmless in local dev).
+  res.setHeader("Strict-Transport-Security", "max-age=15552000");
   if (req.method === "OPTIONS") return res.sendStatus(204);
   next();
 });
@@ -53,7 +74,16 @@ app.use(express.static(path.join(__dirname, "public")));
 // ── API Routes ─────────────────────────────────────────────────────────────
 app.use("/api/files",   fileUploadRoutes);
 app.use("/api/folders", folderRoutes);
-app.get("/api/qr",      generateQr);
+// QR generation is CPU work per request with nothing to stop someone looping
+// on it — same loose cap the other generate-something endpoints have.
+const qrLimiter = rateLimit({
+  windowMs: 60 * 1000,
+  limit: 30,
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: { message: "Too many QR requests — please wait a moment" },
+});
+app.get("/api/qr",      qrLimiter, generateQr);
 
 // ── API docs ───────────────────────────────────────────────────────────────
 app.use("/api-docs", swaggerUi.serve, swaggerUi.setup(openapiSpec));

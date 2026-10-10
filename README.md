@@ -40,10 +40,15 @@ Cryptex allows users to upload files, organize them into folders, generate uniqu
 - Download an entire folder as a ZIP
 
 ### Token-Based Sharing
-- Unique share token generated for every file and folder
+- Short, easy-to-remember **6-character share token** (lowercase letters + digits, e.g. `k3x9a2`) generated for every file and folder — simple enough to read out loud or type from memory. Items shared before this change keep their original long tokens, which still work.
 - Access shared content without exposing database IDs
-- Easy and secure sharing mechanism
-- Expiring tokens, with one-click regeneration to rotate a leaked token
+- Expiring tokens, view limits, and one-click regeneration to rotate a leaked token
+- The token box on the page forgives caps-lock and stray spaces
+
+### My Shares (your own token history)
+- A **My Shares** button in the top bar lists the tokens of the files and folders you made private (or encrypted) **from this browser** — so you can always get back to something you shared without having to remember or save the token yourself. One-click copy token / copy link / open / remove.
+- It's stored **locally in your browser only** (`localStorage`): nothing is sent to the server, only you can see it, and it's cleared if you clear your browser cache/site data (the panel says so, too). Lose it and nothing is lost on the server — you just no longer have the reminder.
+- For encrypted items it keeps the token only — **never the decryption key, and never the real filename** — so it doesn't weaken the zero-knowledge design. (Encrypted entries therefore have no "Copy link": the key lives only in the link you saved when you created it.)
 
 ### Visibility Controls
 - Public files/folders
@@ -110,6 +115,14 @@ SUPABASE_BUCKET=
 
 # Backend Port
 PORT=3000
+
+# Optional — set to the number of reverse proxies in front of the app (1 on
+# Render/Heroku/most PaaS). Without it, every visitor behind a proxy looks like
+# the same IP, so the per-IP rate limits become one shared bucket. Leave unset
+# when there is NO proxy (e.g. local dev): trusting X-Forwarded-For without one
+# lets clients spoof their IP and sidestep the limiters. (If your host logs
+# ERR_ERL_UNEXPECTED_X_FORWARDED_FOR, that's this setting telling you to set it.)
+TRUST_PROXY=
 ```
 ---
 
@@ -150,6 +163,8 @@ PORT=3000
 | DELETE | `/api/folders/:id/files/:fileId` | Remove file from folder 🔒 |
 | GET | `/api/folders/token/:token` | Access via token |
 
+> Moving a file out of a private folder (`POST /api/folders/:id/files`) additionally needs that folder's token as `?sourceToken=` (or `X-Source-Token`), because the file is being removed from it.
+
 > Same 🔒 rule as files, with one difference: a folder's own name/metadata is never encrypted (only what's *inside* a vault folder is, per-file), so a private folder's token is always required — there's no ciphertext-based bypass the way there is for an individual encrypted file.
 
 ---
@@ -183,7 +198,11 @@ This app has no login/user system — it's a personal, share-by-link drop box, n
 - **A public item's mutations need no token at all** — same "public means public" rule as reading it. Specifically: going from public → private never needs a token (there isn't one yet), but anything touching an *already*-private item — including flipping it back to public — needs that item's current token, checked against the item's state as it exists right now in the database, not the state the request is trying to move it to. That specific ordering is what stops a stranger from quietly privatizing someone else's public file and keeping the new token for themselves.
 - Encrypted files are an exception to the "private needs a token" rule above, but only for *reading* them: their content is ciphertext either way, so the server has nothing meaningful to gate — the client-side AES key is the real (and only) protection, exactly as the zero-knowledge design intends. Mutating an encrypted file (renaming — which is blocked outright since the name is encrypted too — or deleting/re-sharing it) still needs the token: being unreadable doesn't make deleting it a free action. A vault *folder's* own name/metadata is always plain text (only what's inside is per-file encrypted), so folders get no encrypted exception anywhere, read or write.
 - Regenerating a share token immediately invalidates the old one everywhere it's checked, mutations included — not just the token-lookup route.
-- Every route that checks a token (`GET /files/token/:token`, `GET /folders/token/:token`, `GET /folders/:id`, and now every rename/delete/visibility/membership route too) is rate-limited against brute-forcing.
+- **Short tokens are a deliberate trade-off.** A 6-character token (36⁶ ≈ 2.18 billion possibilities) is far easier to remember than the old 64-bit one, but weaker against guessing — so the rate limiting is doing real work. Every route that checks a token is limited: the lookups and every rename/delete/visibility/membership route at 30/min, the read-by-id routes (metadata/preview/download) at 60/min, ZIP downloads at 10/min. For something genuinely sensitive, use **encrypted** sharing (the AES key, not the token, is what protects the content) or set an expiry/view limit.
+- **Set `TRUST_PROXY` when deployed behind a proxy** (see Environment Variables) — otherwise the per-IP limits above are shared by everyone.
+- **Moving a file between folders needs permission on both ends.** Pulling a file out of a private folder requires that folder's token (`sourceToken`), not just the destination's — otherwise anyone who knew a file's id could silently rip it out of someone's private folder.
+- Multi-document writes (move/remove a file from a folder, delete a folder, delete a file) run inside MongoDB transactions, so a failure partway through can't leave a file and its folder disagreeing. (Needs a replica set — MongoDB Atlas always is one.)
+- Responses carry `Referrer-Policy: no-referrer` (share links contain the token in the URL) and `Strict-Transport-Security`.
 - QR codes for share links are generated entirely client-side (see `public/js/vendor/qrcode.js`). This matters specifically for encrypted items, whose link includes the decryption key as a `#key=...` fragment — that fragment is never sent to any server, by anyone, for any reason, including rendering its own QR code.
 - Uploaded file content is verified against its declared type using magic-byte signatures, not just the client-reported MIME type (see `verifyMagicBytes` in `controllers/fileUpload.js`).
 - Unencrypted uploads get a best-effort malware pre-screen via VirusTotal's hash-lookup API — see `utils/malwareScan.js` for exactly what this does and doesn't catch (it's a known-hash lookup, not a full scan, and fails open if VirusTotal is unreachable or no API key is configured).

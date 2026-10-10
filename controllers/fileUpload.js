@@ -1,5 +1,5 @@
-import { randomUUID } from "crypto";
 import path from "path";
+import mongoose from "mongoose";
 import File from "../models/File.js";
 import Folder from "../models/Folder.js";
 import supabase from "../config/supabase.js";
@@ -7,13 +7,11 @@ import { Readable } from "stream";
 import { ZipArchive } from "archiver";
 import { isSafeUrl, safeFetchHtml, extractMeta } from "./linkPreview.js";
 import { checkKnownMalwareHash } from "../utils/malwareScan.js";
-import { sanitizeZipEntryName } from "./folderController.js";
+import { appendFilesToZip } from "./folderController.js";
 import { canAccessFile, canMutateFile } from "../middleware/auth.js";
+import { generateToken } from "../utils/token.js";
 
 const BUCKET = process.env.SUPABASE_BUCKET || "cloudvault-files";
-
-// Shared token generator — 16-char hex string, no extra dependencies
-const generateToken = () => randomUUID().replace(/-/g, "").slice(0, 16);
 
 // ── Magic-byte verification ─────────────────────────────────────────────────
 // The MIME type multer sees comes straight from the client and is trivially
@@ -587,23 +585,34 @@ export const deleteFile = async (req, res) => {
       return res.status(403).json({ message: "This file is private — a valid share token is required" });
     }
 
-    // If this file belongs to a folder, pull its own id out of that folder's
-    // files array BEFORE deleting — otherwise the Folder document keeps a
-    // dangling reference to a File that no longer exists in the database.
-    if (file.folderId) {
-      await Folder.findByIdAndUpdate(file.folderId, { $pull: { files: file._id } });
-    }
-
     // Supabase deletion is best-effort — a storage error should NOT block
-    // the MongoDB record from being deleted (otherwise the file reappears on refresh).
+    // the MongoDB record from being deleted (otherwise the file reappears on
+    // refresh). Done before the Mongo transaction below, not inside it: an
+    // external network call has no business sitting inside a DB transaction
+    // (holds it open longer than necessary, and can't roll back anyway).
     const storagePath = file.filePath || file.cloudinaryId;
     if (storagePath) {
       const { error } = await supabase.storage.from(BUCKET).remove([storagePath]);
       if (error) console.warn(`Supabase remove warning (non-fatal): ${error.message}`);
     }
 
-    // Always delete the DB record regardless of storage result
-    await file.deleteOne();
+    // Pull this file's id out of its folder's files array AND delete the
+    // file record as one atomic unit — otherwise a failure between the two
+    // could leave the Folder document with a dangling reference to a File
+    // that no longer exists (or vice versa: file gone, folder still thinks
+    // it's there).
+    const session = await mongoose.startSession();
+    try {
+      await session.withTransaction(async () => {
+        if (file.folderId) {
+          await Folder.findByIdAndUpdate(file.folderId, { $pull: { files: file._id } }, { session });
+        }
+        await file.deleteOne({ session });
+      });
+    } finally {
+      await session.endSession();
+    }
+
     res.status(200).json({ message: "Deleted!" });
   } catch (e) { res.status(500).json({ message: e.message }); }
 };
@@ -630,35 +639,14 @@ export const downloadFilesZip = async (req, res) => {
     res.setHeader("Content-Type", "application/zip");
     res.setHeader("Content-Disposition", `attachment; filename="cryptex-selected-${Date.now()}.zip"`);
 
-    const archive = new ZipArchive({ zlib: { level: 9 } });
+    const archive = new ZipArchive({ zlib: { level: 6 } });
     archive.on("error", (err) => {
       if (!res.headersSent) res.status(500).json({ message: err.message });
       else res.destroy();
     });
     archive.pipe(res);
 
-    const usedNames = new Set();
-    for (const file of files) {
-      const sourceUrl = file.fileUrl || file.cloudinaryUrl;
-      if (!sourceUrl) continue;
-      try {
-        const response = await fetch(sourceUrl);
-        if (!response.ok || !response.body) continue;
-        let name = sanitizeZipEntryName(file.originalName || "file");
-        if (usedNames.has(name)) {
-          const dot = name.lastIndexOf(".");
-          const ext = dot > 0 ? name.slice(dot) : "";
-          const base = dot > 0 ? name.slice(0, dot) : name;
-          let n = 2;
-          while (usedNames.has(`${base} (${n})${ext}`)) n++;
-          name = `${base} (${n})${ext}`;
-        }
-        usedNames.add(name);
-        archive.append(Readable.fromWeb(response.body), { name });
-      } catch {
-        // Skip a file that fails to fetch rather than aborting the whole zip
-      }
-    }
+    await appendFilesToZip(archive, files);
     await archive.finalize();
   } catch (e) {
     if (!res.headersSent) res.status(500).json({ message: e.message });

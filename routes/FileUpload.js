@@ -20,14 +20,41 @@ const router = express.Router();
 
 // Token lookup is the one endpoint where brute-forcing matters most — a token
 // IS the access control here, so this limiter is the main defense against
-// scripted guessing. 64-bit tokens make brute force computationally
-// infeasible already, but rate limiting closes the gap regardless.
+// scripted guessing. With 6-character tokens (~2.18 billion possibilities,
+// see utils/token.js) this limiter is doing real work, not just closing a
+// theoretical gap — it's what makes guessing impractical from one source.
 const tokenLookupLimiter = rateLimit({
   windowMs: 60 * 1000,
   limit: 30,
   standardHeaders: true,
   legacyHeaders: false,
   message: { message: "Too many token attempts — please wait a moment and try again" },
+});
+
+// Read-by-id routes (metadata/preview/download) also check a private item's
+// token now, so they're a brute-force target just like /token/:token — they
+// used to have no limiter at all, which meant an attacker could simply
+// guess tokens against the unprotected route instead of the protected one.
+// Looser than the token-lookup limiter since these are hit more often in
+// normal use (opening several files in a row), but still far too low to
+// guess a token with.
+const fileReadLimiter = rateLimit({
+  windowMs: 60 * 1000,
+  limit: 60,
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: { message: "Too many requests — please wait a moment and try again" },
+});
+
+// ZIP generation pulls real bytes from storage and compresses them — a lot
+// more expensive per request than anything else here, and previously had no
+// limiter at all.
+const zipLimiter = rateLimit({
+  windowMs: 60 * 1000,
+  limit: 10,
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: { message: "Too many ZIP downloads in a short time — please wait a moment" },
 });
 
 // Loose cap on uploads to blunt basic storage/bandwidth abuse, well above
@@ -109,15 +136,15 @@ const handleUpload = (req, res, next) =>
 
 router.post("/upload",            uploadLimiter, handleUpload, uploadFile);
 router.post("/link",              linkLimiter, createLink);
-router.post("/batch-zip",         downloadFilesZip);
+router.post("/batch-zip",         zipLimiter, downloadFilesZip);
 router.get("/",                   getAllFiles);
 
 // Token lookup — must come before /:id routes (specific before generic)
 router.get("/token/:token",       tokenLookupLimiter, getFileByToken);
 
-router.get("/:id/preview",        previewFile);
-router.get("/:id/download",       downloadFile);
-router.get("/:id",                getSingleFile);
+router.get("/:id/preview",        fileReadLimiter, previewFile);
+router.get("/:id/download",       fileReadLimiter, downloadFile);
+router.get("/:id",                fileReadLimiter, getSingleFile);
 
 // Visibility toggle — must come before /:id (PATCH) to avoid swallowing it
 // Rename/visibility/delete now check the item's own private-token state

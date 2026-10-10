@@ -24,6 +24,18 @@ const tokenLookupLimiter = rateLimit({
   message: { message: "Too many token attempts — please wait a moment and try again" },
 });
 
+// ZIP generation pulls real bytes from storage and compresses them, and also
+// checks a private folder's token — it needs its own, stricter limit (it
+// previously had none, so it was both the most expensive route here and an
+// unthrottled place to guess tokens).
+const zipLimiter = rateLimit({
+  windowMs: 60 * 1000,
+  limit: 10,
+  standardHeaders: true,
+  legacyHeaders: false,
+  message: { message: "Too many ZIP downloads in a short time — please wait a moment" },
+});
+
 // ── Folder routes ──────────────────────────────────────────────────────────
 
 router.post("/",                    createFolder);
@@ -38,7 +50,7 @@ router.get("/token/:token",         tokenLookupLimiter, getFolderByToken);
 // with a folder's (non-secret) _id could guess tokens against this route all
 // day with no rate limit at all.
 router.get("/:id",                  tokenLookupLimiter, getFolderById);
-router.get("/:id/zip",               downloadFolderZip);
+router.get("/:id/zip",              zipLimiter, downloadFolderZip);
 
 // Visibility/rename/delete/membership all mutate an existing folder.
 // setFolderVisibility/renameFolder/deleteFolder/addFileToFolder/

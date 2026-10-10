@@ -1,7 +1,5 @@
 import mongoose from "mongoose";
-import { randomUUID } from "crypto";
-
-const generateToken = () => randomUUID().replace(/-/g, "").slice(0, 16);
+import { generateToken } from "../utils/token.js";
 
 const folderSchema = new mongoose.Schema(
   {
@@ -11,7 +9,7 @@ const folderSchema = new mongoose.Schema(
       trim:     true,
     },
 
-    // Same token pattern as File — 16-char hex, auto-generated
+    // Same token pattern as File — short 6-char token (see utils/token.js), auto-generated
     shareToken: {
       type:    String,
       unique:  true,
@@ -22,10 +20,12 @@ const folderSchema = new mongoose.Schema(
 
     // public  → visible in folders list
     // private → only accessible via shareToken
+    // Indexed: every gallery load looks up private folders to hide their files.
     visibility: {
       type:    String,
       enum:    ["public", "private"],
       default: "public",
+      index:   true,
     },
 
     // Same expiry rule as File — null means never expires.

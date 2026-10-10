@@ -1,7 +1,5 @@
 import mongoose from "mongoose";
-import { randomUUID } from "crypto";
-
-const generateToken = () => randomUUID().replace(/-/g, "").slice(0, 16);
+import { generateToken } from "../utils/token.js";
 
 const fileSchema = new mongoose.Schema(
   {
@@ -66,15 +64,18 @@ const fileSchema = new mongoose.Schema(
 
     // public  → appears in main gallery
     // private → hidden from gallery; accessible only via shareToken
+    // Indexed: every gallery load filters on this.
     visibility: {
       type:    String,
       enum:    ["public", "private"],
       default: "public",   // existing files stay visible — no disruption
+      index:   true,
     },
 
     // Optional self-destruct for the token. null = never expires.
-    // Only enforced on token-lookup (getFileByToken) — going public clears it,
-    // since expiry is meaningless once something isn't gated behind a token.
+    // Enforced on token-lookup (getFileByToken) AND on every by-id access
+    // path (see middleware/auth.js) — going public clears it, since expiry
+    // is meaningless once something isn't gated behind a token.
     tokenExpiresAt: { type: Date, default: null },
 
     // Optional self-destruct by ACCESS COUNT rather than time. null = unlimited.
@@ -86,13 +87,19 @@ const fileSchema = new mongoose.Schema(
     viewCount: { type: Number, default: 0 },
 
     // Optional — which folder this file belongs to (null = not in any folder)
+    // Indexed: the gallery excludes files by folder membership on every load.
     folderId: {
       type:    mongoose.Schema.Types.ObjectId,
       ref:     "Folder",
       default: null,
+      index:   true,
     },
   },
   { timestamps: true }
 );
+
+// The gallery always sorts newest-first — without this, every load sorts the
+// whole collection in memory.
+fileSchema.index({ createdAt: -1 });
 
 export default mongoose.model("File", fileSchema);

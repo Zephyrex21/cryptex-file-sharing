@@ -111,8 +111,19 @@ function findKnownFile(id){
     || (curFolder&&(curFolder.files||[]).find(f=>f._id===id))
     || (tokenModalFile&&tokenModalFile._id===id?tokenModalFile:null)
     || (tokenModalFolder&&(tokenModalFolder.files||[]).find(f=>f._id===id))
+    || seenItems.get(id)
     || null;
 }
+// Registry of every token-bearing file/folder this tab has actually put on
+// screen, kept as the LAST fallback for the finders above. Needed because
+// private items live in none of the normal lists (allFiles/allFolders only
+// ever hold public ones) — they exist only inside the token modal, and
+// several flows (delete from the modal, delete a file inside an unlocked
+// vault) close that modal BEFORE the request is sent, which used to leave
+// nothing to read the token from and made those deletes 403.
+const seenItems=new Map();
+function rememberItem(item){if(item&&item._id&&item.shareToken)seenItems.set(item._id,item);}
+function rememberItems(list){(list||[]).forEach(rememberItem);}
 // Same idea as findKnownFile, but for folders: allFolders only ever holds
 // PUBLIC folders (getAllFolders excludes private ones), so a private
 // folder's shareToken has to come from wherever we're currently looking at
@@ -121,7 +132,18 @@ function findKnownFolder(id){
   return allFolders.find(f=>f._id===id)
     || (curFolder&&curFolder._id===id?curFolder:null)
     || (tokenModalFolder&&tokenModalFolder._id===id?tokenModalFolder:null)
+    || seenItems.get(id)
     || null;
+}
+// When a file is moved OUT of a private folder, the server needs THAT
+// folder's token too (separate from the destination's, which rides in
+// ?token=) — otherwise anyone could pull a file out of a private folder just
+// by knowing the file's id. No-op when the file isn't in a folder we hold a
+// token for.
+function withSourceToken(url,fileId){
+  const f=findKnownFile(fileId);
+  const src=f&&f.folderId?findKnownFolder(String(f.folderId)):null;
+  return src&&src.shareToken?`${url}${url.includes('?')?'&':'?'}sourceToken=${encodeURIComponent(src.shareToken)}`:url;
 }
 function withFileToken(url,f){
   return f&&f.shareToken?`${url}${url.includes('?')?'&':'?'}token=${encodeURIComponent(f.shareToken)}`:url;
@@ -201,7 +223,7 @@ function refreshVaultSelect(){
   const sel=document.getElementById('vaultSelect');
   const current=sel.value;
   const vaults=allFolders.filter(f=>f.encrypted&&encKeyCache.has(f._id));
-  sel.innerHTML='<option value="">Standalone (its own key)</option>'+vaults.map(f=>`<option value="${f._id}">${esc(f.name)}</option>`).join('');
+  sel.innerHTML='<option value="">Standalone (its own key)</option>'+vaults.map(f=>`<option value="${f._id}">${escH(f.name)}</option>`).join('');
   if(vaults.some(f=>f._id===current))sel.value=current;
 }
 
@@ -389,6 +411,12 @@ async function uploadEncrypted(f,pos,ui,vaultFolderId){
 // "now private" reveal modal, but the copyable link MUST include the key
 // (see copyPrivLink below), since a token alone can't decrypt anything.
 function openEncryptedRevealModal(file){
+  rememberItem(file);
+  // Deliberately NOT the real filename and NOT the key: the name of an
+  // encrypted file only exists as ciphertext on the server, and the key must
+  // only ever live in the share link itself. Writing either into
+  // localStorage would quietly undo the zero-knowledge design.
+  saveShare({id:file._id,type:'file',name:'Encrypted file',token:file.shareToken,encrypted:true});
   privRevealCtx={id:file._id,type:'file',encrypted:true};
   document.getElementById('prm-title').innerHTML='Encrypted & Uploaded '+ICONS.lock+ICONS.key;
   document.getElementById('prm-sub').textContent="This file is end-to-end encrypted — save the link below now. If it's lost, the file can't be recovered — we have no way to reset it.";
@@ -608,6 +636,7 @@ async function bulkDelete(){
   const ids=[...selectedIds];
   if(!confirm(`Delete ${ids.length} selected file${ids.length!==1?'s':''}? This can't be undone.`))return;
   const results=await Promise.allSettled(ids.map(id=>fetch(withFileToken(`${API}/${id}`,findKnownFile(id)),{method:'DELETE'})));
+  results.forEach((r,i)=>{if(r.status==='fulfilled'&&r.value.ok)removeShare(ids[i]);});
   const failed=results.filter(r=>r.status==='rejected'||!r.value.ok).length;
   const okCount=ids.length-failed;
   toast(failed?`Deleted ${okCount}, ${failed} failed`:`Deleted ${okCount} file${okCount!==1?'s':''}`,failed?'error':'success');
@@ -643,13 +672,13 @@ function mkGrid(f,i){
       ${SEL_CHECK(f._id)}
       <div class="cthumb clink-thumb" onclick="window.open('${esc(f.linkUrl)}','_blank','noopener')" style="cursor:pointer">
         ${isRecent(f.createdAt)?'<span class="new-badge">NEW</span>':''}
-        ${f.linkImage?`<img src="${esc(f.linkImage)}" alt="" loading="lazy" onerror="this.style.display='none';this.nextElementSibling.style.display='flex'">`:''}
+        ${f.linkImage?`<img src="${escH(f.linkImage)}" alt="" loading="lazy" onerror="this.style.display='none';this.nextElementSibling.style.display='flex'">`:''}
         <div class="clink-fallback" style="${f.linkImage?'display:none':'display:flex'}"><svg viewBox="0 0 24 24"><path d="M10 13a5 5 0 007.54.54l3-3a5 5 0 00-7.07-7.07l-1.72 1.71"/><path d="M14 11a5 5 0 00-7.54-.54l-3 3a5 5 0 007.07 7.07l1.71-1.71"/></svg></div>
         <span class="thbadge tb-link">LINK</span>
       </div>
       <div class="cbody">
-        <div class="cname" title="${esc(f.originalName)}">${esc(f.originalName)}</div>
-        <div class="cmeta"><span class="tpill tp-link">LINK</span><span class="dot"></span><span>${esc(f.linkDomain||'')}</span><span class="dot"></span><span>${fmtDt(f.createdAt)}</span><span class="dot"></span><span class="vis-badge vis-${v==='public'?'pub':'priv'}">${v==='public'?'Public':'Private'}</span></div>
+        <div class="cname" title="${escH(f.originalName)}">${escH(f.originalName)}</div>
+        <div class="cmeta"><span class="tpill tp-link">LINK</span><span class="dot"></span><span>${escH(f.linkDomain||'')}</span><span class="dot"></span><span>${fmtDt(f.createdAt)}</span><span class="dot"></span><span class="vis-badge vis-${v==='public'?'pub':'priv'}">${v==='public'?'Public':'Private'}</span></div>
         ${mkActionsGrid(f,v,OPEN_BTN_GRID(f))}
       </div>`;
     return d;
@@ -660,11 +689,11 @@ function mkGrid(f,i){
     <div class="cthumb" onclick="${canP?`openPrev('${f._id}')`:''}" style="cursor:${canP?'pointer':'default'}">
       ${isRecent(f.createdAt)?'<span class="new-badge">NEW</span>':''}
       ${mkThumb(f)}
-      ${canP?`<div class="cover"><span>${esc(stripExt(f.originalName))}</span></div>`:''}
+      ${canP?`<div class="cover"><span>${escH(stripExt(f.originalName))}</span></div>`:''}
       <span class="thbadge tb-${type}">${label}</span>
     </div>
     <div class="cbody">
-      <div class="cname" title="${esc(f.originalName)}">${esc(stripExt(f.originalName))}</div>
+      <div class="cname" title="${escH(f.originalName)}">${escH(stripExt(f.originalName))}</div>
       <div class="cmeta"><span class="tpill tp-${type}">${label}</span><span class="dot"></span><span>${fmtSz(f.fileSize)}</span><span class="dot"></span><span>${fmtDt(f.createdAt)}</span><span class="dot"></span><span class="vis-badge vis-${v==='public'?'pub':'priv'}">${v==='public'?'Public':'Private'}</span></div>
       ${mkActionsGrid(f,v,DL_BTN_GRID(f))}
     </div>`;
@@ -679,10 +708,10 @@ function mkList(f,i){
     d.innerHTML=`
       <div class="lrow">
         ${SEL_CHECK(f._id)}
-        <div class="lthumb llink-thumb" onclick="window.open('${esc(f.linkUrl)}','_blank','noopener')" style="cursor:pointer">${f.linkImage?`<img src="${esc(f.linkImage)}" alt="" loading="lazy" onerror="this.style.display='none'">`:`<svg viewBox="0 0 24 24" stroke-linecap="round" stroke-linejoin="round"><path d="M10 13a5 5 0 007.54.54l3-3a5 5 0 00-7.07-7.07l-1.72 1.71"/><path d="M14 11a5 5 0 00-7.54-.54l-3 3a5 5 0 007.07 7.07l1.71-1.71"/></svg>`}</div>
+        <div class="lthumb llink-thumb" onclick="window.open('${esc(f.linkUrl)}','_blank','noopener')" style="cursor:pointer">${f.linkImage?`<img src="${escH(f.linkImage)}" alt="" loading="lazy" onerror="this.style.display='none'">`:`<svg viewBox="0 0 24 24" stroke-linecap="round" stroke-linejoin="round"><path d="M10 13a5 5 0 007.54.54l3-3a5 5 0 00-7.07-7.07l-1.72 1.71"/><path d="M14 11a5 5 0 00-7.54-.54l-3 3a5 5 0 007.07 7.07l1.71-1.71"/></svg>`}</div>
         <div class="linfo">
-          <div class="lname" title="${esc(f.originalName)}">${esc(f.originalName)}${isRecent(f.createdAt)?'<span class="new-badge-list">NEW</span>':''}</div>
-          <div class="lmeta"><span class="tpill tp-link">LINK</span><span>${esc(f.linkDomain||'')}</span><span>·</span><span>${fmtDt(f.createdAt)}</span><span class="vis-badge vis-${v==='public'?'pub':'priv'}">${v==='public'?'Public':'Private'}</span></div>
+          <div class="lname" title="${escH(f.originalName)}">${escH(f.originalName)}${isRecent(f.createdAt)?'<span class="new-badge-list">NEW</span>':''}</div>
+          <div class="lmeta"><span class="tpill tp-link">LINK</span><span>${escH(f.linkDomain||'')}</span><span>·</span><span>${fmtDt(f.createdAt)}</span><span class="vis-badge vis-${v==='public'?'pub':'priv'}">${v==='public'?'Public':'Private'}</span></div>
         </div>
         ${mkActionsList(f,v,OPEN_BTN_LIST(f))}
       </div>`;
@@ -694,7 +723,7 @@ function mkList(f,i){
       ${SEL_CHECK(f._id)}
       <div class="lthumb" onclick="${canP?`openPrev('${f._id}')`:''}" style="cursor:${canP?'pointer':'default'}">${mkLThumb(f)}</div>
       <div class="linfo">
-        <div class="lname" title="${esc(f.originalName)}">${esc(stripExt(f.originalName))}${isRecent(f.createdAt)?'<span class="new-badge-list">NEW</span>':''}</div>
+        <div class="lname" title="${escH(f.originalName)}">${escH(stripExt(f.originalName))}${isRecent(f.createdAt)?'<span class="new-badge-list">NEW</span>':''}</div>
         <div class="lmeta"><span class="tpill tp-${type}">${label}</span><span>${fmtSz(f.fileSize)}</span><span>·</span><span>${fmtDt(f.createdAt)}</span><span class="vis-badge vis-${v==='public'?'pub':'priv'}">${v==='public'?'Public':'Private'}</span></div>
       </div>
       ${mkActionsList(f,v,DL_BTN_LIST(f))}
@@ -780,8 +809,13 @@ document.getElementById('delConfirm').onclick=()=>{
         // Use the object captured BEFORE the optimistic removal above — by
         // now it's already gone from allFiles/curFolder.files, so
         // findKnownFile(id) would come up empty and lose the token.
-        const res=await fetch(withFileToken(`${API}/${id}`,fileObj||folderFileObj),{method:'DELETE'});
+        // fileObj/folderFileObj only cover public gallery files and files in
+        // the open folder — a private file deleted from its token modal is in
+        // neither, so fall back to the registry (it was remembered when the
+        // modal opened).
+        const res=await fetch(withFileToken(`${API}/${id}`,fileObj||folderFileObj||findKnownFile(id)),{method:'DELETE'});
         if(!res.ok){const d=await res.json().catch(()=>({}));throw new Error(d.message||'Failed');}
+        removeShare(id);
       }catch(e){toast(e.message||'Delete failed','error');}
     },
     ()=>{ // user clicked Undo — nothing was ever sent to the server, just restore the UI
@@ -860,7 +894,7 @@ function showProp(id){
   if(isLink(f.fileType)){
     document.getElementById('propRows').innerHTML=`
       <div class="prop-row"><span class="prop-key">Type</span><span class="prop-val">${typeHuman(f.fileType)}</span></div>
-      <div class="prop-row"><span class="prop-key">Domain</span><span class="prop-val">${esc(f.linkDomain||'')}</span></div>
+      <div class="prop-row"><span class="prop-key">Domain</span><span class="prop-val">${escH(f.linkDomain||'')}</span></div>
       <div class="prop-row"><span class="prop-key">Added</span><span class="prop-val">${f.createdAt?new Date(f.createdAt).toLocaleString('en',{dateStyle:'medium',timeStyle:'short'}):'-'}</span></div>
     `;
     propDl.innerHTML=ICONS.extLink+' Open Link';
@@ -880,7 +914,7 @@ function showProp(id){
 function closeProp(){document.getElementById('propModal').classList.remove('open');}
 document.getElementById('propModal').addEventListener('click',e=>{if(e.target===document.getElementById('propModal'))closeProp();});
 
-document.addEventListener('keydown',e=>{if(e.key==='Escape'){closeLB();closeProp();document.getElementById('delModal').classList.remove('open');closeTokenModal();closeAtf();closeCreateFolder();closeRename();closeFolderDelConfirm();closeShortcuts();}});
+document.addEventListener('keydown',e=>{if(e.key==='Escape'){closeLB();closeProp();document.getElementById('delModal').classList.remove('open');closeTokenModal();closeAtf();closeCreateFolder();closeRename();closeFolderDelConfirm();closeShortcuts();closeMyShares();}});
 
 // ── Keyboard shortcuts ───────────────────────────────────────────────────────
 // Ignored while typing in any input/textarea (except Escape, handled above)
@@ -934,7 +968,24 @@ function toastUndo(msg,onExpire,onUndo,duration=5000){
 }
 function fmtSz(b){if(!b)return'–';if(b<1024)return b+'B';if(b<1048576)return(b/1024).toFixed(1)+'KB';return(b/1048576).toFixed(1)+'MB'}
 function fmtDt(d){if(!d)return'';return new Date(d).toLocaleDateString('en',{month:'short',day:'numeric',year:'numeric'})}
-function esc(s){return(s||'').replace(/\\/g,'\\\\').replace(/'/g,"\\'").replace(/"/g,'&quot;').replace(/</g,'&lt;')}
+// HTML-escape: for text nodes and quoted attribute values (titles, names,
+// src URLs, anything shown rather than executed). Escapes & too, so a name or
+// URL containing "&copy" or "&lt;" displays/works literally instead of being
+// half-interpreted as an HTML entity.
+function escH(s){return String(s??'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;').replace(/'/g,'&#39;')}
+// For values dropped inside a single-quoted JS string in an inline handler,
+// e.g. onclick="delFile('${f._id}','${esc(name)}')". Two layers, in this
+// order: JS-escape so the string literal can't be broken out of, then
+// HTML-escape the result so it survives the attribute (the browser decodes
+// the attribute first, then runs the JS). Use escH() — NOT this — anywhere
+// the value is simply displayed: this one adds backslashes that would show
+// up as literal characters in a filename like "Rayan's notes.pdf".
+function esc(s){
+  return escH(String(s??'')
+    .replace(/\\/g,'\\\\').replace(/'/g,"\\'")
+    .replace(/\n/g,'\\n').replace(/\r/g,'\\r')
+    .replace(/\u2028/g,'\\u2028').replace(/\u2029/g,'\\u2029'));
+}
 function isRecent(d){return d&&(Date.now()-new Date(d).getTime())<10*60*1000;} // uploaded in the last 10 minutes
 // Display-only helpers — the real filename (with extension) is always kept
 // for downloads/storage; only what's SHOWN to the user drops the extension.
@@ -944,13 +995,18 @@ function stripExt(name){if(!name)return name;const i=name.lastIndexOf('.');retur
 async function accessByToken(){
   const input=document.getElementById('tInput');
   const btn=document.getElementById('tBtn');
-  const token=input.value.trim();
-  if(!token)return toast('Paste a token first','error');
+  // Tokens are lowercase (6 chars now, see utils/token.js; older ones are 16
+  // lowercase hex) and meant to be typed by hand — so forgive stray spaces
+  // and caps-lock instead of failing with "no file found" on a typo that
+  // isn't really a wrong token.
+  const token=input.value.trim().toLowerCase();
+  if(!token)return toast('Enter a token first','error');
+  const t=encodeURIComponent(token);
   btn.textContent='…';btn.disabled=true;
   try{
-    let res=await fetch(`${API}/token/${token}`);
+    let res=await fetch(`${API}/token/${t}`);
     if(res.ok){const d=await res.json();input.value='';openTokenModal(d.file,'file');return;}
-    res=await fetch(`${FOLDERS_API}/token/${token}`);
+    res=await fetch(`${FOLDERS_API}/token/${t}`);
     if(res.ok){const d=await res.json();input.value='';openTokenModal(d.folder,'folder');return;}
     toast('No file or folder found for this token','error');
   }catch{toast('Network error — check your connection','error');}
@@ -981,16 +1037,18 @@ const svgIcon=(type,color='rgba(255,255,255,0.95)',sw=1.7)=>`<svg viewBox="0 0 2
 function setTmodalHero(type,imgUrl){
   const hero=document.getElementById('tmodalHero');
   hero.style.background=heroBgMap[type]||heroBgMap.file;
-  hero.innerHTML=(type==='img'&&imgUrl)?`<img src="${esc(imgUrl)}" alt="">`:svgIcon(type);
+  hero.innerHTML=(type==='img'&&imgUrl)?`<img src="${escH(imgUrl)}" alt="">`:svgIcon(type);
 }
 const tinfo=(label,value,full)=>`<div class="tinfo-item${full?' full':''}"><div class="tinfo-label">${label}</div><div class="tinfo-value">${value}</div></div>`;
-const tinfoToken=(token)=>`<div class="tinfo-item full"><div class="tinfo-label">Share Token</div><div class="tinfo-value mono">${esc(token||'-')}${token?`<button class="tinfo-copy-btn" onclick="copyToken('${esc(token)}')" title="Copy token"><svg viewBox="0 0 24 24"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 01-2-2V4a2 2 0 012-2h9a2 2 0 012 2v1"/></svg></button>`:''}</div></div>`;
+const tinfoToken=(token)=>`<div class="tinfo-item full"><div class="tinfo-label">Share Token</div><div class="tinfo-value mono">${escH(token||'-')}${token?`<button class="tinfo-copy-btn" onclick="copyToken('${esc(token)}')" title="Copy token"><svg viewBox="0 0 24 24"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 01-2-2V4a2 2 0 012-2h9a2 2 0 012 2v1"/></svg></button>`:''}</div></div>`;
 // Expiry + view-limit + token rows only make sense once something is
 // actually gated behind a token — i.e. once it's private.
 const privacyInfoRows=(item)=>(item.visibility||'public')!=='private'?'':
   tinfo('Expiry',fmtExpiryStatus(item.tokenExpiresAt))+tinfo('View Limit',fmtViewsStatus(item.maxViews,item.viewCount))+tinfoToken(item.shareToken);
 
 function openTokenModal(data,kind){
+  rememberItem(data);
+  if(kind==='folder')rememberItems(data.files);
   const hd=document.getElementById('tmodalHead');
   const bd=document.getElementById('tmodalBody');
   const ft=document.getElementById('tmodalFoot');
@@ -1000,9 +1058,9 @@ function openTokenModal(data,kind){
     const t=tc(f.fileType);
     const v=f.visibility||'public';
     setTmodalHero(t,f.fileUrl);
-    hd.innerHTML=`<div class="tmodal-title-lg" title="${esc(f.originalName)}">${esc(stripExt(f.originalName))}</div><div class="tmodal-badges"><span class="vis-badge vis-${v==='public'?'pub':'priv'}">${v==='public'?'Public':'Private'}</span><span style="font-size:12px;color:var(--t2)">${typeHuman(f.fileType)}</span></div>`;
+    hd.innerHTML=`<div class="tmodal-title-lg" title="${escH(f.originalName)}">${escH(stripExt(f.originalName))}</div><div class="tmodal-badges"><span class="vis-badge vis-${v==='public'?'pub':'priv'}">${v==='public'?'Public':'Private'}</span><span style="font-size:12px;color:var(--t2)">${typeHuman(f.fileType)}</span></div>`;
     bd.innerHTML=isLink(f.fileType)
-      ?`<div class="tmodal-info-grid">${tinfo('Domain',esc(f.linkDomain||'-'))}${tinfo('Type',typeHuman(f.fileType))}${tinfo('Added',f.createdAt?new Date(f.createdAt).toLocaleString('en',{dateStyle:'medium',timeStyle:'short'}):'-',true)}${privacyInfoRows(f)}</div>`
+      ?`<div class="tmodal-info-grid">${tinfo('Domain',escH(f.linkDomain||'-'))}${tinfo('Type',typeHuman(f.fileType))}${tinfo('Added',f.createdAt?new Date(f.createdAt).toLocaleString('en',{dateStyle:'medium',timeStyle:'short'}):'-',true)}${privacyInfoRows(f)}</div>`
       :`<div class="tmodal-info-grid">${tinfo('Size',fmtSz(f.fileSize))}${tinfo('Type',typeHuman(f.fileType))}${tinfo('Uploaded',f.createdAt?new Date(f.createdAt).toLocaleString('en',{dateStyle:'medium',timeStyle:'short'}):'-',true)}${privacyInfoRows(f)}</div>`;
     const primaryBtn=isLink(f.fileType)
       ?`<button class="tmodal-primary-btn" onclick="window.open('${esc(f.linkUrl)}','_blank','noopener')"><svg viewBox="0 0 24 24"><path d="M18 13v6a2 2 0 01-2 2H5a2 2 0 01-2-2V8a2 2 0 012-2h6"/><polyline points="15 3 21 3 21 9"/><line x1="10" y1="14" x2="21" y2="3"/></svg>Open Link</button>`
@@ -1017,10 +1075,10 @@ function openTokenModal(data,kind){
     const files=(folder.files||[]).filter(x=>(x.visibility||'public')!=='private');
     const v=folder.visibility||'public';
     setTmodalHero('folder');
-    hd.innerHTML=`<div class="tmodal-title-lg" title="${esc(folder.name)}">${esc(folder.name)}</div><div class="tmodal-badges"><span class="vis-badge vis-${v==='public'?'pub':'priv'}">${v==='public'?'Public':'Private'}</span><span style="font-size:12px;color:var(--t2)">${files.length} file${files.length!==1?'s':''}</span></div>`;
+    hd.innerHTML=`<div class="tmodal-title-lg" title="${escH(folder.name)}">${escH(folder.name)}</div><div class="tmodal-badges"><span class="vis-badge vis-${v==='public'?'pub':'priv'}">${v==='public'?'Public':'Private'}</span><span style="font-size:12px;color:var(--t2)">${files.length} file${files.length!==1?'s':''}</span></div>`;
     const infoGrid=`<div class="tmodal-info-grid">${tinfo('Files',files.length,true)}${privacyInfoRows(folder)}</div>`;
     bd.innerHTML=infoGrid+(files.length
-      ?`<div class="tmodal-file-list">${files.map(f=>`<div class="tmodal-file-row"><span class="tmodal-file-name" title="${esc(f.originalName)}">${esc(stripExt(f.originalName))}</span><span class="tmodal-file-meta">${isLink(f.fileType)?esc(f.linkDomain||'Link'):fmtSz(f.fileSize)}</span><button class="tmodal-dl-btn" onclick="${isLink(f.fileType)?`window.open('${esc(f.linkUrl)}','_blank','noopener')`:`dlFile('${f._id}','${esc(f.originalName)}')`}" title="${isLink(f.fileType)?'Open Link':'Download'}">${isLink(f.fileType)?`<svg viewBox="0 0 24 24" stroke-linecap="round" stroke-linejoin="round"><path d="M18 13v6a2 2 0 01-2 2H5a2 2 0 01-2-2V8a2 2 0 012-2h6"/><polyline points="15 3 21 3 21 9"/><line x1="10" y1="14" x2="21" y2="3"/></svg>`:`<svg viewBox="0 0 24 24" stroke-linecap="round" stroke-linejoin="round"><polyline points="8 17 12 21 16 17"/><line x1="12" y1="12" x2="12" y2="21"/></svg>`}</button></div>`).join('')}</div>`
+      ?`<div class="tmodal-file-list">${files.map(f=>`<div class="tmodal-file-row"><span class="tmodal-file-name" title="${escH(f.originalName)}">${escH(stripExt(f.originalName))}</span><span class="tmodal-file-meta">${isLink(f.fileType)?escH(f.linkDomain||'Link'):fmtSz(f.fileSize)}</span><button class="tmodal-dl-btn" onclick="${isLink(f.fileType)?`window.open('${esc(f.linkUrl)}','_blank','noopener')`:`dlFile('${f._id}','${esc(f.originalName)}')`}" title="${isLink(f.fileType)?'Open Link':'Download'}">${isLink(f.fileType)?`<svg viewBox="0 0 24 24" stroke-linecap="round" stroke-linejoin="round"><path d="M18 13v6a2 2 0 01-2 2H5a2 2 0 01-2-2V8a2 2 0 012-2h6"/><polyline points="15 3 21 3 21 9"/><line x1="10" y1="14" x2="21" y2="3"/></svg>`:`<svg viewBox="0 0 24 24" stroke-linecap="round" stroke-linejoin="round"><polyline points="8 17 12 21 16 17"/><line x1="12" y1="12" x2="12" y2="21"/></svg>`}</button></div>`).join('')}</div>`
       :`<div style="text-align:center;padding:24px 0;color:var(--t3);font-size:14px">This folder is empty</div>`);
     ft.innerHTML=(files.length?`<button class="tmodal-primary-btn" onclick="downloadFolderZipFromModal()"><svg viewBox="0 0 24 24"><path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>Download All as ZIP</button>`:'')+(v==='private'?`<div class="tmodal-secondary-row"><button class="tmodal-sec-btn" onclick="openSharePanel('folder')"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"/><path d="M12 1v6m0 10v6M4.22 4.22l4.24 4.24m7.08 7.08l4.24 4.24M1 12h6m10 0h6M4.22 19.78l4.24-4.24m7.08-7.08l4.24-4.24"/></svg>Manage</button><button class="tmodal-sec-btn" onclick="makeFolderPublic('${folder._id}')"><svg viewBox="0 0 24 24"><rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 019.9-1"/></svg>Make Public</button><button class="tmodal-sec-btn danger" onclick="delFolderFromModal('${folder._id}')"><svg viewBox="0 0 24 24"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 01-2 2H8a2 2 0 01-2-2L5 6"/></svg>Delete</button></div>`:'');
     tokenModalFolder=folder; // store so delFolderFromModal can read folder name
@@ -1049,7 +1107,7 @@ async function openEncryptedFolderTokenModal(folder){
   }
 
   setTmodalHero('lock');
-  hd.innerHTML=`<div class="tmodal-title-lg">${esc(folder.name)}</div><div class="tmodal-badges"><span class="vis-badge vis-priv">${ICONS.lock} Encrypted Vault</span></div>`;
+  hd.innerHTML=`<div class="tmodal-title-lg">${escH(folder.name)}</div><div class="tmodal-badges"><span class="vis-badge vis-priv">${ICONS.lock} Encrypted Vault</span></div>`;
   bd.innerHTML=`<div class="enc-unlock"><p>This is an encrypted vault — every file inside shares one key, unreadable without it.</p><input id="encKeyInput" type="text" placeholder="Paste decryption key…" autocomplete="off" spellcheck="false" onkeydown="if(event.key==='Enter')unlockEncryptedVault('${folder._id}')"/></div>`;
   ft.innerHTML=`<button class="tmodal-primary-btn" onclick="unlockEncryptedVault('${folder._id}')"><svg viewBox="0 0 24 24"><rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 019.9-1"/></svg>Unlock Vault</button><div class="tmodal-secondary-row"><button class="tmodal-sec-btn" onclick="openSharePanel('folder')"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"/><path d="M12 1v6m0 10v6M4.22 4.22l4.24 4.24m7.08 7.08l4.24 4.24M1 12h6m10 0h6M4.22 19.78l4.24-4.24m7.08-7.08l4.24-4.24"/></svg>Manage</button><button class="tmodal-sec-btn danger" onclick="delFolderFromModal('${folder._id}')"><svg viewBox="0 0 24 24"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 01-2 2H8a2 2 0 01-2-2L5 6"/></svg>Delete</button></div>`;
   document.getElementById('tokenModal').classList.add('open');
@@ -1086,10 +1144,10 @@ async function renderUnlockedVaultModal(folder,keyStr){
 
   const hd=document.getElementById('tmodalHead'),bd=document.getElementById('tmodalBody'),ft=document.getElementById('tmodalFoot');
   setTmodalHero('folder');
-  hd.innerHTML=`<div class="tmodal-title-lg" title="${esc(folder.name)}">${esc(folder.name)}</div><div class="tmodal-badges"><span class="vis-badge vis-priv">${ICONS.unlock} Vault Unlocked</span><span style="font-size:12px;color:var(--t2)">${decrypted.length} file${decrypted.length!==1?'s':''}</span></div>`;
+  hd.innerHTML=`<div class="tmodal-title-lg" title="${escH(folder.name)}">${escH(folder.name)}</div><div class="tmodal-badges"><span class="vis-badge vis-priv">${ICONS.unlock} Vault Unlocked</span><span style="font-size:12px;color:var(--t2)">${decrypted.length} file${decrypted.length!==1?'s':''}</span></div>`;
   const infoGrid=`<div class="tmodal-info-grid">${tinfo('Files',decrypted.length,true)}${privacyInfoRows(folder)}</div>`;
   bd.innerHTML=infoGrid+(decrypted.length
-    ?`<div class="tmodal-file-list">${decrypted.map(f=>`<div class="tmodal-file-row"><span class="tmodal-file-name" title="${esc(f._realName)}">${esc(stripExt(f._realName))}</span><span class="tmodal-file-meta">${fmtSz(f.fileSize)}</span><button class="tmodal-dl-btn" onclick="decryptAndDownloadVaultFile('${f._id}')" title="Decrypt & Download"><svg viewBox="0 0 24 24" stroke-linecap="round" stroke-linejoin="round"><polyline points="8 17 12 21 16 17"/><line x1="12" y1="12" x2="12" y2="21"/></svg></button></div>`).join('')}</div>`
+    ?`<div class="tmodal-file-list">${decrypted.map(f=>`<div class="tmodal-file-row"><span class="tmodal-file-name" title="${escH(f._realName)}">${escH(stripExt(f._realName))}</span><span class="tmodal-file-meta">${fmtSz(f.fileSize)}</span><button class="tmodal-dl-btn" onclick="decryptAndDownloadVaultFile('${f._id}')" title="Decrypt & Download"><svg viewBox="0 0 24 24" stroke-linecap="round" stroke-linejoin="round"><polyline points="8 17 12 21 16 17"/><line x1="12" y1="12" x2="12" y2="21"/></svg></button></div>`).join('')}</div>`
     :`<div style="text-align:center;padding:24px 0;color:var(--t3);font-size:14px">This vault is empty</div>`)
     +`<div style="margin-top:12px;font-size:12px;color:var(--t3);text-align:center">${ICONS.lock} Decrypted locally — the server never sees the plaintext.</div>`;
   ft.innerHTML=`<div class="tmodal-secondary-row"><button class="tmodal-sec-btn" onclick="openSharePanel('folder')"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"/><path d="M12 1v6m0 10v6M4.22 4.22l4.24 4.24m7.08 7.08l4.24 4.24M1 12h6m10 0h6M4.22 19.78l4.24-4.24m7.08-7.08l4.24-4.24"/></svg>Manage</button><button class="tmodal-sec-btn danger" onclick="delFolderFromModal('${folder._id}')"><svg viewBox="0 0 24 24"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 01-2 2H8a2 2 0 01-2-2L5 6"/></svg>Delete</button></div>`;
@@ -1174,7 +1232,7 @@ async function renderUnlockedEncryptedModal(f,keyStr){
   const canP=isImg(realType)||isVid(realType)||isPdf(realType);
 
   setTmodalHero(t);
-  hd.innerHTML=`<div class="tmodal-title-lg" title="${esc(realName)}">${esc(stripExt(realName))}</div><div class="tmodal-badges"><span class="vis-badge vis-priv">${ICONS.lock} E2E Encrypted</span><span style="font-size:12px;color:var(--t2)">${esc(label)}</span></div>`;
+  hd.innerHTML=`<div class="tmodal-title-lg" title="${escH(realName)}">${escH(stripExt(realName))}</div><div class="tmodal-badges"><span class="vis-badge vis-priv">${ICONS.lock} E2E Encrypted</span><span style="font-size:12px;color:var(--t2)">${escH(label)}</span></div>`;
   bd.innerHTML=`<div class="tmodal-info-grid">${tinfo('Size',fmtSz(f.fileSize))}${tinfo('Type',typeHuman(realType))}${tinfo('Uploaded',f.createdAt?new Date(f.createdAt).toLocaleString('en',{dateStyle:'medium',timeStyle:'short'}):'-',true)}${privacyInfoRows(f)}</div><div style="margin-top:12px;font-size:12px;color:var(--t3);text-align:center">${ICONS.lock} Decrypted locally — the server never sees the plaintext.</div>`;
   const previewBtn=canP?`<button class="tmodal-sec-btn" onclick="decryptAndPreviewEnc('${f._id}')"><svg viewBox="0 0 24 24"><path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/></svg>Preview</button>`:'';
   ft.innerHTML=`<button class="tmodal-primary-btn" onclick="decryptAndDownloadEnc('${f._id}')"><svg viewBox="0 0 24 24"><polyline points="8 17 12 21 16 17"/><line x1="12" y1="12" x2="12" y2="21"/></svg>Decrypt & Download</button><div class="tmodal-secondary-row">${previewBtn}<button class="tmodal-sec-btn" onclick="openSharePanel('file')"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"/><path d="M12 1v6m0 10v6M4.22 4.22l4.24 4.24m7.08 7.08l4.24 4.24M1 12h6m10 0h6M4.22 19.78l4.24-4.24m7.08-7.08l4.24-4.24"/></svg>Manage</button><button class="tmodal-sec-btn danger" onclick="delFileFromModal('${f._id}')"><svg viewBox="0 0 24 24"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 01-2 2H8a2 2 0 01-2-2L5 6"/></svg>Delete</button></div>`;
@@ -1234,7 +1292,7 @@ async function decryptAndPreviewEnc(id){
     if(isImg(f._realType)){img.src=url;img.style.display='block';}
     else if(isVid(f._realType)){vid.src=url;vid.style.display='block';}
     else{URL.revokeObjectURL(url);return;}
-    info.innerHTML=`${esc(stripExt(f._realName))} · ${tl(f._realType)} · ${fmtSz(f.fileSize)} · ${ICONS.unlock} Decrypted locally`;
+    info.innerHTML=`${escH(stripExt(f._realName))} · ${tl(f._realType)} · ${fmtSz(f.fileSize)} · ${ICONS.unlock} Decrypted locally`;
     document.getElementById('lb').classList.add('open');document.body.style.overflow='hidden';
   }catch{toast('Decryption failed — the key or file data may be corrupted','error');}
 }
@@ -1323,7 +1381,7 @@ function renderFolders(){
     // Defensive filter: backend already excludes private files via populate match,
     // but we filter again here in case of any stale cached data.
     const files=(curFolder.files||[]).filter(x=>(x.visibility||'public')!=='private');
-    crumb.innerHTML=`<button class="crumb-back" onclick="backToFolders()"><svg viewBox="0 0 24 24"><polyline points="15 18 9 12 15 6"/></svg></button><span class="crumb-sep">Folders</span><span style="color:var(--t3);margin:0 4px">/</span><span>${esc(curFolder.name)}</span>`;
+    crumb.innerHTML=`<button class="crumb-back" onclick="backToFolders()"><svg viewBox="0 0 24 24"><polyline points="15 18 9 12 15 6"/></svg></button><span class="crumb-sep">Folders</span><span style="color:var(--t3);margin:0 4px">/</span><span>${escH(curFolder.name)}</span>`;
     btnNew.style.display='none';
     searchInput.style.display='none'; // searching folder names doesn't apply once you're inside one
     btnZip.style.display=files.length?'':'none';
@@ -1349,7 +1407,7 @@ function renderFolders(){
       grid.innerHTML=`<div class="folder-empty"><div class="empty-ico"><svg viewBox="0 0 24 24"><path d="M22 19a2 2 0 01-2 2H4a2 2 0 01-2-2V5a2 2 0 012-2h5l2 3h9a2 2 0 012 2z"/></svg></div><p>No folders yet.<br>Hit <strong>+ New Folder</strong> to create one.</p></div>`;
     }else if(!visibleFolders.length){
       grid.className='';
-      grid.innerHTML=`<div class="folder-empty"><div class="empty-ico"><svg viewBox="0 0 24 24"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg></div><p>No folders match "${esc(folderSearchQ)}".</p></div>`;
+      grid.innerHTML=`<div class="folder-empty"><div class="empty-ico"><svg viewBox="0 0 24 24"><circle cx="11" cy="11" r="8"/><line x1="21" y1="21" x2="16.65" y2="16.65"/></svg></div><p>No folders match "${escH(folderSearchQ)}".</p></div>`;
     }else{
       grid.className='fol-grid';
       grid.innerHTML='';
@@ -1379,7 +1437,7 @@ function mkFolderCard(f,i){
         ${cnt>0?`<span class="fol-count">${cnt>99?'99+':cnt}</span>`:''}
       </div>
       <div class="fol-info">
-        <div class="fol-name">${esc(f.name)}</div>
+        <div class="fol-name">${escH(f.name)}</div>
         <div class="fol-meta"><span>${cnt} file${cnt!==1?'s':''}</span><span class="vis-badge vis-${f.visibility==='public'?'pub':'priv'}">${f.visibility==='public'?'Public':'Private'}</span>${f.encrypted?'<span class="vis-badge vault-badge">'+ICONS.lock+' Vault</span>':''}</div>
       </div>
     </div>
@@ -1402,6 +1460,7 @@ async function openFolder(id){
     if(!res.ok)throw new Error();
     const d=await res.json();
     curFolder=d.folder;
+    rememberItem(d.folder);rememberItems(d.folder.files);
     renderFolders();
   }catch{toast('Could not open folder','error');}
 }
@@ -1448,6 +1507,8 @@ async function submitCreateFolder(){
 // per-file encrypted-upload reveal, since this key is the ONLY copy that
 // will ever exist outside this browser tab.
 function openEncryptedFolderRevealModal(folder){
+  rememberItem(folder);
+  saveShare({id:folder._id,type:'folder',name:folder.name,token:folder.shareToken,encrypted:true});
   privRevealCtx={id:folder._id,type:'folder',encrypted:true};
   document.getElementById('prm-title').innerHTML='Vault Created '+ICONS.lock+ICONS.key;
   document.getElementById('prm-sub').textContent="Save this link now — every file you add to this vault will be encrypted under this key, and we have no way to recover it if it's lost.";
@@ -1475,6 +1536,7 @@ async function delFolderConfirm(id,name){
     try{
       const res=await fetch(withFileToken(`${FOLDERS_API}/${id}`,findKnownFolder(id)),{method:'DELETE'});
       if(!res.ok)throw new Error();
+      removeShare(id);
       allFolders=allFolders.filter(f=>f._id!==id);
       if(curFolder&&curFolder._id===id){curFolder=null;folderCtx=null;}
       renderFolders();
@@ -1521,7 +1583,7 @@ function renderAtf(){
   if(atfBulkIds){
     body.innerHTML=allFolders.map(folder=>{
       const cnt=folder.fileCount!==undefined?folder.fileCount:(folder.files?folder.files.length:0);
-      return`<div class="atf-item"><div class="atf-item-ico"><svg viewBox="0 0 24 24"><path d="M22 19a2 2 0 01-2 2H4a2 2 0 01-2-2V5a2 2 0 012-2h5l2 3h9a2 2 0 012 2z"/></svg></div><div class="atf-item-info"><div class="atf-item-name">${esc(folder.name)}</div><div class="atf-item-count">${cnt} file${cnt!==1?'s':''}</div></div><button class="atf-item-btn atf-btn-add" onclick="doAddToFolder('${folder._id}')">Add</button></div>`;
+      return`<div class="atf-item"><div class="atf-item-ico"><svg viewBox="0 0 24 24"><path d="M22 19a2 2 0 01-2 2H4a2 2 0 01-2-2V5a2 2 0 012-2h5l2 3h9a2 2 0 012 2z"/></svg></div><div class="atf-item-info"><div class="atf-item-name">${escH(folder.name)}</div><div class="atf-item-count">${cnt} file${cnt!==1?'s':''}</div></div><button class="atf-item-btn atf-btn-add" onclick="doAddToFolder('${folder._id}')">Add</button></div>`;
     }).join('');
     return;
   }
@@ -1532,7 +1594,7 @@ function renderAtf(){
     const btn=inThis
       ?`<button class="atf-item-btn atf-btn-rm" onclick="doRemoveFromFolder('${folder._id}')">Remove</button>`
       :`<button class="atf-item-btn atf-btn-add" onclick="doAddToFolder('${folder._id}')">Add</button>`;
-    return`<div class="atf-item"><div class="atf-item-ico"><svg viewBox="0 0 24 24"><path d="M22 19a2 2 0 01-2 2H4a2 2 0 01-2-2V5a2 2 0 012-2h5l2 3h9a2 2 0 012 2z"/></svg></div><div class="atf-item-info"><div class="atf-item-name">${esc(folder.name)}</div><div class="atf-item-count">${cnt} file${cnt!==1?'s':''}</div></div>${btn}</div>`;
+    return`<div class="atf-item"><div class="atf-item-ico"><svg viewBox="0 0 24 24"><path d="M22 19a2 2 0 01-2 2H4a2 2 0 01-2-2V5a2 2 0 012-2h5l2 3h9a2 2 0 012 2z"/></svg></div><div class="atf-item-info"><div class="atf-item-name">${escH(folder.name)}</div><div class="atf-item-count">${cnt} file${cnt!==1?'s':''}</div></div>${btn}</div>`;
   }).join('');
 }
 async function showAtfBulk(ids){
@@ -1546,7 +1608,7 @@ async function showAtfBulk(ids){
 async function doAddToFolder(folderId){
   if(atfBulkIds){
     const ids=atfBulkIds;
-    const results=await Promise.allSettled(ids.map(id=>fetch(withFileToken(`${FOLDERS_API}/${folderId}/files`,findKnownFolder(folderId)),{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({fileId:id})})));
+    const results=await Promise.allSettled(ids.map(id=>fetch(withSourceToken(withFileToken(`${FOLDERS_API}/${folderId}/files`,findKnownFolder(folderId)),id),{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({fileId:id})})));
     const okCount=results.filter(r=>r.status==='fulfilled'&&r.value.ok).length;
     ids.forEach(id=>{const file=allFiles.find(f=>f._id===id);if(file)file.folderId=folderId;});
     const folder=allFolders.find(f=>f._id===folderId);
@@ -1557,7 +1619,7 @@ async function doAddToFolder(folderId){
   }
   const fileId=atfFileId;
   try{
-    const res=await fetch(withFileToken(`${FOLDERS_API}/${folderId}/files`,findKnownFolder(folderId)),{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({fileId})});
+    const res=await fetch(withSourceToken(withFileToken(`${FOLDERS_API}/${folderId}/files`,findKnownFolder(folderId)),fileId),{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({fileId})});
     if(!res.ok)throw new Error();
     const file=allFiles.find(f=>f._id===fileId);if(file)file.folderId=folderId;
     const folder=allFolders.find(f=>f._id===folderId);
@@ -1607,6 +1669,10 @@ async function toggleVis(id,currentVis){
     // stored in MongoDB, not a potentially stale value from the frontend state.
     const token=d.file?.shareToken||'';
     if(!token){toast('Token missing — contact support','error');return;}
+    // Capture the name before the file is removed from allFiles just below.
+    const fileName=allFiles.find(x=>x._id===id)?.originalName||d.file?.originalName||'File';
+    rememberItem(d.file);
+    saveShare({id,type:'file',name:fileName,token,encrypted:false});
     // Remove from allFiles so it never re-renders in the gallery
     allFiles=allFiles.filter(x=>x._id!==id);
     const card=document.getElementById(`card-${id}`);
@@ -1709,6 +1775,9 @@ async function regenPrivToken(){
     const item=d.file||d.folder;
     if(!item?.shareToken){toast('Server did not return a new token','error');return;}
     document.getElementById('prm-token').textContent=item.shareToken;
+    const known=seenItems.get(privRevealCtx.id);if(known)known.shareToken=item.shareToken;
+    rememberItem(item);
+    updateShareToken(privRevealCtx.id,item.shareToken);
     // Defensive: keep any still-cached references in sync, in case some future
     // code path reads them without a fresh fetch first.
     if(tokenModalFile&&tokenModalFile._id===privRevealCtx.id)tokenModalFile.shareToken=item.shareToken;
@@ -1742,6 +1811,8 @@ async function toggleFolderVis(id,currentVis){
     const d=await res.json();
     const token=d.folder?.shareToken||'';
     if(!token){toast('Token missing — contact support','error');return;}
+    rememberItem(d.folder);
+    saveShare({id,type:'folder',name:d.folder?.name||allFolders.find(x=>x._id===id)?.name||'Folder',token,encrypted:false});
     allFolders=allFolders.filter(x=>x._id!==id);
     if(curFolder&&curFolder._id===id){curFolder=null;folderCtx=null;}
     // Also remove this folder's files from the gallery immediately
@@ -1792,6 +1863,7 @@ async function makeFilePublic(id){
     // This correctly handles the edge case where the file's parent folder is private
     // (getAllFiles would exclude it; manual allFiles.unshift would wrongly show it).
     closeTokenModal();
+    removeShare(id);
     toast('File is now public '+ICONS.check,'success');
     await loadFiles();
   }catch{toast('Failed to make public','error');}
@@ -1808,11 +1880,122 @@ async function makeFolderPublic(id){
     const res=await fetch(withFileToken(`${FOLDERS_API}/${id}/visibility`,findKnownFolder(id)),{method:'PATCH',headers:{'Content-Type':'application/json'},body:JSON.stringify({visibility:'public'})});
     if(!res.ok)throw new Error();
     closeTokenModal();
+    removeShare(id);
     // Reload both: folders list + gallery (folder's files now need to appear)
     await Promise.all([loadFolders(),loadFiles()]);
     toast('Folder is now public '+ICONS.check,'success');
   }catch{toast('Failed to make folder public','error');}
 }
+
+// ═══════════════════════════════════════════════════════════════════════
+// My Shares — a local, per-browser memory of the private tokens YOU created
+//
+// A token is the only way back into a private item, and there's no account
+// to recover it from — so if the link isn't saved somewhere, the item is
+// effectively gone. This keeps a list in THIS browser's localStorage of every
+// file/folder you made private (or encrypted) here, so you can always find
+// the token again without having to remember it. It never leaves the device:
+// nothing is sent to the server, only you can see it, and it disappears if
+// browser data is cleared. Decryption keys and the real names of encrypted
+// files are deliberately never written here.
+// ═══════════════════════════════════════════════════════════════════════
+const MY_SHARES_KEY='cv-my-shares';
+const MY_SHARES_MAX=200;
+function loadShares(){
+  try{
+    const a=JSON.parse(localStorage.getItem(MY_SHARES_KEY)||'[]');
+    return Array.isArray(a)?a.filter(s=>s&&s.id&&s.token):[];
+  }catch{return[];}
+}
+function persistShares(list){
+  try{localStorage.setItem(MY_SHARES_KEY,JSON.stringify(list.slice(0,MY_SHARES_MAX)));}
+  catch{/* storage full or blocked — this list is a convenience, never essential */}
+}
+function saveShare({id,type,name,token,encrypted}){
+  if(!id||!token)return;
+  const list=loadShares().filter(s=>s.id!==id);
+  list.unshift({id,type,name:String(name||'').slice(0,200),token,encrypted:!!encrypted,createdAt:Date.now()});
+  persistShares(list);
+  // One-time pointer so the feature is discoverable the first time it's used.
+  try{
+    if(!localStorage.getItem('cv-shares-hint')){
+      localStorage.setItem('cv-shares-hint','1');
+      toast('Saved to My Shares (top bar) — stored in this browser only','info');
+    }
+  }catch{}
+}
+function updateShareToken(id,token){
+  const list=loadShares();
+  const s=list.find(x=>x.id===id);
+  if(!s||!token)return; // only refresh entries this browser already tracks
+  s.token=token;
+  persistShares(list);
+  if(document.getElementById('mySharesModal')?.classList.contains('open'))renderMyShares();
+}
+function removeShare(id){
+  const list=loadShares();
+  const next=list.filter(s=>s.id!==id);
+  if(next.length!==list.length)persistShares(next);
+}
+function openMyShares(){renderMyShares();document.getElementById('mySharesModal').classList.add('open');}
+function closeMyShares(){document.getElementById('mySharesModal').classList.remove('open');}
+function renderMyShares(){
+  const list=loadShares();
+  const body=document.getElementById('msBody');
+  document.getElementById('msFoot').style.display=list.length?'flex':'none';
+  if(!list.length){
+    body.innerHTML='<div class="atf-empty">Nothing saved yet.<br>When you make a file or folder private (or upload something encrypted) from this browser, its token will show up here.</div>';
+    return;
+  }
+  const fileIco='<svg viewBox="0 0 24 24"><path d="M13 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V9z"/><polyline points="13 2 13 9 20 9"/></svg>';
+  const folderIco='<svg viewBox="0 0 24 24"><path d="M22 19a2 2 0 01-2 2H4a2 2 0 01-2-2V5a2 2 0 012-2h5l2 3h9a2 2 0 012 2z"/></svg>';
+  body.innerHTML=list.map((s,i)=>{
+    const when=new Date(s.createdAt).toLocaleDateString(undefined,{year:'numeric',month:'short',day:'numeric'});
+    return `<div class="ms-item">
+      <div class="ms-ico">${s.type==='folder'?folderIco:fileIco}</div>
+      <div class="ms-info">
+        <div class="ms-name" title="${escH(s.name)}">${escH(s.name)}</div>
+        <div class="ms-meta"><code class="ms-token">${escH(s.token)}</code><span>${escH(s.type==='folder'?'Folder':'File')} · ${escH(when)}</span>${s.encrypted?'<span class="vis-badge ms-enc">Encrypted</span>':''}</div>
+        ${s.encrypted?'<div class="ms-hint">The decryption key isn\'t stored here — use the full link you saved when you created this.</div>':''}
+      </div>
+      <div class="ms-actions">
+        <button class="ms-btn" onclick="copyShareToken(${i})">Copy token</button>
+        ${s.encrypted?'':`<button class="ms-btn" onclick="copyShareLink(${i})">Copy link</button>`}
+        <button class="ms-btn" onclick="openShare(${i})">Open</button>
+        <button class="ms-btn ms-rm" onclick="removeShareAt(${i})" title="Remove from this list (doesn't delete the ${s.type==='folder'?'folder':'file'})">✕</button>
+      </div>
+    </div>`;
+  }).join('');
+}
+function copyShareToken(i){
+  const s=loadShares()[i];if(!s)return;
+  navigator.clipboard.writeText(s.token).then(()=>toast('Token copied '+ICONS.check,'success')).catch(()=>toast('Token: '+s.token,'info'));
+}
+function copyShareLink(i){
+  const s=loadShares()[i];if(!s||s.encrypted)return;
+  const link=`${window.location.origin}${window.location.pathname}?token=${encodeURIComponent(s.token)}`;
+  navigator.clipboard.writeText(link).then(()=>toast('Link copied '+ICONS.check,'success')).catch(()=>toast('Link: '+link,'info'));
+}
+function openShare(i){
+  const s=loadShares()[i];if(!s)return;
+  closeMyShares();
+  const input=document.getElementById('tInput');
+  if(input)input.value=s.token;
+  accessByToken();
+}
+function removeShareAt(i){
+  const list=loadShares();
+  list.splice(i,1);
+  persistShares(list);
+  renderMyShares();
+}
+function clearMyShares(){
+  if(!loadShares().length)return;
+  if(!confirm("Remove every saved token from this browser? This only clears this list — it doesn't delete or change any of your files."))return;
+  persistShares([]);
+  renderMyShares();
+}
+document.getElementById('mySharesModal').addEventListener('click',e=>{if(e.target===document.getElementById('mySharesModal'))closeMyShares();});
 
 loadFiles();
 

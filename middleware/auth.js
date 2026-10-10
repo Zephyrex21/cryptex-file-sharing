@@ -27,12 +27,13 @@
 // to make. Re-checking it here would break the normal flow (open the link,
 // then download/preview/manage what it unlocked) the moment maxViews was
 // set to 1.
-const hasValidToken = (req, doc) => {
-  const token = req.query.token || req.headers["x-share-token"];
+const tokenMatches = (token, doc) => {
   if (!token || token !== doc.shareToken) return false;
   if (doc.tokenExpiresAt && doc.tokenExpiresAt < new Date()) return false;
   return true;
 };
+const hasValidToken = (req, doc) =>
+  tokenMatches(req.query.token || req.headers["x-share-token"], doc);
 
 // FILES — reading (getSingleFile/previewFile/downloadFile).
 // A private file's real protection for its CONTENT is the client-side AES
@@ -62,4 +63,15 @@ export const canMutateFile = (req, file) => {
 export const canAccessFolder = (req, folder) => {
   if (folder.visibility !== "private") return true;
   return hasValidToken(req, folder);
+};
+
+// FOLDERS — the folder a file is being moved OUT of. Moving a file between
+// two private folders involves two different tokens, but a request only has
+// one ?token= — so the source folder's token can arrive separately as
+// ?sourceToken= (or an X-Source-Token header). The normal token is accepted
+// for the source too, which covers the common case of one token being
+// enough (e.g. the destination is public).
+export const canLeaveFolder = (req, folder) => {
+  if (canAccessFolder(req, folder)) return true;
+  return tokenMatches(req.query.sourceToken || req.headers["x-source-token"], folder);
 };

@@ -3,7 +3,7 @@
   "info": {
     "title": "Cryptex API",
     "version": "1.0.0",
-    "description": "Token-based, optionally end-to-end-encrypted file sharing. No accounts — visibility and share tokens are the entire access-control model. See the project README for the full encrypted-upload contract (multipart fields for AES-256-GCM ciphertext + per-field IVs)."
+    "description": "Token-based, optionally end-to-end-encrypted file sharing. No accounts — visibility and share tokens are the entire access-control model: a public file/folder is open to anyone (including rename/delete), while a private one needs its own current, unexpired share token for EVERY operation on it, reads and writes alike — pass it as a `token` query parameter (or `X-Share-Token` header). When moving a file out of a private folder, that folder's token goes in `sourceToken` (or `X-Source-Token`). New tokens are 6 lowercase letters/digits; older items keep their original 16-character hex tokens. See the project README for the full encrypted-upload contract (multipart fields for AES-256-GCM ciphertext + per-field IVs)."
   },
   "servers": [{ "url": "/api" }],
   "tags": [
@@ -102,7 +102,7 @@
       "get": {
         "tags": ["Files"],
         "summary": "Access a file by its share token",
-        "parameters": [{ "name": "token", "in": "path", "required": true, "schema": { "type": "string" } }],
+        "parameters": [{ "name": "token", "in": "path", "required": true, "description": "Share token — 6 lowercase letters/digits (older items: 16-char hex)", "schema": { "type": "string" } }],
         "responses": {
           "200": { "description": "OK", "content": { "application/json": { "schema": { "type": "object", "properties": { "file": { "$ref": "#/components/schemas/File" } } } } } },
           "404": { "description": "Invalid token" },
@@ -155,7 +155,7 @@
       }
     },
     "/folders/{id}/zip": { "get": { "tags": ["Folders"], "summary": "Download every file in a folder as a ZIP", "description": "Encrypted files are silently excluded.", "parameters": [{ "name": "id", "in": "path", "required": true, "schema": { "type": "string" } }], "responses": { "200": { "description": "ZIP stream" } } } },
-    "/folders/token/{token}": { "get": { "tags": ["Folders"], "summary": "Access a folder by its share token", "parameters": [{ "name": "token", "in": "path", "required": true, "schema": { "type": "string" } }], "responses": { "200": { "description": "OK" }, "410": { "description": "Expired or view limit reached" } } } },
+    "/folders/token/{token}": { "get": { "tags": ["Folders"], "summary": "Access a folder by its share token", "parameters": [{ "name": "token", "in": "path", "required": true, "description": "Share token — 6 lowercase letters/digits (older items: 16-char hex)", "schema": { "type": "string" } }], "responses": { "200": { "description": "OK" }, "410": { "description": "Expired or view limit reached" } } } },
     "/folders/{id}/files": { "post": { "tags": ["Folders"], "summary": "Add a file to a folder", "parameters": [{ "name": "id", "in": "path", "required": true, "schema": { "type": "string" } }], "responses": { "200": { "description": "Added" } } } },
     "/folders/{id}/files/{fileId}": { "delete": { "tags": ["Folders"], "summary": "Remove a file from a folder", "parameters": [{ "name": "id", "in": "path", "required": true, "schema": { "type": "string" } }, { "name": "fileId", "in": "path", "required": true, "schema": { "type": "string" } }], "responses": { "200": { "description": "Removed" } } } },
     "/qr": {

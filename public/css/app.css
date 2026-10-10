@@ -567,6 +567,30 @@
 .atf-btn-add{background:var(--grns);color:var(--grn)}.atf-btn-add:hover{background:var(--grn);color:#fff}
 .atf-btn-rm{background:var(--reds);color:var(--red)}.atf-btn-rm:hover{background:var(--red);color:#fff}
 .atf-empty{padding:24px 16px;text-align:center;color:var(--t3);font-size:13px;line-height:1.6}
+/* ── My Shares modal (local token history) ─────────────────────────────── */
+.ms-box{max-width:560px}
+.ms-note{display:flex;gap:10px;align-items:flex-start;margin:2px 12px 6px;padding:10px 12px;border-radius:var(--r1);background:var(--accs);border:.5px solid var(--accg);font-size:12px;line-height:1.55;color:var(--t2)}
+.ms-note svg{width:15px;height:15px;flex-shrink:0;margin-top:1px;stroke:var(--acc);fill:none;stroke-width:2;stroke-linecap:round;stroke-linejoin:round}
+.ms-note strong{color:var(--t1);font-weight:600}
+.ms-item{display:flex;align-items:center;gap:10px;padding:10px;border-radius:var(--r1);border:.5px solid transparent;transition:all .12s var(--ease)}
+.ms-item:hover{background:var(--surfh);border-color:var(--b1)}
+.ms-ico{width:30px;height:30px;border-radius:8px;background:var(--accs);display:flex;align-items:center;justify-content:center;flex-shrink:0}
+.ms-ico svg{width:14px;height:14px;stroke:var(--acc);fill:none;stroke-width:2;stroke-linecap:round;stroke-linejoin:round}
+.ms-info{flex:1;min-width:0}
+.ms-name{font-size:13px;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.ms-meta{display:flex;flex-wrap:wrap;align-items:center;gap:8px;margin-top:3px;font-size:11px;color:var(--t3)}
+.ms-token{font-family:var(--font-mono);font-size:12px;font-weight:700;color:var(--acc);letter-spacing:1px;background:var(--accs);padding:1px 7px;border-radius:6px}
+.ms-enc{background:var(--reds);color:var(--red)}
+.ms-hint{font-size:11px;color:var(--t3);margin-top:3px;line-height:1.45}
+.ms-actions{display:flex;gap:6px;flex-shrink:0;flex-wrap:wrap;justify-content:flex-end}
+.ms-btn{padding:5px 11px;border-radius:99px;border:none;font-size:11.5px;font-weight:600;font-family:var(--font);cursor:pointer;background:var(--accs);color:var(--acc);transition:all .12s var(--ease);white-space:nowrap}
+.ms-btn:hover{background:var(--acc);color:#fff}
+.ms-rm{background:var(--bg2);color:var(--t2)}
+.ms-rm:hover{background:var(--red);color:#fff}
+.ms-foot{padding:6px 12px 14px;display:none;justify-content:flex-end}
+.ms-clear{padding:6px 14px;border-radius:99px;border:.5px solid var(--b2);background:var(--bg2);color:var(--t2);font-size:12px;font-weight:600;font-family:var(--font);cursor:pointer;transition:all .12s var(--ease)}
+.ms-clear:hover{background:var(--reds);color:var(--red);border-color:transparent}
+@media(max-width:520px){.ms-item{flex-wrap:wrap}.ms-actions{width:100%;justify-content:flex-start}}
 /* ── Create folder modal ──────────────────────────────────────────────── */
 .cf-box{background:var(--surf2);border:.5px solid var(--b2);border-radius:var(--r3);max-width:380px;width:100%;box-shadow:var(--sh3);padding:24px}
 .shortcuts-box{max-width:300px}

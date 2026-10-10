@@ -40,6 +40,9 @@
   </a>
   <div class="nav-right">
     <span class="hbadge" id="badge">— files</span>
+    <button class="icobtn" id="mySharesBtn" title="My Shares — tokens of the files you made private on this browser" onclick="openMyShares()">
+      <svg viewBox="0 0 24 24" stroke-linecap="round" stroke-linejoin="round"><path d="M21 2l-2 2m-7.61 7.61a5.5 5.5 0 11-7.78 7.78 5.5 5.5 0 017.78-7.78zm0 0L15.5 7.5m0 0l3 3L22 7l-3-3m-3.5 3.5L19 4"/></svg>
+    </button>
     <button class="icobtn" title="Keyboard shortcuts (?)" onclick="toggleShortcuts()">
       <svg viewBox="0 0 24 24" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="4" width="20" height="16" rx="2"/><path d="M6 8h.01M10 8h.01M14 8h.01M18 8h.01M6 12h.01M10 12h.01M14 12h.01M18 12h.01M8 16h8"/></svg>
     </button>
@@ -70,7 +73,7 @@
     <div class="tbar">
       <svg viewBox="0 0 24 24"><path d="M10 13a5 5 0 007.54.54l3-3a5 5 0 00-7.07-7.07l-1.72 1.71"/><path d="M14 11a5 5 0 00-7.54-.54l-3 3a5 5 0 007.07 7.07l1.71-1.71"/></svg>
       <span class="tbar-lbl">Access a private file</span>
-      <input id="tInput" type="text" placeholder="Paste share token here…" autocomplete="off" spellcheck="false"/>
+      <input id="tInput" type="text" placeholder="Enter share token…" autocomplete="off" spellcheck="false"/>
       <button id="tBtn" onclick="accessByToken()">Access <svg class="ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="5" y1="12" x2="19" y2="12"/><polyline points="12 5 19 12 12 19"/></svg></button>
     </div>
   <div class="uzone" id="uzone">
@@ -208,6 +211,20 @@
     <div class="tmodal-titlebar" id="tmodalHead"></div>
     <div class="tmodal-scroll" id="tmodalBody"></div>
     <div class="tmodal-actions-v2" id="tmodalFoot"></div>
+  </div>
+</div>
+<div class="modal-bg" id="mySharesModal">
+  <div class="atf-box ms-box">
+    <div class="atf-head">
+      <span class="atf-title">My Shares</span>
+      <button class="atf-close" onclick="closeMyShares()"><svg viewBox="0 0 24 24"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg></button>
+    </div>
+    <div class="ms-note">
+      <svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="10"/><line x1="12" y1="16" x2="12" y2="12"/><line x1="12" y1="8" x2="12.01" y2="8"/></svg>
+      <span>This list shows the share tokens of <strong>your own files and folders</strong> that you made private from <strong>this browser only</strong>. It is saved on this device, visible <strong>only to you</strong>, and it will be <strong>cleared if you clear your browser cache or site data</strong> — so keep a copy of any token you can't afford to lose.</span>
+    </div>
+    <div class="atf-body" id="msBody"></div>
+    <div class="ms-foot" id="msFoot"><button class="ms-clear" onclick="clearMyShares()">Clear list</button></div>
   </div>
 </div>
 <div class="modal-bg" id="privRevealModal">
