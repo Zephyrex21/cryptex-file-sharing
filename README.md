@@ -123,6 +123,20 @@ PORT=3000
 # lets clients spoof their IP and sidestep the limiters. (If your host logs
 # ERR_ERL_UNEXPECTED_X_FORWARDED_FOR, that's this setting telling you to set it.)
 TRUST_PROXY=
+
+# Optional — cap how many uploads may be in flight at once (each is buffered in
+# memory, up to 50 MB). Extra uploads get a 503 "retry in a few seconds".
+# Default 4; raise it only if your instance has plenty of RAM.
+MAX_CONCURRENT_UPLOADS=
+
+# Optional — global storage ceiling in MB (e.g. 800 on Supabase's 1 GB free
+# tier). When reached, uploads get a 507 instead of filling your quota.
+# Unset/0 = no cap.
+MAX_TOTAL_STORAGE_MB=
+
+# Optional — delete PRIVATE files whose share token expired more than this many
+# days ago (storage + record). Unset/0 = never delete anything automatically.
+PURGE_EXPIRED_AFTER_DAYS=
 ```
 ---
 
@@ -209,6 +223,10 @@ This app has no login/user system — it's a personal, share-by-link drop box, n
 - **Vaults can't be written to without their token.** An upload into a vault must present that vault's own current share token (`?token=` / `X-Share-Token`) — the vault `_id` alone is not enough — and existing files can't be added into a vault (or encrypted files into ordinary folders), so a foreign file can't be planted in one. The vault view also skips any undecryptable file instead of treating it as a wrong key.
 - Request fields that reach database lookups (`vaultFolderId`, `fileId`, encryption metadata) must be plain strings: multer expands `field[$gt]=x` into objects, which would otherwise become Mongo operators.
 - Link-preview HTML is scanned with a bounded linear-time scanner (no backtracking regexes), so a hostile page can't stall the server.
+- **The link-preview SSRF guard judges IPv6 by value.** Every textual form is parsed to numbers first, so hex-mapped IPv4 (`::ffff:7f00:1` = 127.0.0.1, `::ffff:a9fe:a9fe` = the cloud metadata IP), NAT64 (`64:ff9b::/96`), 6to4, Teredo, link-local, unique-local, multicast and malformed addresses are all rejected; anything unparseable fails closed. The fetch deadline covers the response *body* too — a server that stalls after sending headers can't hold a request open — and a page whose `<head>` arrived before it stalled still yields a preview.
+- **Removing a file from a folder checks the file, not just the folder.** The file must really be in that folder, and a *private* file also needs its own token (sent as `?fileToken=` since `?token=` carries the folder's).
+- **Expiry can't strand data.** An expired-but-still-current token can no longer read or modify an item, but it can still **delete** it, so owners can always remove their own files. Optionally set `PURGE_EXPIRED_AFTER_DAYS` to have the server delete private files that expired that long ago. (Regenerating a token still locks out everyone holding the old one — including for deletion.)
+- **Upload abuse backstops.** Uploads are buffered in memory, so `MAX_CONCURRENT_UPLOADS` (default 4) caps how many run at once (503 + `Retry-After` beyond that), a declared body size over the limit is refused with 413 *before* it's read, and `MAX_TOTAL_STORAGE_MB` (off by default) stops anonymous uploads from filling your storage quota (507).
 - Uploaded file content is verified against its declared type using magic-byte signatures, not just the client-reported MIME type (see `verifyMagicBytes` in `controllers/fileUpload.js`).
 - Unencrypted uploads get a best-effort malware pre-screen via VirusTotal's hash-lookup API — see `utils/malwareScan.js` for exactly what this does and doesn't catch (it's a known-hash lookup, not a full scan, and fails open if VirusTotal is unreachable or no API key is configured).
 - **Encrypted uploads are zero-knowledge by construction**, not just policy: the AES key never appears in any request body, response, log line, or database row this server controls. This also means magic-byte content verification is skipped for encrypted uploads — the server has no plaintext to check, which is the expected cost of not being able to read the file at all.

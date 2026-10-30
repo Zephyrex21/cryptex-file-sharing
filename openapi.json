@@ -210,6 +210,15 @@
           },
           "403": {
             "description": "Vault upload without that vault's valid, unexpired share token"
+          },
+          "413": {
+            "description": "Declared upload size is over the 50 MB limit (rejected before the body is read)"
+          },
+          "503": {
+            "description": "Too many uploads in flight at once — retry after the `Retry-After` seconds"
+          },
+          "507": {
+            "description": "Server storage cap (MAX_TOTAL_STORAGE_MB) reached"
           }
         }
       }
@@ -754,7 +763,8 @@
           "200": {
             "description": "Removed"
           }
-        }
+        },
+        "description": "The file must actually be in this folder. For a PRIVATE file, also pass that file's own token as the `fileToken` query parameter (or `X-File-Token` header); `token` carries the folder's."
       }
     },
     "/qr": {

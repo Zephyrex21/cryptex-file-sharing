@@ -9,6 +9,10 @@ import connectDB from "./config/database.js";
 import fileUploadRoutes from "./routes/FileUpload.js";
 import folderRoutes     from "./routes/folder.js";
 import { generateQr }   from "./controllers/qrController.js";
+import File from "./models/File.js";
+import Folder from "./models/Folder.js";
+import supabase from "./config/supabase.js";
+import { purgeExpiredPrivateFiles } from "./utils/purgeExpired.js";
 
 const require = createRequire(import.meta.url);
 const openapiSpec = require("./openapi.json");
@@ -112,4 +116,18 @@ app.use((req, res) => {
 
 app.listen(PORT, () => {
   console.log(`🚀 Server running at http://localhost:${PORT}`);
+
+  // Opt-in: delete private files whose token expired more than N days ago.
+  // Does nothing unless PURGE_EXPIRED_AFTER_DAYS is set to a positive number.
+  const purgeDays = Number(process.env.PURGE_EXPIRED_AFTER_DAYS);
+  if (purgeDays > 0) {
+    const run = () =>
+      purgeExpiredPrivateFiles({
+        File, Folder, supabase, bucket: process.env.SUPABASE_BUCKET || "cloudvault-files", olderThanDays: purgeDays,
+      })
+        .then((r) => { if (r.purged || r.failed) console.log(`🧹 Expired-file purge: ${r.purged} removed, ${r.failed} failed`); })
+        .catch((e) => console.warn(`Expired-file purge error: ${e.message}`));
+    setTimeout(run, 60_000).unref();            // let the DB connection settle first
+    setInterval(run, 6 * 60 * 60 * 1000).unref();
+  }
 });

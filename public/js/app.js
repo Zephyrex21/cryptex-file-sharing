@@ -148,6 +148,12 @@ function withSourceToken(url,fileId){
 function withFileToken(url,f){
   return f&&f.shareToken?`${url}${url.includes('?')?'&':'?'}token=${encodeURIComponent(f.shareToken)}`:url;
 }
+// Removing a file from a folder: ?token= belongs to the FOLDER, so a PRIVATE
+// file's own token rides separately as ?fileToken= (public files need none).
+function withFileTokenParam(url,fileId){
+  const f=findKnownFile(fileId);
+  return f&&f.visibility==='private'&&f.shareToken?`${url}${url.includes('?')?'&':'?'}fileToken=${encodeURIComponent(f.shareToken)}`:url;
+}
 // Private items no longer expose their storage URL — their bytes come through
 // the token-checked /preview route instead. Public items keep the direct URL.
 function mediaSrc(f){
@@ -1571,7 +1577,7 @@ async function delFolderConfirm(id,name){
 // ── Remove from folder (when in folder detail view) ───────────────────────
 async function removeFromFolder(folderId,fileId){
   try{
-    const res=await fetch(withFileToken(`${FOLDERS_API}/${folderId}/files/${fileId}`,findKnownFolder(folderId)),{method:'DELETE'});
+    const res=await fetch(withFileTokenParam(withFileToken(`${FOLDERS_API}/${folderId}/files/${fileId}`,findKnownFolder(folderId)),fileId),{method:'DELETE'});
     if(!res.ok)throw new Error();
     const file=allFiles.find(f=>f._id===fileId);if(file)file.folderId=null;
     if(curFolder&&curFolder._id===folderId)curFolder.files=curFolder.files.filter(f=>f._id!==fileId);
@@ -1652,7 +1658,7 @@ async function doAddToFolder(folderId){
 async function doRemoveFromFolder(folderId){
   const fileId=atfFileId;
   try{
-    const res=await fetch(withFileToken(`${FOLDERS_API}/${folderId}/files/${fileId}`,findKnownFolder(folderId)),{method:'DELETE'});
+    const res=await fetch(withFileTokenParam(withFileToken(`${FOLDERS_API}/${folderId}/files/${fileId}`,findKnownFolder(folderId)),fileId),{method:'DELETE'});
     if(!res.ok)throw new Error();
     const file=allFiles.find(f=>f._id===fileId);if(file)file.folderId=null;
     const folder=allFolders.find(f=>f._id===folderId);

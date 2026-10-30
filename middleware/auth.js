@@ -27,13 +27,13 @@
 // to make. Re-checking it here would break the normal flow (open the link,
 // then download/preview/manage what it unlocked) the moment maxViews was
 // set to 1.
-const tokenMatches = (token, doc) => {
+const tokenMatches = (token, doc, { allowExpired = false } = {}) => {
   if (!token || token !== doc.shareToken) return false;
-  if (doc.tokenExpiresAt && doc.tokenExpiresAt < new Date()) return false;
+  if (!allowExpired && doc.tokenExpiresAt && doc.tokenExpiresAt < new Date()) return false;
   return true;
 };
-const hasValidToken = (req, doc) =>
-  tokenMatches(req.query.token || req.headers["x-share-token"], doc);
+const hasValidToken = (req, doc, opts) =>
+  tokenMatches(req.query.token || req.headers["x-share-token"], doc, opts);
 
 // FILES — reading (getSingleFile/previewFile/downloadFile).
 // A private file's real protection for its CONTENT is the client-side AES
@@ -53,6 +53,30 @@ export const canAccessFile = (req, file) => {
 export const canMutateFile = (req, file) => {
   if (file.visibility !== "private") return true;
   return hasValidToken(req, file);
+};
+
+// DELETING a private item. Identical to canMutateFile/canAccessFolder except an
+// EXPIRED token still works — and only for deletion. Expiry exists to stop
+// *reading* a link; it used to also make the item permanently undeletable, so
+// an owner who set a 1-hour expiry could never remove their own file (and its
+// bytes stayed in storage forever). The token must still be the CURRENT one, so
+// regenerating it still locks everyone else out; expiry just can't strand data.
+export const canDeleteFile = (req, file) => {
+  if (file.visibility !== "private") return true;
+  return hasValidToken(req, file, { allowExpired: true });
+};
+export const canDeleteFolder = (req, folder) => {
+  if (folder.visibility !== "private") return true;
+  return hasValidToken(req, folder, { allowExpired: true });
+};
+
+// Changing a FILE's folder membership (e.g. removing it from a folder). The
+// request's single ?token= normally belongs to the FOLDER, so the file's own
+// token may arrive separately as ?fileToken= (or X-File-Token) — same pattern as
+// ?sourceToken= above. Public files need nothing.
+export const canMoveFile = (req, file) => {
+  if (file.visibility !== "private") return true;
+  return hasValidToken(req, file) || tokenMatches(req.query.fileToken || req.headers["x-file-token"], file);
 };
 
 // FOLDERS — used for both reading (getFolderById/downloadFolderZip) AND

@@ -3,7 +3,7 @@ import Folder from "../models/Folder.js";
 import File   from "../models/File.js";
 import { ZipArchive } from "archiver";
 import { Readable } from "stream";
-import { canAccessFolder, canLeaveFolder, canMutateFile } from "../middleware/auth.js";
+import { canAccessFolder, canLeaveFolder, canMutateFile, canDeleteFolder, canMoveFile } from "../middleware/auth.js";
 import { generateToken } from "../utils/token.js";
 import { toClientFolder } from "../utils/clientView.js";
 
@@ -229,8 +229,10 @@ export const deleteFolder = async (req, res) => {
   try {
     const folder = await Folder.findById(req.params.id);
     if (!folder) return res.status(404).json({ message: "Folder not found" });
-    if (!canAccessFolder(req, folder)) {
-      return res.status(403).json({ message: "Private folder — a valid, unexpired token is required" });
+    // Deleting tolerates an expired token (see canDeleteFolder) so an expired
+    // private folder can still be cleaned up instead of being stuck forever.
+    if (!canDeleteFolder(req, folder)) {
+      return res.status(403).json({ message: "Private folder — a valid token is required" });
     }
 
     const session = await mongoose.startSession();
@@ -359,12 +361,27 @@ export const removeFileFromFolder = async (req, res) => {
     if (!canAccessFolder(req, folder)) {
       return res.status(403).json({ message: "Private folder — a valid, unexpired token is required" });
     }
+    // The FILE's own rules apply too — this route changes file.folderId, so it
+    // can't be a back door around a private file's token (previously any public
+    // folder id + any file id detached a private file with no token at all).
+    if (!canMoveFile(req, file)) {
+      return res.status(403).json({ message: "This file is private — a valid share token is required" });
+    }
+    // ...and the file must actually belong to THIS folder. Without this, a
+    // caller could use an unrelated folder they can write to to pull a file out
+    // of a different (private) folder, leaving that folder with a dangling
+    // reference and un-hiding public files it was keeping out of the gallery.
+    const inFolder = folder.files.some(f => f.toString() === fileId);
+    const pointsHere = file.folderId && file.folderId.toString() === id;
+    if (!inFolder && !pointsHere) {
+      return res.status(404).json({ message: "File is not in this folder" });
+    }
 
     const session = await mongoose.startSession();
     try {
       await session.withTransaction(async () => {
         folder.files = folder.files.filter(f => f.toString() !== fileId);
-        file.folderId = null;
+        if (pointsHere) file.folderId = null; // never clobber membership in some other folder
         await folder.save({ session });
         await file.save({ session });
       });

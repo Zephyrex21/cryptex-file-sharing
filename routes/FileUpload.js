@@ -1,5 +1,6 @@
 import express from "express";
 import multer from "multer";
+import { createUploadGuard } from "../middleware/uploadGuard.js";
 import rateLimit from "express-rate-limit";
 import path from "path";
 import {
@@ -108,9 +109,12 @@ const CODE_EXTENSIONS = [
   ".java",".c",".cpp",".h",".hpp",".css",".html",".sql",".yml",".yaml",".sh",
 ];
 
+const MAX_UPLOAD_BYTES = 50 * 1024 * 1024;
+const uploadGuard = createUploadGuard({ maxFileBytes: MAX_UPLOAD_BYTES });
+
 const upload = multer({
   storage: multer.memoryStorage(),
-  limits: { fileSize: 50 * 1024 * 1024 }, // flat 50MB cap, all file types
+  limits: { fileSize: MAX_UPLOAD_BYTES }, // flat 50MB cap, all file types
   fileFilter: (req, file, cb) => {
     if (ALLOWED.includes(file.mimetype)) return cb(null, true);
     if (CODE_EXTENSIONS.includes(path.extname(file.originalname).toLowerCase())) return cb(null, true);
@@ -134,7 +138,7 @@ const handleUpload = (req, res, next) =>
 
 // ── File routes ────────────────────────────────────────────────────────────
 
-router.post("/upload",            uploadLimiter, handleUpload, uploadFile);
+router.post("/upload",            uploadLimiter, uploadGuard, handleUpload, uploadFile);
 router.post("/link",              linkLimiter, createLink);
 router.post("/batch-zip",         zipLimiter, downloadFilesZip);
 router.get("/",                   getAllFiles);

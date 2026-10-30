@@ -227,6 +227,20 @@ await S.ev(`(async()=>{await uploadEncrypted({name:'x.txt',type:'text/plain',siz
 await S.tick(10);
 ok(/token isn't available/i.test(toastText(S)) && hit(/upload/).length === 0, "vault upload without a known vault token is refused client-side, nothing sent");
 
+// ───────────────────────── S16: folder removal sends the file's own token for PRIVATE files ─────────────────────────
+section("S16 Removing a private file from a folder sends its own token; public files send none");
+reset(); S = await boot();
+const u16 = JSON.parse(await S.ev(`(()=>{
+  allFiles.push({_id:'p'.repeat(24),visibility:'private',shareToken:'filetok1'},{_id:'q'.repeat(24),visibility:'public',shareToken:'pubtok1'});
+  return JSON.stringify({
+    priv: withFileTokenParam('/api/folders/F/files/x?token=foldtok',  'p'.repeat(24)),
+    pub:  withFileTokenParam('/api/folders/F/files/y?token=foldtok',  'q'.repeat(24)),
+    unknown: withFileTokenParam('/api/folders/F/files/z?token=foldtok','z'.repeat(24)),
+  });
+})()`));
+ok(u16.priv.endsWith("?token=foldtok&fileToken=filetok1"), "private file → ?token=<folder>&fileToken=<file>", u16.priv);
+ok(u16.pub === "/api/folders/F/files/y?token=foldtok" && u16.unknown === "/api/folders/F/files/z?token=foldtok", "public / unknown files → URL unchanged");
+
 // ───────────────────────── S13: every inline handler resolves ─────────────────────────
 section("S13 Static check: every inline onclick/onkeydown target is a real function");
 reset(); mkFile(); mkFolder(); S = await boot();

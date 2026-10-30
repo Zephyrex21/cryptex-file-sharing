@@ -8,10 +8,11 @@ import { ZipArchive } from "archiver";
 import { isSafeUrl, safeFetchHtml, extractMeta } from "./linkPreview.js";
 import { checkKnownMalwareHash } from "../utils/malwareScan.js";
 import { appendFilesToZip } from "./folderController.js";
-import { canAccessFile, canMutateFile, canAccessFolder } from "../middleware/auth.js";
+import { canAccessFile, canMutateFile, canAccessFolder, canDeleteFile } from "../middleware/auth.js";
 import { generateToken } from "../utils/token.js";
 import { newObjectPath, rotateObjectPath, undoRotation } from "../utils/storagePaths.js";
 import { toClientFile } from "../utils/clientView.js";
+import { hasStorageRoom } from "../utils/storageQuota.js";
 
 const BUCKET = process.env.SUPABASE_BUCKET || "cloudvault-files";
 
@@ -152,6 +153,11 @@ export const uploadFile = async (req, res) => {
 
   try {
     if (!req.file) return res.status(400).json({ message: "No file provided" });
+
+    // Optional global storage cap (MAX_TOTAL_STORAGE_MB) — off unless configured.
+    if (!(await hasStorageRoom(req.file.size, File)).ok) {
+      return res.status(507).json({ message: "Storage is full right now — please try again later" });
+    }
 
     const isEncrypted = req.body.encrypted === "true";
 
@@ -635,7 +641,9 @@ export const deleteFile = async (req, res) => {
   try {
     const file = await File.findById(req.params.id);
     if (!file) return res.status(404).json({ message: "Not found" });
-    if (!canMutateFile(req, file)) {
+    // Tolerates an EXPIRED token (still must be the current one) so an owner can
+    // always remove their own file — see canDeleteFile in middleware/auth.js.
+    if (!canDeleteFile(req, file)) {
       return res.status(403).json({ message: "This file is private — a valid share token is required" });
     }
 

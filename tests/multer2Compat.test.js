@@ -1,8 +1,8 @@
 // Proves the multer 1.x → 2.x upgrade didn't change real multipart behaviour:
 // drives the ACTUAL router (multer + fileFilter + size limits + controllers) over HTTP.
-/* global FormData, Blob */
 import { describe, it, expect, vi, beforeAll, afterAll } from "vitest";
 import express from "express";
+import http from "http";
 
 vi.mock("../config/supabase.js", () => ({
   default: { storage: { from: () => ({
@@ -63,5 +63,17 @@ describe("real multipart through the real router (multer 2)", () => {
   it("vault upload with only the vault id → 403; with its token → 201", async () => {
     expect((await post(vaultForm())).status).toBe(403);
     expect((await post(vaultForm(), "?token=vaulttok")).status).toBe(201);
+  });
+
+  it("declared body far over the 50 MB cap is refused with 413 before anything is read (upload guard wired in)", async () => {
+    const status = await new Promise((resolve, reject) => {
+      const u = new URL(`${base}/upload`);
+      const req = http.request({ host: u.hostname, port: u.port, path: u.pathname, method: "POST",
+        headers: { "content-type": "multipart/form-data; boundary=x", "content-length": String(200 * 1024 * 1024) } },
+        (res) => { resolve(res.statusCode); res.resume(); req.destroy(); });
+      req.on("error", reject);
+      req.write("--x\r\n"); // body never completes — a real client would be mid-upload
+    });
+    expect(status).toBe(413);
   });
 });

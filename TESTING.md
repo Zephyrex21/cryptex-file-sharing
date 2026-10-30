@@ -7,7 +7,7 @@ stale versions and make things look broken when they aren't.
 
 ## Automated tests
 
-`npm test` runs 196 Vitest cases covering the security-critical logic that's
+`npm test` runs 267 Vitest cases covering the security-critical logic that's
 otherwise easy to silently break: magic-byte content verification (every
 supported file type, plus mismatch/tampering cases), the SSRF protections in
 `isSafeUrl` (private IPs, IPv6, cloud metadata address, mixed-resolution,
@@ -26,6 +26,7 @@ format (`tests/token.test.js`); and the batched ZIP assembly keeping order,
 name de-duplication, and its concurrency cap (`tests/zipHelper.test.js`); and the second-audit
 critical fixes — linear-time link-preview parsing, no inline rendering of uploaded active content,
 token-gated vault uploads, and hidden/rotating private storage paths (`tests/criticalFixes.test.js`), plus a real-HTTP multipart check of the multer 2 upgrade (`tests/multer2Compat.test.js`).
+The high-severity fixes — IPv6 SSRF notations, body-stall deadline, folder-removal authorization, expiry/delete rules and the opt-in purge job, upload concurrency/size guard and storage cap — are pinned in `tests/highFixes.test.js`.
 
 There's also an **optional website smoke test** in `e2e/` (`cd e2e && npm install
 && npm test`) that loads the real `app.html` + `app.js` into a DOM and drives the

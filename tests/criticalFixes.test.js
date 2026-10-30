@@ -1,4 +1,3 @@
-/* global Response, performance */
 // Regression tests for the five critical findings of the second security audit.
 // Each block reproduces the original attack and asserts it no longer works —
 // plus that the legitimate path right next to it still does.

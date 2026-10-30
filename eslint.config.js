@@ -13,7 +13,7 @@ export default [
     languageOptions: {
       ecmaVersion: 2022,
       sourceType: "module",
-      globals: { process: "readonly", console: "readonly", Buffer: "readonly", __dirname: "readonly", fetch: "readonly", AbortController: "readonly", global: "readonly", URL: "readonly", setTimeout: "readonly", clearTimeout: "readonly" },
+      globals: { process: "readonly", console: "readonly", Buffer: "readonly", __dirname: "readonly", fetch: "readonly", AbortController: "readonly", global: "readonly", URL: "readonly", setTimeout: "readonly", clearTimeout: "readonly", setInterval: "readonly", performance: "readonly", Response: "readonly", FormData: "readonly", Blob: "readonly" },
     },
     rules: {
       "no-unused-vars": ["warn", { args: "none", varsIgnorePattern: "^_" }],
