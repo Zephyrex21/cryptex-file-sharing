@@ -9,7 +9,7 @@ import js from "@eslint/js";
 export default [
   js.configs.recommended,
   {
-    files: ["controllers/**/*.js", "models/**/*.js", "routes/**/*.js", "config/**/*.js", "middleware/**/*.js", "utils/**/*.js", "index.js", "tests/**/*.js"],
+    files: ["controllers/**/*.js", "models/**/*.js", "routes/**/*.js", "config/**/*.js", "middleware/**/*.js", "utils/**/*.js", "scripts/**/*.js", "index.js", "tests/**/*.js"],
     languageOptions: {
       ecmaVersion: 2022,
       sourceType: "module",

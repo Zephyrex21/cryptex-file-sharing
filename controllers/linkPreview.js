@@ -107,22 +107,74 @@ export const safeFetchHtml = async (urlString) => {
 };
 
 // ── Lightweight OG/meta extraction ──────────────────────────────────────────
-// Regex-based rather than a full HTML parser — we only need a handful of
-// specific tags, and this keeps the project dependency-free for it (no
-// cheerio/jsdom just for a few <meta> reads).
+// Linear-time scanner, NOT regexes with `[^>]+` between attributes: those
+// backtrack quadratically on hostile pages (a 60 KB crafted page froze the
+// event loop for ~8 s). Every loop here is bounded by an explicit cap, and
+// each tag is parsed from a length-capped slice, so worst-case work is O(n).
+const MAX_SCAN_CHARS = 60000;
+const MAX_META_SCANS = 2000;
+const MAX_META_TAGS = 300;
+const MAX_TAG_LEN = 2000;
+const ATTR_RE = /([a-zA-Z_:][-a-zA-Z0-9_:.]{0,40})\s{0,8}=\s{0,8}(?:"([^"]*)"|'([^']*)'|([^\s"'>]+))/g;
+
+const isTagBoundary = (c) => c === 32 || c === 9 || c === 10 || c === 13 || c === 12 || c === 47;
+
+const collectMetaTags = (head, lower) => {
+  const tags = [];
+  let pos = 0;
+  for (let scans = 0; scans < MAX_META_SCANS && tags.length < MAX_META_TAGS; scans++) {
+    const start = lower.indexOf("<meta", pos);
+    if (start === -1) break;
+    pos = start + 5;
+    if (!isTagBoundary(lower.charCodeAt(start + 5))) continue;
+    const chunk = head.slice(start + 5, start + 5 + MAX_TAG_LEN);
+    const end = chunk.indexOf(">");
+    if (end === -1) continue;
+    const attrs = {};
+    const body = chunk.slice(0, end);
+    ATTR_RE.lastIndex = 0;
+    let m;
+    while ((m = ATTR_RE.exec(body)) !== null) {
+      const k = m[1].toLowerCase();
+      if (!(k in attrs)) attrs[k] = m[2] ?? m[3] ?? m[4] ?? "";
+    }
+    const key = (attrs.property ?? attrs.name);
+    if (key !== undefined && attrs.content !== undefined) tags.push({ key: key.toLowerCase(), content: attrs.content });
+  }
+  return tags;
+};
+
+const findTitle = (head, lower) => {
+  let pos = 0;
+  for (let i = 0; i < 20; i++) {
+    const s = lower.indexOf("<title", pos);
+    if (s === -1) return null;
+    pos = s + 6;
+    const chunk = head.slice(s, s + 1500);
+    const gt = chunk.indexOf(">");
+    if (gt === -1) continue;
+    const close = chunk.toLowerCase().indexOf("</title", gt);
+    if (close === -1) continue;
+    const inner = chunk.slice(gt + 1, close);
+    if (inner.includes("<")) continue;
+    return inner;
+  }
+  return null;
+};
+
 export const extractMeta = (html) => {
-  const head = html.slice(0, 60000); // tags are always near the top; cap the scan
+  const head = String(html || "").slice(0, MAX_SCAN_CHARS); // tags are always near the top
+  const lower = head.toLowerCase();
+  const tags = collectMetaTags(head, lower);
   const getMeta = (prop) => {
-    const re1 = new RegExp(`<meta[^>]+(?:property|name)=["']${prop}["'][^>]+content=["']([^"']*)["']`, "i");
-    const re2 = new RegExp(`<meta[^>]+content=["']([^"']*)["'][^>]+(?:property|name)=["']${prop}["']`, "i");
-    const m = head.match(re1) || head.match(re2);
-    return m ? m[1] : null;
+    const hit = tags.find((t) => t.key === prop);
+    return hit ? hit.content : null;
   };
   const decodeEntities = (s) =>
     s ? s.replace(/&amp;/g, "&").replace(/&quot;/g, '"').replace(/&#39;/g, "'").replace(/&lt;/g, "<").replace(/&gt;/g, ">") : s;
 
   let title = getMeta("og:title");
-  if (!title) { const m = head.match(/<title[^>]*>([^<]*)<\/title>/i); title = m ? m[1] : null; }
+  if (!title) title = findTitle(head, lower);
   const image = getMeta("og:image");
   const description = getMeta("og:description") || getMeta("description");
   const siteName = getMeta("og:site_name");

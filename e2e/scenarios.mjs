@@ -186,6 +186,47 @@ await S.ev("togglePrivQr()"); await S.tick(20);
 ok(S.$("#prm-qr-img").getAttribute("src")?.startsWith("data:image"), "QR rendered as an inline data: image");
 ok(hit(/qr/i).length === 0, "no request to /api/qr (or anywhere) while rendering it");
 
+// ───────────────────────── S14: private media goes through the token route ─────────────────────────
+section("S14 Private files carry no storage URL — media loads via the token-checked preview route");
+reset(); S = await boot();
+const m14 = JSON.parse(await S.ev(`JSON.stringify({
+  pub: mediaSrc({_id:'a'.repeat(24),fileUrl:'https://storage.test/x.png',visibility:'public'}),
+  priv: mediaSrc({_id:'b'.repeat(24),shareToken:'abc123',visibility:'private'}),
+  thumb: mkThumb({_id:'b'.repeat(24),shareToken:'abc123',visibility:'private',fileType:'image/png'}),
+})`));
+ok(m14.pub === "https://storage.test/x.png", "public files keep their direct URL (gallery unchanged)");
+ok(/\/b{24}\/preview\?token=abc123$/.test(m14.priv), "private file → /preview?token=… (no storage URL needed)", m14.priv);
+ok(m14.thumb.includes("/preview?token=abc123") && !m14.thumb.includes("undefined"), "private image thumbnail uses the preview route, never 'undefined'");
+
+// ───────────────────────── S15: vault modal ─────────────────────────
+section("S15 Vault modal: lists its files, a foreign file can't lock it, a wrong key is still rejected");
+reset(); S = await boot();
+const v15 = JSON.parse(await S.ev(`(async()=>{
+  const k=await genAesKey(), ks=await exportKeyB64url(k);
+  const other=await genAesKey(), os=await exportKeyB64url(other);
+  const mk=async(key,name)=>{const a=await encryptString(key,name),b=await encryptString(key,'text/plain');
+    return {_id:'f'+name,visibility:'private',encrypted:true,fileType:'application/octet-stream',fileSize:10,originalName:'Encrypted file',shareToken:'abc123',
+      encryptedName:a.cipherB64,encryptedNameIV:a.ivB64,encryptedMimeType:b.cipherB64,encryptedMimeTypeIV:b.ivB64,createdAt:new Date().toISOString()};};
+  const vault=(files)=>({_id:'v1',name:'V',encrypted:true,visibility:'private',shareToken:'tok123',files});
+  const body=()=>document.getElementById('tmodalBody').innerHTML;
+  const res={};
+  await renderUnlockedVaultModal(vault([await mk(k,'one.txt'),await mk(k,'two.txt')]),ks);
+  res.clean=body();
+  await renderUnlockedVaultModal(vault([await mk(k,'one.txt'),await mk(other,'JUNK.txt'),await mk(k,'two.txt')]),ks);
+  res.poisoned=body();
+  try{await renderUnlockedVaultModal(vault([await mk(other,'a.txt'),await mk(other,'b.txt')]),ks);res.wrong='rendered';}catch(e){res.wrong='threw';}
+  return JSON.stringify(res);
+})()`));
+ok(v15.clean.includes('title="one.txt"') && v15.clean.includes('title="two.txt"') && !/vault is empty/i.test(v15.clean), "a vault with 2 encrypted files shows both (was: 'This vault is empty')");
+ok(v15.poisoned.includes('title="one.txt"') && v15.poisoned.includes('title="two.txt"') && !v15.poisoned.includes("JUNK") && /1 file in this vault couldn't be decrypted/.test(v15.poisoned), "one foreign/poisoned file is skipped with a notice — the rest still open");
+ok(v15.wrong === "threw", "if NOTHING decrypts, the key is still reported wrong");
+
+// uploading into a vault whose token the client doesn't hold must stop before encrypting/sending
+db.log.length = 0;
+await S.ev(`(async()=>{await uploadEncrypted({name:'x.txt',type:'text/plain',size:1,arrayBuffer:async()=>new ArrayBuffer(1)},1,{pw:{classList:{remove(){}}},pf:{},pn:{},pp:{},ptr:{}},'ffffffffffffffffffffffff')})()`);
+await S.tick(10);
+ok(/token isn't available/i.test(toastText(S)) && hit(/upload/).length === 0, "vault upload without a known vault token is refused client-side, nothing sent");
+
 // ───────────────────────── S13: every inline handler resolves ─────────────────────────
 section("S13 Static check: every inline onclick/onkeydown target is a real function");
 reset(); mkFile(); mkFolder(); S = await boot();

@@ -148,6 +148,11 @@ function withSourceToken(url,fileId){
 function withFileToken(url,f){
   return f&&f.shareToken?`${url}${url.includes('?')?'&':'?'}token=${encodeURIComponent(f.shareToken)}`:url;
 }
+// Private items no longer expose their storage URL — their bytes come through
+// the token-checked /preview route instead. Public items keep the direct URL.
+function mediaSrc(f){
+  return f.fileUrl||f.cloudinaryUrl||withFileToken(`${API}/${f._id}/preview`,f);
+}
 // The private-reveal panel (privRevealCtx) always has the item's current
 // token sitting right there on screen — reading it straight from the DOM is
 // simpler and more reliably fresh than looking the item up in local state,
@@ -345,6 +350,13 @@ function proc(){
 async function uploadEncrypted(f,pos,ui,vaultFolderId){
   const{pw,pf,pn,pp,ptr}=ui;
   try{
+    // Uploads into a vault must present that vault's token (the server rejects
+    // anything else) — look it up before spending time encrypting.
+    const vaultItem=vaultFolderId?findKnownFolder(vaultFolderId):null;
+    if(vaultFolderId&&!(vaultItem&&vaultItem.shareToken)){
+      busy=false;toast('This vault\'s link token isn\'t available — reopen the vault from its link, then retry','error');
+      pw.classList.remove('show');uzone.classList.remove('busy');proc();return;
+    }
     pn.textContent=batchTotal>1?`Encrypting ${f.name} · ${pos} of ${batchTotal}…`:`Encrypting ${f.name}…`;
     pp.textContent='';
     // Into a vault: reuse that vault's ONE shared key (cached at creation
@@ -400,7 +412,7 @@ async function uploadEncrypted(f,pos,ui,vaultFolderId){
       }
     };
     xhr.onerror=()=>{busy=false;toast('Server unreachable','error');pw.classList.remove('show');uzone.classList.remove('busy');proc();};
-    xhr.open('POST',`${API}/upload`);xhr.send(fd);
+    xhr.open('POST',withFileToken(`${API}/upload`,vaultItem));xhr.send(fd);
   }catch(err){
     busy=false;
     toast('Encryption failed: '+(err.message||'unknown error'),'error');
@@ -555,7 +567,7 @@ function tl(m){
 }
 function typeHuman(m){if(isImg(m))return tl(m)+' Image';if(isVid(m))return tl(m)+' Video';if(isPdf(m))return'PDF Document';if(isZip(m))return'ZIP Archive';if(isDoc(m))return tl(m)==='TXT'?'Text File':tl(m)==='XML'?'XML File':'Word Document';if(isSheet(m))return tl(m)==='CSV'?'CSV Spreadsheet':'Excel Spreadsheet';if(isSlide(m))return'PowerPoint Presentation';if(isCode(m))return tl(m)+' File';if(isLink(m))return'Link';return'File';}
 function mkThumb(f){
-  if(isImg(f.fileType))return`<img src="${f.fileUrl||f.cloudinaryUrl}" alt="" loading="lazy">`;
+  if(isImg(f.fileType))return`<img src="${escH(mediaSrc(f))}" alt="" loading="lazy">`;
   if(isVid(f.fileType))return`<div class="fph fph-vid"><div class="play-ring"><svg viewBox="0 0 16 16"><polygon points="4,2 14,8 4,14" fill="white"/></svg></div><span class="fph-lbl">${tl(f.fileType)}</span></div>`;
   if(isPdf(f.fileType))return`<div class="fph fph-pdf"><div class="fph-icon"><svg viewBox="0 0 56 56" fill="none"><rect x="8" y="4" width="30" height="40" rx="4" fill="white" fill-opacity=".92"/><rect x="28" y="4" width="10" height="12" rx="2" fill="#E84040" fill-opacity=".7"/><rect x="12" y="20" width="20" height="2.5" rx="1.25" fill="#E84040" fill-opacity=".5"/><rect x="12" y="26" width="16" height="2.5" rx="1.25" fill="#E84040" fill-opacity=".4"/><rect x="12" y="32" width="18" height="2.5" rx="1.25" fill="#E84040" fill-opacity=".3"/><rect x="30" y="38" width="18" height="14" rx="3" fill="#E84040"/><text x="39" y="48" font-family="Inter,Arial" font-size="7" font-weight="800" fill="white" text-anchor="middle">PDF</text></svg></div><span class="fph-lbl">PDF</span></div>`;
   if(isZip(f.fileType))return`<div class="fph fph-zip"><div class="fph-icon"><svg viewBox="0 0 56 56" fill="none"><rect x="6" y="18" width="44" height="30" rx="4" fill="white" fill-opacity=".9"/><rect x="6" y="18" width="44" height="11" rx="4" fill="#E8A020" fill-opacity=".85"/><rect x="22" y="10" width="12" height="16" rx="3" fill="#E8A020" fill-opacity=".7"/><rect x="24" y="29" width="8" height="3" rx="1.5" fill="#E8A020" fill-opacity=".55"/><rect x="24" y="34" width="8" height="3" rx="1.5" fill="#E8A020" fill-opacity=".45"/><rect x="24" y="39" width="8" height="3" rx="1.5" fill="#E8A020" fill-opacity=".35"/></svg></div><span class="fph-lbl">ZIP</span></div>`;
@@ -566,7 +578,7 @@ function mkThumb(f){
   return`<div class="fph fph-file"><div class="fph-icon"><svg viewBox="0 0 48 48" fill="none"><path d="M10 8h20l10 10v22a2 2 0 01-2 2H10a2 2 0 01-2-2V10a2 2 0 012-2z" fill="white" fill-opacity=".6"/></svg></div><span class="fph-lbl">${tl(f.fileType)}</span></div>`;
 }
 function mkLThumb(f){
-  if(isImg(f.fileType))return`<img src="${f.fileUrl||f.cloudinaryUrl}" alt="" loading="lazy">`;
+  if(isImg(f.fileType))return`<img src="${escH(mediaSrc(f))}" alt="" loading="lazy">`;
   const col=isVid(f.fileType)?'lph-vid':isPdf(f.fileType)?'lph-pdf':isZip(f.fileType)?'lph-zip':isDoc(f.fileType)?'lph-doc':isSheet(f.fileType)?'lph-sheet':isSlide(f.fileType)?'lph-slide':isCode(f.fileType)?'lph-code':'lph-file';
   const sc=isVid(f.fileType)?'rgba(255,255,255,.7)':isPdf(f.fileType)?'var(--red)':isZip(f.fileType)?'var(--ylw)':isDoc(f.fileType)?'var(--cyn)':isSheet(f.fileType)?'var(--tel)':isSlide(f.fileType)?'var(--org)':isCode(f.fileType)?'var(--cod)':'var(--t3)';
   const icons={vid:`<polygon points="4,3 13,8 4,13" fill="${sc}"/>`,pdf:`<path d="M14 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V8z" stroke="${sc}" fill="none"/><polyline points="14 2 14 8 20 8" stroke="${sc}" fill="none"/>`,zip:`<path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4" stroke="${sc}" fill="none"/><polyline points="7 10 12 15 17 10" stroke="${sc}" fill="none"/><line x1="12" y1="15" x2="12" y2="3" stroke="${sc}"/>`,doc:`<path d="M13 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V9z" stroke="${sc}" fill="none"/><polyline points="13 2 13 9 20 9" stroke="${sc}" fill="none"/><line x1="8" y1="13" x2="16" y2="13" stroke="${sc}"/><line x1="8" y1="17" x2="16" y2="17" stroke="${sc}"/>`,sheet:`<rect x="3" y="4" width="18" height="16" rx="2" stroke="${sc}" fill="none"/><line x1="3" y1="10" x2="21" y2="10" stroke="${sc}"/><line x1="9" y1="10" x2="9" y2="20" stroke="${sc}"/><line x1="15" y1="10" x2="15" y2="20" stroke="${sc}"/>`,slide:`<rect x="2" y="5" width="20" height="13" rx="2" stroke="${sc}" fill="none"/><line x1="8" y1="21" x2="16" y2="21" stroke="${sc}"/><line x1="12" y1="18" x2="12" y2="21" stroke="${sc}"/>`,code:`<polyline points="9 8 5 12 9 16" stroke="${sc}" fill="none"/><polyline points="15 8 19 12 15 16" stroke="${sc}" fill="none"/>`,file:`<path d="M13 2H6a2 2 0 00-2 2v16a2 2 0 002 2h12a2 2 0 002-2V9z" stroke="${sc}" fill="none"/><polyline points="13 2 13 9 20 9" stroke="${sc}" fill="none"/>`};
@@ -755,7 +767,7 @@ function openPrev(id){
   // Image or Video — lightbox
   const img=document.getElementById('lbImg'),vid=document.getElementById('lbVid'),info=document.getElementById('lbInfo');
   img.style.display='none';vid.style.display='none';img.src='';vid.src='';
-  const src=f.fileUrl||f.cloudinaryUrl;
+  const src=mediaSrc(f);
   if(isImg(f.fileType)){img.src=src;img.style.display='block';}
   else if(isVid(f.fileType)){vid.src=src;vid.style.display='block';}
   else return;
@@ -1057,7 +1069,7 @@ function openTokenModal(data,kind){
     const f=data;
     const t=tc(f.fileType);
     const v=f.visibility||'public';
-    setTmodalHero(t,f.fileUrl);
+    setTmodalHero(t,isImg(f.fileType)?mediaSrc(f):f.fileUrl);
     hd.innerHTML=`<div class="tmodal-title-lg" title="${escH(f.originalName)}">${escH(stripExt(f.originalName))}</div><div class="tmodal-badges"><span class="vis-badge vis-${v==='public'?'pub':'priv'}">${v==='public'?'Public':'Private'}</span><span style="font-size:12px;color:var(--t2)">${typeHuman(f.fileType)}</span></div>`;
     bd.innerHTML=isLink(f.fileType)
       ?`<div class="tmodal-info-grid">${tinfo('Domain',escH(f.linkDomain||'-'))}${tinfo('Type',typeHuman(f.fileType))}${tinfo('Added',f.createdAt?new Date(f.createdAt).toLocaleString('en',{dateStyle:'medium',timeStyle:'short'}):'-',true)}${privacyInfoRows(f)}</div>`
@@ -1132,13 +1144,21 @@ async function unlockEncryptedVault(id){
 // ciphertext, which is an inherent limitation, not a bug.
 async function renderUnlockedVaultModal(folder,keyStr){
   const key=await importKeyB64url(keyStr);
-  const files=(folder.files||[]).filter(x=>(x.visibility||'public')!=='private'&&x.encrypted);
-  const decrypted=[];
+  // Vault files are ALWAYS private (that's what makes them vault files), so the
+  // old `visibility!=='private'&&encrypted` filter hid every one of them and a
+  // vault always showed as empty. Encrypted is the only test that applies here.
+  const files=(folder.files||[]).filter(x=>x.encrypted);
+  const decrypted=[];let unreadable=0;
   for(const f of files){
-    const realName=await decryptString(key,f.encryptedName,f.encryptedNameIV);
-    const realType=await decryptString(key,f.encryptedMimeType,f.encryptedMimeTypeIV);
-    decrypted.push({...f,_realName:realName,_realType:realType});
+    // Per-file: a single foreign/corrupt file must not make the whole vault
+    // look like it has the wrong key. Only if NOTHING decrypts is the key wrong.
+    try{
+      const realName=await decryptString(key,f.encryptedName,f.encryptedNameIV);
+      const realType=await decryptString(key,f.encryptedMimeType,f.encryptedMimeTypeIV);
+      decrypted.push({...f,_realName:realName,_realType:realType});
+    }catch{unreadable++;}
   }
+  if(files.length&&!decrypted.length)throw new Error('Decryption failed — wrong key');
   folder._vaultKeyStr=keyStr;
   folder._decryptedFiles=decrypted;
 
@@ -1149,6 +1169,7 @@ async function renderUnlockedVaultModal(folder,keyStr){
   bd.innerHTML=infoGrid+(decrypted.length
     ?`<div class="tmodal-file-list">${decrypted.map(f=>`<div class="tmodal-file-row"><span class="tmodal-file-name" title="${escH(f._realName)}">${escH(stripExt(f._realName))}</span><span class="tmodal-file-meta">${fmtSz(f.fileSize)}</span><button class="tmodal-dl-btn" onclick="decryptAndDownloadVaultFile('${f._id}')" title="Decrypt & Download"><svg viewBox="0 0 24 24" stroke-linecap="round" stroke-linejoin="round"><polyline points="8 17 12 21 16 17"/><line x1="12" y1="12" x2="12" y2="21"/></svg></button></div>`).join('')}</div>`
     :`<div style="text-align:center;padding:24px 0;color:var(--t3);font-size:14px">This vault is empty</div>`)
+    +(unreadable?`<div style="margin-top:10px;font-size:12px;color:var(--t2);text-align:center">⚠ ${unreadable} file${unreadable!==1?'s':''} in this vault couldn't be decrypted with this key and ${unreadable!==1?'were':'was'} skipped.</div>`:'')
     +`<div style="margin-top:12px;font-size:12px;color:var(--t3);text-align:center">${ICONS.lock} Decrypted locally — the server never sees the plaintext.</div>`;
   ft.innerHTML=`<div class="tmodal-secondary-row"><button class="tmodal-sec-btn" onclick="openSharePanel('folder')"><svg viewBox="0 0 24 24"><circle cx="12" cy="12" r="3"/><path d="M12 1v6m0 10v6M4.22 4.22l4.24 4.24m7.08 7.08l4.24 4.24M1 12h6m10 0h6M4.22 19.78l4.24-4.24m7.08-7.08l4.24-4.24"/></svg>Manage</button><button class="tmodal-sec-btn danger" onclick="delFolderFromModal('${folder._id}')"><svg viewBox="0 0 24 24"><polyline points="3 6 5 6 21 6"/><path d="M19 6l-1 14a2 2 0 01-2 2H8a2 2 0 01-2-2L5 6"/></svg>Delete</button></div>`;
 }
@@ -1169,7 +1190,7 @@ async function decryptAndDownloadVaultFile(id){
     const a=document.createElement('a');a.href=url;a.download=f._realName||'decrypted-file';
     document.body.appendChild(a);a.click();document.body.removeChild(a);
     setTimeout(()=>URL.revokeObjectURL(url),10000);
-    toast(`${f._realName} decrypted & downloaded ${ICONS.unlock}`,'success');
+    toast(`${escH(f._realName)} decrypted & downloaded ${ICONS.unlock}`,'success');
   }catch{toast('Decryption failed — the key or file data may be corrupted','error');}
 }
 
@@ -1271,7 +1292,7 @@ async function decryptAndDownloadEnc(id){
     const a=document.createElement('a');a.href=url;a.download=f._realName||'decrypted-file';
     document.body.appendChild(a);a.click();document.body.removeChild(a);
     setTimeout(()=>URL.revokeObjectURL(url),10000);
-    toast(`${f._realName} decrypted & downloaded ${ICONS.unlock}`,'success');
+    toast(`${escH(f._realName)} decrypted & downloaded ${ICONS.unlock}`,'success');
   }catch{toast('Decryption failed — the key or file data may be corrupted','error');}
 }
 async function decryptAndPreviewEnc(id){
@@ -1573,7 +1594,8 @@ document.getElementById('atfModal').addEventListener('click',e=>{if(e.target===d
 document.getElementById('cfModal').addEventListener('click',e=>{if(e.target===document.getElementById('cfModal'))closeCreateFolder();});
 function renderAtf(){
   const body=document.getElementById('atfBody');
-  if(!allFolders.length){
+  const atfFolders=allFolders.filter(f=>!f.encrypted); // vaults only accept direct uploads
+  if(!atfFolders.length){
     body.innerHTML=`<div class="atf-empty">No folders yet.<br>Create one first from the <strong>Folders</strong> tab.</div>`;
     return;
   }
@@ -1581,14 +1603,14 @@ function renderAtf(){
   // showing per-file "already in this folder" state for a mixed batch would
   // need per-file rows, which isn't worth the complexity for this picker.
   if(atfBulkIds){
-    body.innerHTML=allFolders.map(folder=>{
+    body.innerHTML=atfFolders.map(folder=>{
       const cnt=folder.fileCount!==undefined?folder.fileCount:(folder.files?folder.files.length:0);
       return`<div class="atf-item"><div class="atf-item-ico"><svg viewBox="0 0 24 24"><path d="M22 19a2 2 0 01-2 2H4a2 2 0 01-2-2V5a2 2 0 012-2h5l2 3h9a2 2 0 012 2z"/></svg></div><div class="atf-item-info"><div class="atf-item-name">${escH(folder.name)}</div><div class="atf-item-count">${cnt} file${cnt!==1?'s':''}</div></div><button class="atf-item-btn atf-btn-add" onclick="doAddToFolder('${folder._id}')">Add</button></div>`;
     }).join('');
     return;
   }
   const file=allFiles.find(f=>f._id===atfFileId);
-  body.innerHTML=allFolders.map(folder=>{
+  body.innerHTML=atfFolders.map(folder=>{
     const inThis=file&&file.folderId&&file.folderId===folder._id;
     const cnt=folder.fileCount!==undefined?folder.fileCount:(folder.files?folder.files.length:0);
     const btn=inThis

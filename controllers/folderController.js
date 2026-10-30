@@ -5,6 +5,7 @@ import { ZipArchive } from "archiver";
 import { Readable } from "stream";
 import { canAccessFolder, canLeaveFolder, canMutateFile } from "../middleware/auth.js";
 import { generateToken } from "../utils/token.js";
+import { toClientFolder } from "../utils/clientView.js";
 
 // Same defense-in-depth as fileUpload.js's sanitizeOriginalName — strip
 // control characters and cap length before anything reaches storage.
@@ -97,7 +98,7 @@ export const getFolderById = async (req, res) => {
       return res.status(403).json({ message: "Private folder — a valid, unexpired token is required" });
     }
 
-    res.status(200).json({ folder });
+    res.status(200).json({ folder: toClientFolder(folder) });
   } catch (e) { res.status(500).json({ message: e.message }); }
 };
 
@@ -130,10 +131,10 @@ export const getFolderByToken = async (req, res) => {
       if (!updated) {
         return res.status(410).json({ message: "This link has reached its view limit and is no longer available" });
       }
-      return res.status(200).json({ folder: updated });
+      return res.status(200).json({ folder: toClientFolder(updated) });
     }
 
-    res.status(200).json({ folder });
+    res.status(200).json({ folder: toClientFolder(folder) });
   } catch (e) { res.status(500).json({ message: e.message }); }
 };
 
@@ -260,6 +261,9 @@ export const addFileToFolder = async (req, res) => {
   try {
     const { fileId } = req.body;
     if (!fileId) return res.status(400).json({ message: "fileId is required" });
+    // Must be a plain string — a JSON body like {"fileId":{"$ne":null}} would
+    // otherwise reach File.findById as a Mongo operator.
+    if (typeof fileId !== "string") return res.status(400).json({ message: "fileId must be a string" });
 
     const [folder, file] = await Promise.all([
       Folder.findById(req.params.id),
@@ -268,6 +272,18 @@ export const addFileToFolder = async (req, res) => {
 
     if (!folder) return res.status(404).json({ message: "Folder not found" });
     if (!file)   return res.status(404).json({ message: "File not found" });
+
+    // Vault integrity: a vault only ever holds files encrypted with ITS key,
+    // which only the uploading client can guarantee (the server never sees
+    // keys) — so files enter a vault exclusively through the vault upload path.
+    // Adding anything else here would plant a file that can't be decrypted.
+    if (folder.encrypted || file.encrypted) {
+      return res.status(400).json({
+        message: folder.encrypted
+          ? "Vaults only accept files uploaded into them directly — existing files can't be added"
+          : "Encrypted files can't be moved into ordinary folders",
+      });
+    }
 
     // Gated by the FOLDER's own state — you're modifying its membership.
     if (!canAccessFolder(req, folder)) {

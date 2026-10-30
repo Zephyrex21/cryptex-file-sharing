@@ -8,8 +8,10 @@ import { ZipArchive } from "archiver";
 import { isSafeUrl, safeFetchHtml, extractMeta } from "./linkPreview.js";
 import { checkKnownMalwareHash } from "../utils/malwareScan.js";
 import { appendFilesToZip } from "./folderController.js";
-import { canAccessFile, canMutateFile } from "../middleware/auth.js";
+import { canAccessFile, canMutateFile, canAccessFolder } from "../middleware/auth.js";
 import { generateToken } from "../utils/token.js";
+import { newObjectPath, rotateObjectPath, undoRotation } from "../utils/storagePaths.js";
+import { toClientFile } from "../utils/clientView.js";
 
 const BUCKET = process.env.SUPABASE_BUCKET || "cloudvault-files";
 
@@ -127,12 +129,9 @@ const resolveEffectiveMimetype = (originalname, reportedMimetype) => {
 
 // ── Upload buffer to Supabase Storage ─────────────────────────────────────
 const uploadToSupabase = async (buffer, originalname, mimetype) => {
-  const dotIdx = originalname.lastIndexOf(".");
-  const base = (dotIdx > 0 ? originalname.slice(0, dotIdx) : originalname)
-    .replace(/\s+/g, "_")
-    .replace(/[^a-zA-Z0-9_.-]/g, "");
-  const ext = dotIdx > 0 ? originalname.slice(dotIdx).toLowerCase() : "";
-  const filePath = `${base}-${Date.now()}${ext}`;
+  // Unguessable 128-bit random object path (see utils/storagePaths.js) — the
+  // original name only lives in the DB, never in the storage URL.
+  const filePath = newObjectPath(originalname);
 
   const { data, error } = await supabase.storage
     .from(BUCKET)
@@ -170,6 +169,14 @@ export const uploadFile = async (req, res) => {
       if (!iv || !encryptedName || !encryptedNameIV || !encryptedMimeType || !encryptedMimeTypeIV) {
         return res.status(400).json({ message: "Missing encryption metadata for encrypted upload" });
       }
+      // multer expands `field[$gt]=x` into objects. Every field must be a plain
+      // string, otherwise an attacker can smuggle Mongo operators into the
+      // folder lookup below (and non-string metadata is never legitimate).
+      const metaFields = [iv, encryptedName, encryptedNameIV, encryptedMimeType, encryptedMimeTypeIV];
+      if (metaFields.some((v) => typeof v !== "string") ||
+          (vaultFolderId !== undefined && typeof vaultFolderId !== "string")) {
+        return res.status(400).json({ message: "Invalid upload fields" });
+      }
       if (req.file.mimetype !== "application/octet-stream") {
         return res.status(400).json({ message: "Encrypted uploads must be sent as application/octet-stream" });
       }
@@ -185,11 +192,18 @@ export const uploadFile = async (req, res) => {
         if (!vaultFolder || !vaultFolder.encrypted) {
           return res.status(400).json({ message: "Target vault folder not found" });
         }
+        // The vault's _id is not a secret, so it can't authorize writes. The
+        // vault's own current, unexpired share token must accompany the upload
+        // (?token= or X-Share-Token) — otherwise anyone could drop junk
+        // ciphertext into somebody else's vault.
+        if (!canAccessFolder(req, vaultFolder)) {
+          return res.status(403).json({ message: "This vault is private — a valid share token is required to upload into it" });
+        }
       }
 
       const result = await uploadToSupabase(
         req.file.buffer,
-        `encrypted-${Date.now()}.bin`, // storage path only — never derived from the real name
+        "encrypted.bin", // extension hint only — the storage path itself is random
         "application/octet-stream"
       );
       filePath = result.filePath;
@@ -221,7 +235,7 @@ export const uploadFile = async (req, res) => {
         await vaultFolder.save();
       }
 
-      return res.status(201).json({ message: "Uploaded (end-to-end encrypted)!", file });
+      return res.status(201).json({ message: "Uploaded (end-to-end encrypted)!", file: toClientFile(file) });
     }
 
     // ── Ordinary upload — unchanged ─────────────────────────────────────────
@@ -266,7 +280,7 @@ export const uploadFile = async (req, res) => {
       visibility:   "public",
     });
 
-    res.status(201).json({ message: "Uploaded!", file });
+    res.status(201).json({ message: "Uploaded!", file: toClientFile(file) });
   } catch (e) {
     if (filePath) {
       await supabase.storage.from(BUCKET).remove([filePath]).catch(() => {});
@@ -399,9 +413,9 @@ export const getFileByToken = async (req, res) => {
       if (!updated) {
         return res.status(410).json({ message: "This link has reached its view limit and is no longer available" });
       }
-      return res.status(200).json({ file: updated });
+      return res.status(200).json({ file: toClientFile(updated) });
     }
-    res.status(200).json({ file });
+    res.status(200).json({ file: toClientFile(file) });
   } catch (e) { res.status(500).json({ message: e.message }); }
 };
 
@@ -416,7 +430,7 @@ export const getSingleFile = async (req, res) => {
     if (!canAccessFile(req, file)) {
       return res.status(403).json({ message: "This file is private — a valid share token is required" });
     }
-    res.status(200).json({ file });
+    res.status(200).json({ file: toClientFile(file) });
   } catch (e) { res.status(500).json({ message: e.message }); }
 };
 
@@ -447,7 +461,7 @@ export const renameFile = async (req, res) => {
       { new: true }
     );
     if (!file) return res.status(404).json({ message: "Not found" });
-    res.status(200).json({ message: "Renamed!", file });
+    res.status(200).json({ message: "Renamed!", file: toClientFile(file) });
   } catch (e) { res.status(500).json({ message: e.message }); }
 };
 
@@ -510,17 +524,46 @@ export const setVisibility = async (req, res) => {
       update.viewCount = 0; // a rotated token is a clean slate for its view budget too
     }
 
-    const file = await File.findByIdAndUpdate(
-      req.params.id,
-      update,
-      { new: true }
-    );
-    if (!file) return res.status(404).json({ message: "Not found" });
-    res.status(200).json({ message: `Visibility set to ${visibility}`, file });
+    // Revoke any storage URL that was ever exposed: going public → private, or
+    // rotating the token of a private file, moves the object to a fresh random
+    // path. Fails closed — if storage can't be rotated we do NOT report success.
+    let rotated = null;
+    const needsRotation =
+      (visibility === "private" && existing.visibility === "public") ||
+      (visibility === "private" && regenerateToken);
+    if (needsRotation) {
+      try {
+        rotated = await rotateObjectPath(supabase, BUCKET, existing);
+      } catch {
+        return res.status(502).json({ message: "Couldn't secure the file in storage — nothing was changed, please try again" });
+      }
+      if (rotated) {
+        update.filePath = rotated.filePath;
+        update.fileUrl = rotated.fileUrl;
+      }
+    }
+
+    let file;
+    try {
+      file = await File.findByIdAndUpdate(req.params.id, update, { new: true });
+    } catch (e) {
+      if (rotated) await undoRotation(supabase, BUCKET, existing.filePath, rotated.filePath);
+      throw e;
+    }
+    if (!file) {
+      if (rotated) await undoRotation(supabase, BUCKET, existing.filePath, rotated.filePath);
+      return res.status(404).json({ message: "Not found" });
+    }
+    res.status(200).json({ message: `Visibility set to ${visibility}`, file: toClientFile(file) });
   } catch (e) { res.status(500).json({ message: e.message }); }
 };
 
 // ── Shared streaming helper ────────────────────────────────────────────────
+const INLINE_SAFE_TYPES = new Set([
+  "image/jpeg", "image/png", "image/gif", "image/webp",
+  "video/mp4", "video/webm", "video/ogg", "video/quicktime", "video/x-msvideo",
+  "application/pdf",
+]);
 const streamFile = async (req, res, disposition) => {
   const file = await File.findById(req.params.id);
   if (!file) return res.status(404).json({ message: "Not found" });
@@ -540,15 +583,26 @@ const streamFile = async (req, res, disposition) => {
   if (!response.body) throw new Error("Empty response body from storage");
 
   const encoded  = encodeURIComponent(file.originalName).replace(/'/g, "%27");
-  const fallback = file.originalName.replace(/[^\x20-\x7E]/g, "_");
+  const fallback = file.originalName.replace(/[^\x20-\x7E]/g, "_").replace(/["\\]/g, "_");
 
+  // Only formats a browser can't execute script from may render inline on our
+  // origin. Everything else (html, xml, svg, js, text…) is forced to download
+  // and sandboxed — an uploaded .html served inline here would be same-origin
+  // stored XSS with access to every visitor's saved share tokens.
+  const mime = (file.fileType || "application/octet-stream").toLowerCase();
+  const inlineOk = disposition === "inline" && INLINE_SAFE_TYPES.has(mime);
   res.setHeader("Content-Disposition",
-    `${disposition}; filename="${fallback}"; filename*=UTF-8''${encoded}`);
-  res.setHeader("Content-Type", file.fileType || "application/octet-stream");
+    `${inlineOk ? "inline" : "attachment"}; filename="${fallback}"; filename*=UTF-8''${encoded}`);
+  res.setHeader("Content-Type", mime);
+  res.setHeader("X-Content-Type-Options", "nosniff");
+  // Chrome's built-in PDF viewer refuses to render sandboxed documents, and PDF
+  // can't script our origin anyway; everything else gets a full sandbox.
+  if (mime !== "application/pdf") res.setHeader("Content-Security-Policy", "sandbox; default-src 'none'");
 
   const cl = response.headers.get("content-length");
   if (cl) res.setHeader("Content-Length", cl);
-  res.setHeader("Cache-Control", "public, max-age=3600");
+  // Token-gated bytes must not sit in shared caches after the token is revoked.
+  res.setHeader("Cache-Control", file.visibility === "private" ? "private, no-store" : "public, max-age=3600");
 
   const stream = Readable.fromWeb(response.body);
   stream.on("error", (err) => {
