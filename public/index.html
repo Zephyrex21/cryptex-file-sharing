@@ -70,7 +70,7 @@
   <div class="hero">
     <div class="hero-copy">
       <div class="eyebrow"><svg class="ico" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0110 0v4"/></svg> End-to-End Encrypted · Zero-Knowledge</div>
-      <h1><span id="heroLine1">Encrypted with</span> <span id="heroLineAES" class="aes-highlight">AES-256</span>.<br><span id="heroLine2" class="hgrad">Not even we can see it.</span></h1>
+      <h1><span id="heroLine1">Encrypted with</span> <span id="heroLineAES" class="aes-highlight">AES-256</span>.<br><span id="heroLine2" class="hgrad">We only ever hold ciphertext.</span></h1>
       <p>Files are encrypted in your browser before they're ever uploaded — the key never touches our server. Pair that with token-based access, and privacy stops being a policy promise and starts being math.</p>
       <div class="hero-cta">
         <a class="btn-pick" href="/app"><svg viewBox="0 0 24 24"><path d="M5 12h14M12 5l7 7-7 7"/></svg>Open Vault</a>
@@ -459,8 +459,8 @@
   <div class="enc-callout reveal">
     <div class="enc-callout-ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0110 0v4"/></svg></div>
     <div>
-      <h4>This server is structurally unable to decrypt your files</h4>
-      <p>Not "won't" — <em>can't</em>. The key never appears in any request, log, or database row we control. The honest trade-off: if you lose the link, the file is gone for good. There's no reset button, because there's nothing on our end left to reset.</p>
+      <h4>This server only ever stores ciphertext — and never receives your key</h4>
+      <p>The key lives in the link's <code>#</code> fragment, which browsers never send in a request, so it can't show up in a request, log, or database row. Two honest caveats: if you lose the link, the file is gone for good (there's nothing on our end to reset) — and, as with every browser-based encryption tool, your browser runs the page's code from this server, so you're trusting whoever operates it not to ship tampered code. The project is open source; for maximum assurance, read it or host your own copy.</p>
     </div>
   </div>
 </div>
@@ -478,7 +478,7 @@
     <div class="faq-list">
       <details class="faq-item reveal">
         <summary>Is Cryptex really zero-knowledge?<svg class="faq-chevron" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"/></svg></summary>
-        <p>Yes, for anything you choose to encrypt. Content, filename, and file type are locked with AES-256-GCM entirely in your browser before upload — the key only ever exists in your share link, which never reaches our server, logs, or database.</p>
+        <p>For anything you choose to encrypt, yes in the sense that matters day to day: content, filename, and file type are locked with AES-256-GCM entirely in your browser before upload, and the key only ever exists in your share link's fragment, which is never sent to our server. The usual caveat for web apps applies — your browser runs this site's JavaScript, so you're trusting the operator not to serve modified code. The source is public, and you can host your own copy.</p>
       </details>
       <details class="faq-item reveal">
         <summary>What happens if I lose my share link?<svg class="faq-chevron" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"/></svg></summary>

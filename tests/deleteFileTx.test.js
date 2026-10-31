@@ -22,8 +22,8 @@ beforeEach(() => {
   remove.mockResolvedValue({ error: null });
 });
 
-describe("deleteFile — storage removal is best-effort; the two DB writes are one transaction", () => {
-  it("removes from storage, then pulls from the folder and deletes the record atomically", async () => {
+describe("deleteFile — DB first (one transaction), then best-effort storage removal", () => {
+  it("pulls from the folder and deletes the record atomically, THEN removes the storage object", async () => {
     const deleteOne = vi.fn(async () => {});
     File.findById.mockResolvedValue({ _id: "f1", visibility: "public", filePath: "x/y.png", folderId: "fo", deleteOne });
     const res = mockRes();
@@ -33,8 +33,31 @@ describe("deleteFile — storage removal is best-effort; the two DB writes are o
     expect(session.withTransaction).toHaveBeenCalledTimes(1);
     expect(Folder.findByIdAndUpdate).toHaveBeenCalledWith("fo", { $pull: { files: "f1" } }, { session });
     expect(deleteOne).toHaveBeenCalledWith({ session });
-    // storage call must happen BEFORE the transaction opens (no network I/O inside it)
-    expect(remove.mock.invocationCallOrder[0]).toBeLessThan(session.withTransaction.mock.invocationCallOrder[0]);
+    // The storage call happens AFTER the transaction has committed (still never
+    // inside it): a failed transaction must not have already destroyed the bytes.
+    expect(session.endSession.mock.invocationCallOrder[0]).toBeLessThan(remove.mock.invocationCallOrder[0]);
+  });
+
+  it("if the transaction fails, the storage object is left untouched (no record pointing at missing bytes)", async () => {
+    session.withTransaction.mockRejectedValue(new Error("tx failed"));
+    const deleteOne = vi.fn(async () => {});
+    File.findById.mockResolvedValue({ _id: "f1", visibility: "public", filePath: "x/y.png", folderId: "fo", deleteOne });
+    const res = mockRes();
+    vi.spyOn(console, "error").mockImplementation(() => {});
+    await deleteFile({ params: { id: "f1" }, headers: {}, query: {} }, res);
+    expect(res.status).toHaveBeenCalledWith(500);
+    expect(remove).not.toHaveBeenCalled();
+  });
+
+  it("a storage call that THROWS (not just returns an error) still doesn't fail the delete", async () => {
+    remove.mockRejectedValue(new Error("network"));
+    vi.spyOn(console, "warn").mockImplementation(() => {});
+    const deleteOne = vi.fn(async () => {});
+    File.findById.mockResolvedValue({ _id: "f1", visibility: "public", filePath: "x/y.png", folderId: null, deleteOne });
+    const res = mockRes();
+    await deleteFile({ params: { id: "f1" }, headers: {}, query: {} }, res);
+    expect(res.status).toHaveBeenCalledWith(200);
+    expect(deleteOne).toHaveBeenCalled();
   });
 
   it("a storage error does NOT block deleting the DB record (otherwise the file reappears on refresh)", async () => {

@@ -22,12 +22,14 @@
     "mongoose": "^9.6.3",
     "multer": "^2.5.0",
     "nodemon": "^3.1.14",
-    "qrcode": "^1.5.4",
     "swagger-ui-express": "^5.0.1"
   },
   "devDependencies": {
     "@eslint/js": "^10.0.1",
     "eslint": "^10.9.1",
     "vitest": "^2.1.4"
+  },
+  "overrides": {
+    "minimatch": "^11.0.1"
   }
 }

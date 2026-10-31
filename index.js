@@ -1,5 +1,4 @@
 import express from "express";
-import rateLimit from "express-rate-limit";
 import dotenv from "dotenv";
 import path from "path";
 import { fileURLToPath } from "url";
@@ -8,7 +7,6 @@ import swaggerUi from "swagger-ui-express";
 import connectDB from "./config/database.js";
 import fileUploadRoutes from "./routes/FileUpload.js";
 import folderRoutes     from "./routes/folder.js";
-import { generateQr }   from "./controllers/qrController.js";
 import File from "./models/File.js";
 import Folder from "./models/Folder.js";
 import supabase from "./config/supabase.js";
@@ -20,6 +18,7 @@ const openapiSpec = require("./openapi.json");
 dotenv.config();
 
 const app  = express();
+app.disable("x-powered-by"); // don't advertise the framework
 const PORT = process.env.PORT || 3000;
 
 const __filename = fileURLToPath(import.meta.url);
@@ -52,11 +51,13 @@ app.use((req, res, next) => {
   if (allowedOrigin) {
     res.setHeader("Access-Control-Allow-Origin", allowedOrigin);
     res.setHeader("Access-Control-Allow-Methods", "GET, POST, PATCH, DELETE, OPTIONS");
-    res.setHeader("Access-Control-Allow-Headers", "Content-Type, X-Share-Token, X-Source-Token");
+    res.setHeader("Access-Control-Allow-Headers", "Content-Type, X-Share-Token, X-Source-Token, X-File-Token");
   }
   // Clickjacking protection — this app has no legitimate reason to ever be framed.
   res.setHeader("X-Frame-Options", "DENY");
-  res.setHeader("Content-Security-Policy", "frame-ancestors 'none'; object-src 'none'");
+  // No <base>/forms are used, so pinning them costs nothing and removes two
+  // injection pivots. (A full script-src policy needs the inline handlers gone.)
+  res.setHeader("Content-Security-Policy", "frame-ancestors 'none'; object-src 'none'; base-uri 'self'; form-action 'self'");
   // Stops browsers from "sniffing" a file's real content and overriding the
   // Content-Type we declare — relevant since uploaded-file MIME types
   // ultimately come from the client at upload time.
@@ -78,19 +79,16 @@ app.use(express.static(path.join(__dirname, "public")));
 // ── API Routes ─────────────────────────────────────────────────────────────
 app.use("/api/files",   fileUploadRoutes);
 app.use("/api/folders", folderRoutes);
-// QR generation is CPU work per request with nothing to stop someone looping
-// on it — same loose cap the other generate-something endpoints have.
-const qrLimiter = rateLimit({
-  windowMs: 60 * 1000,
-  limit: 30,
-  standardHeaders: true,
-  legacyHeaders: false,
-  message: { message: "Too many QR requests — please wait a moment" },
-});
-app.get("/api/qr",      qrLimiter, generateQr);
+// (The old server-side /api/qr route is gone: QR codes are generated in the
+// browser, and a route that received share links — encryption key included —
+// had no reason to exist.)
 
 // ── API docs ───────────────────────────────────────────────────────────────
-app.use("/api-docs", swaggerUi.serve, swaggerUi.setup(openapiSpec));
+// On by default; set DISABLE_API_DOCS=true to stop serving the Swagger UI in
+// production if you'd rather not publish your route map.
+if (process.env.DISABLE_API_DOCS !== "true") {
+  app.use("/api-docs", swaggerUi.serve, swaggerUi.setup(openapiSpec));
+}
 
 // ── Pages ──────────────────────────────────────────────────────────────────
 // Two-page site: "/" is the marketing homepage, "/app" is the actual file
@@ -112,6 +110,16 @@ app.get("/app", (req, res) => {
 // Express 4 and 5 since it isn't doing pattern matching at all.
 app.use((req, res) => {
   res.status(404).sendFile(path.join(__dirname, "public", "404.html"));
+});
+
+// Last-resort error handler: JSON, never an HTML stack trace, never internals.
+// (Catches things that happen before a controller — e.g. a malformed JSON body.)
+app.use((err, req, res, next) => {
+  if (res.headersSent) return next(err);
+  if (err?.type === "entity.parse.failed") return res.status(400).json({ message: "Invalid JSON body" });
+  if (err?.type === "entity.too.large") return res.status(413).json({ message: "Request body too large" });
+  console.error(err);
+  res.status(500).json({ message: "Something went wrong — please try again" });
 });
 
 app.listen(PORT, () => {

@@ -111,23 +111,28 @@ const MAX_BODY_BYTES = 700_000; // OG tags live in <head> — no need to read a 
 // redirect hop (not just the original URL) — a server could otherwise
 // resolve safely on the first request and redirect to an internal address,
 // bypassing a check done only once up front.
-export const safeFetchHtml = async (urlString) => {
+const MAX_IMAGE_BYTES = 1_500_000;
+
+// Shared hardened fetch: SSRF re-check at every redirect hop, ONE deadline per
+// hop covering headers AND body (a server that stalls after the headers can't
+// hold the request open), and a hard byte cap.
+//   allowPartial — if the deadline/connection dies mid-body, keep what arrived
+//   (right for HTML: the <head> is all we need; wrong for images: a truncated
+//   image is corrupt, so those fail instead).
+const safeFetchBytes = async (urlString, { accept, typeOk, typeError, maxBytes, allowPartial }) => {
   // Overridable for tests; production default is FETCH_TIMEOUT_MS.
   const timeoutMs = Number(process.env.LINK_FETCH_TIMEOUT_MS) || FETCH_TIMEOUT_MS;
   let currentUrl = urlString;
   for (let hop = 0; hop <= MAX_REDIRECTS; hop++) {
     if (!(await isSafeUrl(currentUrl))) throw new Error("URL resolves to a disallowed address");
 
-    // ONE deadline per hop covering headers AND body. It used to be cleared as
-    // soon as headers arrived, so a server that sent headers and then stalled
-    // (or trickled bytes) held the request — and its socket — open forever.
     const controller = new AbortController();
     const timeout = setTimeout(() => controller.abort(), timeoutMs);
     try {
       const res = await fetch(currentUrl, {
         redirect: "manual",
         signal: controller.signal,
-        headers: { "User-Agent": "CryptexLinkPreview/1.0 (+link unfurling bot)" },
+        headers: { "User-Agent": "CryptexLinkPreview/1.0 (+link unfurling bot)", ...(accept ? { Accept: accept } : {}) },
       });
 
       if ([301, 302, 303, 307, 308].includes(res.status)) {
@@ -139,29 +144,64 @@ export const safeFetchHtml = async (urlString) => {
       }
       if (!res.ok) { res.body?.cancel().catch(() => {}); throw new Error(`Fetch failed with status ${res.status}`); }
       const contentType = res.headers.get("content-type") || "";
-      if (!contentType.includes("text/html")) { res.body?.cancel().catch(() => {}); throw new Error(`Not HTML (${contentType})`); }
+      if (!typeOk(contentType)) { res.body?.cancel().catch(() => {}); throw new Error(typeError(contentType)); }
       if (!res.body) throw new Error("Empty response body");
 
       const reader = res.body.getReader();
-      let received = 0; const chunks = [];
+      let received = 0, finished = false; const chunks = [];
       try {
-        while (received < MAX_BODY_BYTES) {
+        while (received < maxBytes) {
           const { done, value } = await reader.read();
-          if (done) break;
+          if (done) { finished = true; break; }
           chunks.push(value); received += value.length;
         }
       } catch (err) {
-        // Deadline hit / connection dropped mid-body: the <head> (all we need)
-        // usually arrived already — use what we have, only fail if nothing did.
-        if (chunks.length === 0) throw err;
+        if (!allowPartial || chunks.length === 0) throw err;
       }
       reader.cancel().catch(() => {});
-      return Buffer.concat(chunks).toString("utf8");
+      if (!finished && !allowPartial) throw new Error("Response too large or incomplete");
+      return { buffer: Buffer.concat(chunks), contentType };
     } finally {
       clearTimeout(timeout);
     }
   }
   throw new Error("Too many redirects");
+};
+
+// Fetches a URL and returns its HTML (see safeFetchBytes for the protections).
+export const safeFetchHtml = async (urlString) => {
+  const { buffer } = await safeFetchBytes(urlString, {
+    typeOk: (ct) => ct.includes("text/html"),
+    typeError: (ct) => `Not HTML (${ct})`,
+    maxBytes: MAX_BODY_BYTES,
+    allowPartial: true,
+  });
+  return buffer.toString("utf8");
+};
+
+// Identify an image by its actual bytes — never trust the remote server's
+// Content-Type. Only formats a browser can't run script from.
+export const sniffImageType = (b) => {
+  if (b.length >= 8 && b[0] === 0x89 && b[1] === 0x50 && b[2] === 0x4e && b[3] === 0x47) return "image/png";
+  if (b.length >= 3 && b[0] === 0xff && b[1] === 0xd8 && b[2] === 0xff) return "image/jpeg";
+  if (b.length >= 6 && b.toString("ascii", 0, 4) === "GIF8") return "image/gif";
+  if (b.length >= 12 && b.toString("ascii", 0, 4) === "RIFF" && b.toString("ascii", 8, 12) === "WEBP") return "image/webp";
+  return null;
+};
+
+// Downloads a link-preview image (≤1.5 MB png/jpeg/gif/webp) so it can be
+// mirrored into our own storage instead of being hot-linked from a third party.
+export const safeFetchImage = async (urlString) => {
+  const { buffer } = await safeFetchBytes(urlString, {
+    accept: "image/png,image/jpeg,image/gif,image/webp",
+    typeOk: (ct) => /^image\/(png|jpe?g|gif|webp)/i.test(ct),
+    typeError: (ct) => `Not a supported image (${ct})`,
+    maxBytes: MAX_IMAGE_BYTES,
+    allowPartial: false,
+  });
+  const contentType = sniffImageType(buffer);
+  if (!contentType) throw new Error("Image content doesn't match a supported format");
+  return { buffer, contentType };
 };
 
 // ── Lightweight OG/meta extraction ──────────────────────────────────────────

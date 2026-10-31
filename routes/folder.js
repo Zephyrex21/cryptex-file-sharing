@@ -16,9 +16,13 @@ import {
 const router = express.Router();
 
 // Same brute-force defense as the file routes' token lookup.
+// Counts only FAILED attempts (status >= 400): wrong-token guessing is what this
+// exists to throttle. Counting successes too meant a bulk delete/move of more
+// than 30 files (30 legitimate, successful requests) got 429s part-way through.
 const tokenLookupLimiter = rateLimit({
   windowMs: 60 * 1000,
   limit: 30,
+  skipSuccessfulRequests: true,
   standardHeaders: true,
   legacyHeaders: false,
   message: { message: "Too many token attempts — please wait a moment and try again" },

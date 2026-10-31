@@ -6,6 +6,7 @@ import { Readable } from "stream";
 import { canAccessFolder, canLeaveFolder, canMutateFile, canDeleteFolder, canMoveFile } from "../middleware/auth.js";
 import { generateToken } from "../utils/token.js";
 import { toClientFolder } from "../utils/clientView.js";
+import { serverError } from "../utils/httpError.js";
 
 // Same defense-in-depth as fileUpload.js's sanitizeOriginalName — strip
 // control characters and cap length before anything reaches storage.
@@ -44,7 +45,7 @@ export const createFolder = async (req, res) => {
     });
 
     res.status(201).json({ message: "Folder created!", folder });
-  } catch (e) { res.status(500).json({ message: e.message }); }
+  } catch (e) { serverError(res, e); }
 };
 
 // ── GET ALL ────────────────────────────────────────────────────────────────
@@ -67,7 +68,7 @@ export const getAllFolders = async (req, res) => {
     // private still belongs to the folder structurally — it's just not rendered
     // inside the folder's contents until unlocked via its own token.
     res.status(200).json({ count: folders.length, folders });
-  } catch (e) { res.status(500).json({ message: e.message }); }
+  } catch (e) { serverError(res, e); }
 };
 
 // ── GET ONE BY ID ──────────────────────────────────────────────────────────
@@ -99,7 +100,7 @@ export const getFolderById = async (req, res) => {
     }
 
     res.status(200).json({ folder: toClientFolder(folder) });
-  } catch (e) { res.status(500).json({ message: e.message }); }
+  } catch (e) { serverError(res, e); }
 };
 
 // ── GET BY TOKEN ── (shared link access) ──────────────────────────────────
@@ -135,7 +136,7 @@ export const getFolderByToken = async (req, res) => {
     }
 
     res.status(200).json({ folder: toClientFolder(folder) });
-  } catch (e) { res.status(500).json({ message: e.message }); }
+  } catch (e) { serverError(res, e); }
 };
 
 // ── RENAME ─────────────────────────────────────────────────────────────────
@@ -160,7 +161,7 @@ export const renameFolder = async (req, res) => {
     if (!folder) return res.status(404).json({ message: "Folder not found" });
 
     res.status(200).json({ message: "Renamed!", folder });
-  } catch (e) { res.status(500).json({ message: e.message }); }
+  } catch (e) { serverError(res, e); }
 };
 
 // ── SET VISIBILITY ─────────────────────────────────────────────────────────
@@ -220,7 +221,7 @@ export const setFolderVisibility = async (req, res) => {
     if (!folder) return res.status(404).json({ message: "Folder not found" });
 
     res.status(200).json({ message: `Visibility set to ${visibility}`, folder });
-  } catch (e) { res.status(500).json({ message: e.message }); }
+  } catch (e) { serverError(res, e); }
 };
 
 // ── DELETE ─────────────────────────────────────────────────────────────────
@@ -253,7 +254,7 @@ export const deleteFolder = async (req, res) => {
     }
 
     res.status(200).json({ message: "Folder deleted! Files are still in your vault." });
-  } catch (e) { res.status(500).json({ message: e.message }); }
+  } catch (e) { serverError(res, e); }
 };
 
 // ── ADD FILE TO FOLDER ─────────────────────────────────────────────────────
@@ -342,7 +343,7 @@ export const addFileToFolder = async (req, res) => {
     }
 
     res.status(200).json({ message: "File added to folder!", folder });
-  } catch (e) { res.status(500).json({ message: e.message }); }
+  } catch (e) { serverError(res, e); }
 };
 
 // ── REMOVE FILE FROM FOLDER ────────────────────────────────────────────────
@@ -390,7 +391,7 @@ export const removeFileFromFolder = async (req, res) => {
     }
 
     res.status(200).json({ message: "File removed from folder", folder });
-  } catch (e) { res.status(500).json({ message: e.message }); }
+  } catch (e) { serverError(res, e); }
 };
 
 // ── Shared ZIP assembly ────────────────────────────────────────────────────
@@ -473,7 +474,7 @@ export const downloadFolderZip = async (req, res) => {
 
     const archive = new ZipArchive({ zlib: { level: 6 } });
     archive.on("error", (err) => {
-      if (!res.headersSent) res.status(500).json({ message: err.message });
+      if (!res.headersSent) serverError(res, err);
       else res.destroy();
     });
     archive.pipe(res);
@@ -481,6 +482,6 @@ export const downloadFolderZip = async (req, res) => {
     await appendFilesToZip(archive, files);
     await archive.finalize();
   } catch (e) {
-    if (!res.headersSent) res.status(500).json({ message: e.message });
+    if (!res.headersSent) serverError(res, e);
   }
 };

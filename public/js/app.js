@@ -45,6 +45,15 @@ const ICONS={
 // real zero-knowledge tools make, and we tell the user so in the UI.
 // ═══════════════════════════════════════════════════════════════════════
 const encKeyCache=new Map(); // fileId -> base64url AES key, this-tab-only
+// The decryption key rides in the URL #fragment so it never reaches the server —
+// but once the page has READ it, leaving it in the address bar parks the key in
+// browser history (and in Chrome/Safari history sync), screenshots and
+// "copy URL" shares. Called after the key has actually unlocked something; the
+// in-memory cache keeps the item open for the rest of the session. (To pass a
+// link on, use the Share panel — it rebuilds the full link, key included.)
+function scrubKeyFromUrl(){
+  try{if(/(^|[#&])key=/.test(window.location.hash))history.replaceState(null,'',window.location.pathname+window.location.search);}catch{}
+}
 let pendingDecryptKey=null;  // key parsed from location.hash on page load, if any
 
 function buf2b64url(buf){
@@ -890,7 +899,7 @@ document.getElementById('folderDelModal').addEventListener('click',e=>{if(e.targ
 
 // ── PROPERTIES — user-friendly info only, no Cloudinary details ────────────
 function showProp(id){
-  const f=allFiles.find(x=>x._id===id);if(!f)return;
+  const f=findKnownFile(id);if(!f)return; // not just the gallery: files inside a token-opened folder too
   const type=tc(f.fileType);
   const icons={
     img:`<svg viewBox="0 0 24 24" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="3" width="18" height="18" rx="2"/><circle cx="8.5" cy="8.5" r="1.5"/><polyline points="21 15 16 10 5 21"/></svg>`,
@@ -1119,6 +1128,7 @@ async function openEncryptedFolderTokenModal(folder){
     try{
       await renderUnlockedVaultModal(folder,key);
       encKeyCache.set(folder._id,key);
+      scrubKeyFromUrl();
       document.getElementById('tokenModal').classList.add('open');
       return;
     }catch{ /* fall through to the manual-key prompt below — key was wrong/stale */ }
@@ -1220,6 +1230,7 @@ async function openEncryptedTokenModal(f){
     try{
       await renderUnlockedEncryptedModal(f,key);
       encKeyCache.set(f._id,key); // cache it so reopening this file later in the session doesn't need the URL fragment again
+      scrubKeyFromUrl();
       document.getElementById('tokenModal').classList.add('open');
       return;
     }
@@ -2004,9 +2015,26 @@ function copyShareLink(i){
   const link=`${window.location.origin}${window.location.pathname}?token=${encodeURIComponent(s.token)}`;
   navigator.clipboard.writeText(link).then(()=>toast('Link copied '+ICONS.check,'success')).catch(()=>toast('Link: '+link,'info'));
 }
-function openShare(i){
+async function openShare(i){
   const s=loadShares()[i];if(!s)return;
   closeMyShares();
+  // Opening an item from your own saved list shouldn't spend one of its views:
+  // the by-id route is token-checked but doesn't count one. If that can't be
+  // used (no id, expired, or the views are already used up) fall through to the
+  // normal token lookup, which shows the proper expired / limit message.
+  try{
+    if(s.id){
+      const base=s.type==='folder'?FOLDERS_API:API;
+      const res=await fetch(`${base}/${s.id}?token=${encodeURIComponent(s.token)}`);
+      if(res.ok){
+        const d=await res.json();
+        const item=d.folder||d.file;
+        const expired=item&&item.tokenExpiresAt&&new Date(item.tokenExpiresAt)<new Date();
+        const spent=item&&item.maxViews&&(item.viewCount||0)>=item.maxViews;
+        if(item&&!expired&&!spent){openTokenModal(item,s.type==='folder'?'folder':'file');return;}
+      }
+    }
+  }catch{ /* fall back to the token lookup below */ }
   const input=document.getElementById('tInput');
   if(input)input.value=s.token;
   accessByToken();
@@ -2044,5 +2072,10 @@ loadFiles();
   if(!t)return;
   const input=document.getElementById('tInput');
   if(input)input.value=t;
+  // Every token lookup spends one of a view-limited link's views, and a browser
+  // refresh would re-run this — so a reload only pre-fills the token; the person
+  // presses Access if they really want to open it again.
+  const nav=(window.performance&&performance.getEntriesByType)?performance.getEntriesByType('navigation')[0]:null;
+  if(nav&&nav.type==='reload'){toast('Token filled in — press Access to open it again','info');return;}
   setTimeout(()=>accessByToken(),350);
 })();

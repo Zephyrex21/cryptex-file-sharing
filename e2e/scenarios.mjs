@@ -241,6 +241,42 @@ const u16 = JSON.parse(await S.ev(`(()=>{
 ok(u16.priv.endsWith("?token=foldtok&fileToken=filetok1"), "private file → ?token=<folder>&fileToken=<file>", u16.priv);
 ok(u16.pub === "/api/folders/F/files/y?token=foldtok" && u16.unknown === "/api/folders/F/files/z?token=foldtok", "public / unknown files → URL unchanged");
 
+// ───────────────────────── S17: Properties for a file that only lives inside a token-opened folder ─────────────────────────
+section("S17 Properties works for files inside a token-opened folder (not just the gallery)");
+reset(); S = await boot();
+const p17 = await S.ev(`(()=>{
+  tokenModalFolder={_id:'fo',name:'F',files:[{_id:'z'.repeat(24),originalName:'inside.png',fileType:'image/png',fileSize:10,visibility:'public',createdAt:new Date().toISOString()}]};
+  showProp('z'.repeat(24));
+  return document.getElementById('propFname').textContent;
+})()`);
+ok(p17 === "inside.png", "showProp finds a file that is only inside the open folder", p17);
+
+// ───────────────────────── S18: decryption key is scrubbed from the address bar once used ─────────────────────────
+section("S18 The #key is removed from the URL after it has been used; the token and other hashes are left alone");
+reset(); S = await boot();
+await S.ev(`history.replaceState(null,'','/app?token=abc123#key=SECRETKEY')`);
+await S.ev(`scrubKeyFromUrl()`);
+const u18 = JSON.parse(await S.ev(`JSON.stringify({h:location.hash,s:location.search})`));
+ok(u18.h === "" && u18.s === "?token=abc123", "key fragment gone, ?token= kept", JSON.stringify(u18));
+await S.ev(`history.replaceState(null,'','/app#other=1')`);
+await S.ev(`scrubKeyFromUrl()`);
+ok((await S.ev(`location.hash`)) === "#other=1", "an unrelated fragment is untouched");
+
+// ───────────────────────── S19: opening from My Shares doesn't spend a view ─────────────────────────
+section("S19 My Shares → Open uses the by-id route (no view spent); exhausted/expired items still show the proper message path");
+reset(); S = await boot();
+const f19 = mkFile({ visibility: "private", shareToken: "abc123", maxViews: 3, viewCount: 0, fileUrl: undefined });
+await S.ev(`saveShare({id:'${f19._id}',type:'file',name:'x',token:'abc123',encrypted:false})`);
+db.log.length = 0;
+await S.ev(`openShare(0)`); await S.tick(20);
+ok(hit(new RegExp(`/api/files/${f19._id}\\?token=abc123`)).length >= 1, "opened via GET /api/files/:id?token=");
+ok(hit(/\/token\//).length === 0, "no /token/ lookup (that is what spends a view)");
+ok(db.files.get(f19._id).viewCount === 0, "viewCount untouched on the server", String(db.files.get(f19._id).viewCount));
+db.files.get(f19._id).viewCount = 3;
+db.log.length = 0;
+await S.ev(`openShare(0)`); await S.tick(20);
+ok(hit(/\/token\/abc123/).length >= 1, "views already used up → falls back to the normal token lookup (shows the limit message)");
+
 // ───────────────────────── S13: every inline handler resolves ─────────────────────────
 section("S13 Static check: every inline onclick/onkeydown target is a real function");
 reset(); mkFile(); mkFolder(); S = await boot();

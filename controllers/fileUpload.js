@@ -5,13 +5,14 @@ import Folder from "../models/Folder.js";
 import supabase from "../config/supabase.js";
 import { Readable } from "stream";
 import { ZipArchive } from "archiver";
-import { isSafeUrl, safeFetchHtml, extractMeta } from "./linkPreview.js";
-import { checkKnownMalwareHash } from "../utils/malwareScan.js";
+import { isSafeUrl, safeFetchHtml, safeFetchImage, extractMeta } from "./linkPreview.js";
+import { checkKnownMalwareHash, isScanConfigured } from "../utils/malwareScan.js";
 import { appendFilesToZip } from "./folderController.js";
 import { canAccessFile, canMutateFile, canAccessFolder, canDeleteFile } from "../middleware/auth.js";
 import { generateToken } from "../utils/token.js";
 import { newObjectPath, rotateObjectPath, undoRotation } from "../utils/storagePaths.js";
 import { toClientFile } from "../utils/clientView.js";
+import { serverError } from "../utils/httpError.js";
 import { hasStorageRoom } from "../utils/storageQuota.js";
 
 const BUCKET = process.env.SUPABASE_BUCKET || "cloudvault-files";
@@ -265,6 +266,15 @@ export const uploadFile = async (req, res) => {
     if (scan.flagged) {
       return res.status(400).json({ message: `Upload rejected: ${scan.reason}` });
     }
+    if (!scan.checked && isScanConfigured()) {
+      // A key is configured but no verdict was reached (VT down / rate-limited).
+      // Default: fail open and say so in the log. Set VIRUSTOTAL_FAIL_CLOSED=true
+      // if you'd rather refuse uploads than accept them unchecked.
+      console.warn("Malware pre-screen could not reach a verdict for an upload (VirusTotal unavailable or rate-limited)");
+      if (process.env.VIRUSTOTAL_FAIL_CLOSED === "true") {
+        return res.status(503).json({ message: "Couldn't run the malware check right now — please try again shortly" });
+      }
+    }
 
     const result = await uploadToSupabase(
       req.file.buffer,
@@ -291,7 +301,7 @@ export const uploadFile = async (req, res) => {
     if (filePath) {
       await supabase.storage.from(BUCKET).remove([filePath]).catch(() => {});
     }
-    res.status(500).json({ message: e.message });
+    serverError(res, e);
   }
 };
 
@@ -302,7 +312,22 @@ export const uploadFile = async (req, res) => {
 // protections on that fetch); if the fetch fails, we still save the link
 // with just the URL itself — the person typed a real address, that's enough
 // to be useful even without a rich preview.
+const THUMB_EXT = { "image/png": "png", "image/jpeg": "jpg", "image/gif": "gif", "image/webp": "webp" };
+const mirrorLinkImage = async (imageUrl) => {
+  try {
+    const { buffer, contentType } = await safeFetchImage(imageUrl);
+    const path = newObjectPath(`thumb.${THUMB_EXT[contentType]}`);
+    const { error } = await supabase.storage.from(BUCKET).upload(path, buffer, { contentType, upsert: false });
+    if (error) throw new Error(error.message);
+    return { path, url: supabase.storage.from(BUCKET).getPublicUrl(path).data.publicUrl };
+  } catch (e) {
+    console.warn(`Link preview image not mirrored: ${e.message}`);
+    return null;
+  }
+};
+
 export const createLink = async (req, res) => {
+  let mirroredPath = null;
   try {
     const { url, visibility } = req.body;
     if (!url || typeof url !== "string" || !url.trim()) {
@@ -334,22 +359,30 @@ export const createLink = async (req, res) => {
     const domain = parsed.hostname.replace(/^www\./, "");
     const title = sanitizeOriginalName(meta.title || domain);
 
+    // Mirror the preview image into OUR storage instead of hot-linking it: a
+    // third-party <img> makes every viewer's browser contact the linked site
+    // (IP/UA tracking by whoever controls it). Best-effort — no image is fine.
+    const mirrored = safeImage ? await mirrorLinkImage(safeImage) : null;
+    mirroredPath = mirrored ? mirrored.path : null;
+
     const file = await File.create({
       itemType:        "link",
       originalName:    title,
       linkUrl:         parsed.toString(),
       linkTitle:       meta.title ? sanitizeOriginalName(meta.title) : null,
       linkDescription: meta.description ? sanitizeOriginalName(meta.description) : null,
-      linkImage:       safeImage,
+      linkImage:       mirrored ? mirrored.url : null,
+      filePath:        mirrored ? mirrored.path : undefined, // lets delete/purge clean the thumbnail up too
       linkDomain:      sanitizeOriginalName(domain),
       fileType:        "text/x-url",
       shareToken:      generateToken(),
       visibility:      visibility === "private" ? "private" : "public",
     });
 
-    res.status(201).json({ message: "Link added!", file });
+    res.status(201).json({ message: "Link added!", file: toClientFile(file) });
   } catch (e) {
-    res.status(500).json({ message: e.message });
+    if (mirroredPath) await supabase.storage.from(BUCKET).remove([mirroredPath]).catch(() => {}); // don't orphan the thumbnail
+    serverError(res, e);
   }
 };
 
@@ -389,14 +422,15 @@ export const getAllFiles = async (req, res) => {
       await Promise.all(needsToken.map(f => { f.shareToken = generateToken(); return f.save(); }));
     }
 
+    const clientFiles = files.map(toClientFile);
     if (hasPaging) {
       return res.status(200).json({
-        count: files.length, files, total, page, limit,
+        count: files.length, files: clientFiles, total, page, limit,
         hasMore: page * limit < total,
       });
     }
-    res.status(200).json({ count: files.length, files });
-  } catch (e) { res.status(500).json({ message: e.message }); }
+    res.status(200).json({ count: files.length, files: clientFiles });
+  } catch (e) { serverError(res, e); }
 };
 
 // ── GET BY TOKEN ── (no auth needed — used for shared links) ───────────────
@@ -422,7 +456,7 @@ export const getFileByToken = async (req, res) => {
       return res.status(200).json({ file: toClientFile(updated) });
     }
     res.status(200).json({ file: toClientFile(file) });
-  } catch (e) { res.status(500).json({ message: e.message }); }
+  } catch (e) { serverError(res, e); }
 };
 
 // ── GET ONE ────────────────────────────────────────────────────────────────
@@ -437,7 +471,7 @@ export const getSingleFile = async (req, res) => {
       return res.status(403).json({ message: "This file is private — a valid share token is required" });
     }
     res.status(200).json({ file: toClientFile(file) });
-  } catch (e) { res.status(500).json({ message: e.message }); }
+  } catch (e) { serverError(res, e); }
 };
 
 // ── RENAME ─────────────────────────────────────────────────────────────────
@@ -468,7 +502,7 @@ export const renameFile = async (req, res) => {
     );
     if (!file) return res.status(404).json({ message: "Not found" });
     res.status(200).json({ message: "Renamed!", file: toClientFile(file) });
-  } catch (e) { res.status(500).json({ message: e.message }); }
+  } catch (e) { serverError(res, e); }
 };
 
 // ── SET VISIBILITY ─────────────────────────────────────────────────────────
@@ -561,7 +595,7 @@ export const setVisibility = async (req, res) => {
       return res.status(404).json({ message: "Not found" });
     }
     res.status(200).json({ message: `Visibility set to ${visibility}`, file: toClientFile(file) });
-  } catch (e) { res.status(500).json({ message: e.message }); }
+  } catch (e) { serverError(res, e); }
 };
 
 // ── Shared streaming helper ────────────────────────────────────────────────
@@ -612,7 +646,7 @@ const streamFile = async (req, res, disposition) => {
 
   const stream = Readable.fromWeb(response.body);
   stream.on("error", (err) => {
-    if (!res.headersSent) res.status(500).json({ message: err.message });
+    if (!res.headersSent) serverError(res, err);
     else res.destroy();
   });
   stream.pipe(res);
@@ -623,7 +657,7 @@ export const previewFile = async (req, res) => {
   try {
     await streamFile(req, res, "inline");
   } catch (e) {
-    if (!res.headersSent) res.status(500).json({ message: e.message });
+    if (!res.headersSent) serverError(res, e);
   }
 };
 
@@ -632,7 +666,7 @@ export const downloadFile = async (req, res) => {
   try {
     await streamFile(req, res, "attachment");
   } catch (e) {
-    if (!res.headersSent) res.status(500).json({ message: e.message });
+    if (!res.headersSent) serverError(res, e);
   }
 };
 
@@ -647,16 +681,13 @@ export const deleteFile = async (req, res) => {
       return res.status(403).json({ message: "This file is private — a valid share token is required" });
     }
 
-    // Supabase deletion is best-effort — a storage error should NOT block
-    // the MongoDB record from being deleted (otherwise the file reappears on
-    // refresh). Done before the Mongo transaction below, not inside it: an
-    // external network call has no business sitting inside a DB transaction
-    // (holds it open longer than necessary, and can't roll back anyway).
+    // Order matters: the DB record goes FIRST, the storage object AFTER. If the
+    // transaction fails nothing has been touched (the file is intact and can be
+    // retried). The old order removed the bytes first, so a failing transaction
+    // left a record pointing at a file that no longer existed — a broken entry.
+    // The reverse failure (record gone, object removal fails) only strands an
+    // unreferenced object, which is logged and harmless to users.
     const storagePath = file.filePath || file.cloudinaryId;
-    if (storagePath) {
-      const { error } = await supabase.storage.from(BUCKET).remove([storagePath]);
-      if (error) console.warn(`Supabase remove warning (non-fatal): ${error.message}`);
-    }
 
     // Pull this file's id out of its folder's files array AND delete the
     // file record as one atomic unit — otherwise a failure between the two
@@ -675,8 +706,20 @@ export const deleteFile = async (req, res) => {
       await session.endSession();
     }
 
+    // Best-effort and outside the transaction: an external network call has no
+    // business inside a DB transaction, and a storage hiccup must not make a
+    // successful delete look like a failure.
+    if (storagePath) {
+      try {
+        const { error } = await supabase.storage.from(BUCKET).remove([storagePath]);
+        if (error) console.warn(`Supabase remove warning (non-fatal, object orphaned): ${error.message}`);
+      } catch (e) {
+        console.warn(`Supabase remove warning (non-fatal, object orphaned): ${e.message}`);
+      }
+    }
+
     res.status(200).json({ message: "Deleted!" });
-  } catch (e) { res.status(500).json({ message: e.message }); }
+  } catch (e) { serverError(res, e); }
 };
 
 // ── BULK: DOWNLOAD SELECTED FILES AS ZIP ────────────────────────────────────
@@ -703,7 +746,7 @@ export const downloadFilesZip = async (req, res) => {
 
     const archive = new ZipArchive({ zlib: { level: 6 } });
     archive.on("error", (err) => {
-      if (!res.headersSent) res.status(500).json({ message: err.message });
+      if (!res.headersSent) serverError(res, err);
       else res.destroy();
     });
     archive.pipe(res);
@@ -711,6 +754,6 @@ export const downloadFilesZip = async (req, res) => {
     await appendFilesToZip(archive, files);
     await archive.finalize();
   } catch (e) {
-    if (!res.headersSent) res.status(500).json({ message: e.message });
+    if (!res.headersSent) serverError(res, e);
   }
 };

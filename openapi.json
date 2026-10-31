@@ -766,36 +766,6 @@
         },
         "description": "The file must actually be in this folder. For a PRIVATE file, also pass that file's own token as the `fileToken` query parameter (or `X-File-Token` header); `token` carries the folder's."
       }
-    },
-    "/qr": {
-      "get": {
-        "tags": [
-          "Utility"
-        ],
-        "summary": "Generate a QR code PNG for any text (e.g. a share link)",
-        "parameters": [
-          {
-            "name": "text",
-            "in": "query",
-            "required": true,
-            "schema": {
-              "type": "string",
-              "maxLength": 500
-            }
-          }
-        ],
-        "responses": {
-          "200": {
-            "description": "PNG image",
-            "content": {
-              "image/png": {}
-            }
-          },
-          "400": {
-            "description": "Missing or too-long text"
-          }
-        }
-      }
     }
   }
 }

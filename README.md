@@ -137,6 +137,13 @@ MAX_TOTAL_STORAGE_MB=
 # Optional — delete PRIVATE files whose share token expired more than this many
 # days ago (storage + record). Unset/0 = never delete anything automatically.
 PURGE_EXPIRED_AFTER_DAYS=
+# Optional — if a VirusTotal key is set but VirusTotal can't give a verdict
+# (down / free-tier rate limit), uploads are accepted unchecked by default (and a
+# warning is logged). Set to "true" to refuse those uploads instead.
+VIRUSTOTAL_FAIL_CLOSED=
+
+# Optional — set to "true" to stop serving the Swagger UI at /api-docs.
+DISABLE_API_DOCS=
 ```
 ---
 
@@ -227,6 +234,15 @@ This app has no login/user system — it's a personal, share-by-link drop box, n
 - **Removing a file from a folder checks the file, not just the folder.** The file must really be in that folder, and a *private* file also needs its own token (sent as `?fileToken=` since `?token=` carries the folder's).
 - **Expiry can't strand data.** An expired-but-still-current token can no longer read or modify an item, but it can still **delete** it, so owners can always remove their own files. Optionally set `PURGE_EXPIRED_AFTER_DAYS` to have the server delete private files that expired that long ago. (Regenerating a token still locks out everyone holding the old one — including for deletion.)
 - **Upload abuse backstops.** Uploads are buffered in memory, so `MAX_CONCURRENT_UPLOADS` (default 4) caps how many run at once (503 + `Retry-After` beyond that), a declared body size over the limit is refused with 413 *before* it's read, and `MAX_TOTAL_STORAGE_MB` (off by default) stops anonymous uploads from filling your storage quota (507).
+- **Deleting is DB-first.** The record (and its folder link) is removed in one transaction, and only then is the storage object removed (best-effort). If the transaction fails the file is untouched — it can no longer end up as a record pointing at bytes that were already deleted.
+- **Bulk actions aren't rate-limited by the guessing limiter.** The 30/min limit on token endpoints now counts only *failed* attempts, so deleting or moving 40 files at once works, while brute-forcing tokens is still capped.
+- **Link-preview images are mirrored into your own storage** (≤1.5 MB png/jpeg/gif/webp, type verified from the bytes, fetched through the same SSRF-safe path as the page) instead of being hot-linked, so viewing the gallery never makes a visitor's browser contact a third-party site. Links saved before this change keep working; their remote image is simply withheld.
+- **The decryption key is scrubbed from the address bar** (`#key=…`) once it has actually unlocked something, so it doesn't sit in browser history/sync or get copied with the URL. Use the Share panel to pass a link on — it rebuilds the full link. A page *refresh* no longer auto-reopens a token link (that would spend another view of a view-limited link); the token is just pre-filled. Opening an item from **My Shares** uses the by-id route, so it doesn't spend a view either.
+- **Errors don't leak internals.** Controllers return a generic message (full error goes to the server log); a malformed id is a `400`, malformed JSON is a JSON `400`, and `X-Powered-By` is off. CSP also pins `base-uri` and `form-action`.
+- **VirusTotal is a known-hash reputation check only** — it can't catch a new file, and on the free tier it'll often be rate-limited. When a key is set but no verdict is reached it now logs a warning; set `VIRUSTOTAL_FAIL_CLOSED=true` to refuse those uploads rather than accept them unchecked.
+- **Honest threat model for encryption:** the server only stores ciphertext and never receives the key, but (as with any web app) your browser runs JavaScript this server delivers, so you're trusting the operator not to ship tampered code. The landing page now says so.
+- `package.json` pins `minimatch` to `^11.0.1` via `overrides`: a newly published advisory (denial of service) affects the older copy that `archiver` and `nodemon` pull in transitively. This app never passes user input to a glob, so it wasn't exploitable here, but the override clears `npm audit` and was verified against real ZIP generation and `nodemon`.
+- The unused server-side `/api/qr` route and its `qrcode` dependency were removed (QR codes are generated in the browser). Set `DISABLE_API_DOCS=true` to stop serving `/api-docs`.
 - Uploaded file content is verified against its declared type using magic-byte signatures, not just the client-reported MIME type (see `verifyMagicBytes` in `controllers/fileUpload.js`).
 - Unencrypted uploads get a best-effort malware pre-screen via VirusTotal's hash-lookup API — see `utils/malwareScan.js` for exactly what this does and doesn't catch (it's a known-hash lookup, not a full scan, and fails open if VirusTotal is unreachable or no API key is configured).
 - **Encrypted uploads are zero-knowledge by construction**, not just policy: the AES key never appears in any request body, response, log line, or database row this server controls. This also means magic-byte content verification is skipped for encrypted uploads — the server has no plaintext to check, which is the expected cost of not being able to read the file at all.

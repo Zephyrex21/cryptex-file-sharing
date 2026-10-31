@@ -12,10 +12,24 @@ const plain = (doc) => {
   return { ...doc };
 };
 
+// Link-preview images are mirrored into OUR storage when a link is added. Links
+// saved before that still point at the third party's server, and rendering them
+// would make every gallery viewer's browser contact that host (IP/UA tracking
+// by whoever controls the linked page). Withhold any image that isn't ours —
+// the card falls back to its icon.
+const storageOrigin = () => {
+  try { return new URL(process.env.SUPABASE_URL).origin; } catch { return null; }
+};
+const isOurImage = (url, origin) => {
+  try { return new URL(url).origin === origin; } catch { return false; }
+};
+
 export const toClientFile = (doc) => {
   const o = plain(doc);
-  if (o && typeof o === "object" && o.visibility === "private") {
-    for (const k of PRIVATE_HIDDEN) delete o[k];
+  if (o && typeof o === "object") {
+    if (o.visibility === "private") for (const k of PRIVATE_HIDDEN) delete o[k];
+    const origin = storageOrigin();
+    if (o.linkImage && origin && !isOurImage(o.linkImage, origin)) delete o.linkImage;
   }
   return o;
 };

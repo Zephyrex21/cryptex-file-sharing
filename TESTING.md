@@ -7,7 +7,7 @@ stale versions and make things look broken when they aren't.
 
 ## Automated tests
 
-`npm test` runs 267 Vitest cases covering the security-critical logic that's
+`npm test` runs 293 Vitest cases covering the security-critical logic that's
 otherwise easy to silently break: magic-byte content verification (every
 supported file type, plus mismatch/tampering cases), the SSRF protections in
 `isSafeUrl` (private IPs, IPv6, cloud metadata address, mixed-resolution,
@@ -27,6 +27,7 @@ name de-duplication, and its concurrency cap (`tests/zipHelper.test.js`); and th
 critical fixes — linear-time link-preview parsing, no inline rendering of uploaded active content,
 token-gated vault uploads, and hidden/rotating private storage paths (`tests/criticalFixes.test.js`), plus a real-HTTP multipart check of the multer 2 upgrade (`tests/multer2Compat.test.js`).
 The high-severity fixes — IPv6 SSRF notations, body-stall deadline, folder-removal authorization, expiry/delete rules and the opt-in purge job, upload concurrency/size guard and storage cap — are pinned in `tests/highFixes.test.js`.
+The medium-severity fixes — failure-only token limiter vs bulk actions, link-image mirroring and the third-party-image filter, malware-scan fail-open/closed, generic error responses — are in `tests/mediumFixes.test.js`; the browser-side ones (Properties in folders, key scrubbing, My Shares not spending views) are e2e scenarios S17–S19.
 
 There's also an **optional website smoke test** in `e2e/` (`cd e2e && npm install
 && npm test`) that loads the real `app.html` + `app.js` into a DOM and drives the
@@ -229,7 +230,7 @@ for the full reasoning.
 - The access-control and My Shares checklists above, in a *real browser*. What I
   did verify: the unit tests run the actual controller functions, and the `e2e/`
   smoke test runs the real page + real `app.js` in a DOM against a fake API that
-  uses the real auth rules (66 checks, and I confirmed it fails when I put the
+  uses the real auth rules (75 checks, and I confirmed it fails when I put the
   bugs back). What that can't tell you: how it looks and feels, and anything
   involving a real MongoDB or Supabase.
 - **MongoDB transactions against a real database.** The move/remove/delete code
