@@ -14,6 +14,7 @@ import { newObjectPath, rotateObjectPath, undoRotation } from "../utils/storageP
 import { toClientFile } from "../utils/clientView.js";
 import { serverError } from "../utils/httpError.js";
 import { hasStorageRoom } from "../utils/storageQuota.js";
+import { withTokenRetry } from "../utils/tokenRetry.js";
 
 const BUCKET = process.env.SUPABASE_BUCKET || "cloudvault-files";
 
@@ -215,7 +216,7 @@ export const uploadFile = async (req, res) => {
       );
       filePath = result.filePath;
 
-      const file = await File.create({
+      const file = await withTokenRetry(() => File.create({
         originalName: "Encrypted file", // placeholder; the real name only exists as ciphertext below
         fileUrl:      result.publicUrl,
         filePath:     result.filePath,
@@ -235,7 +236,7 @@ export const uploadFile = async (req, res) => {
         encryptedMimeType,
         encryptedMimeTypeIV,
         folderId:     vaultFolder ? vaultFolder._id : null,
-      });
+      }));
 
       if (vaultFolder) {
         vaultFolder.files.push(file._id);
@@ -285,7 +286,7 @@ export const uploadFile = async (req, res) => {
 
     // Explicitly generate shareToken — don't rely on schema default,
     // which can silently fail on some Mongoose versions with sparse unique indexes.
-    const file = await File.create({
+    const file = await withTokenRetry(() => File.create({
       originalName: sanitizeOriginalName(req.file.originalname),
       fileUrl:      result.publicUrl,
       filePath:     result.filePath,
@@ -294,7 +295,7 @@ export const uploadFile = async (req, res) => {
       storageType:  "supabase",
       shareToken:   generateToken(),
       visibility:   "public",
-    });
+    }));
 
     res.status(201).json({ message: "Uploaded!", file: toClientFile(file) });
   } catch (e) {
@@ -365,7 +366,7 @@ export const createLink = async (req, res) => {
     const mirrored = safeImage ? await mirrorLinkImage(safeImage) : null;
     mirroredPath = mirrored ? mirrored.path : null;
 
-    const file = await File.create({
+    const file = await withTokenRetry(() => File.create({
       itemType:        "link",
       originalName:    title,
       linkUrl:         parsed.toString(),
@@ -377,7 +378,7 @@ export const createLink = async (req, res) => {
       fileType:        "text/x-url",
       shareToken:      generateToken(),
       visibility:      visibility === "private" ? "private" : "public",
-    });
+    }));
 
     res.status(201).json({ message: "Link added!", file: toClientFile(file) });
   } catch (e) {
@@ -386,7 +387,8 @@ export const createLink = async (req, res) => {
   }
 };
 
-// ── GET ALL ────────────────────────────────────────────────────────────────
+// ── GET ALL ────────────────────────────────────────────
+const GALLERY_MAX_ITEMS = Math.max(1, Number(process.env.GALLERY_MAX_ITEMS) || 1000);
 export const getAllFiles = async (req, res) => {
   try {
     // Find IDs of all private folders so we can hide their files from the gallery.
@@ -414,22 +416,28 @@ export const getAllFiles = async (req, res) => {
     const total = hasPaging ? await File.countDocuments(query) : undefined;
     let filesQuery = File.find(query).sort({ createdAt: -1 });
     if (hasPaging) filesQuery = filesQuery.skip((page - 1) * limit).limit(limit);
+    else filesQuery = filesQuery.limit(GALLERY_MAX_ITEMS); // safety cap — see below
     const files = await filesQuery;
 
     // One-time migration: assign tokens to any legacy docs that don't have one.
     const needsToken = files.filter(f => !f.shareToken);
     if (needsToken.length > 0) {
-      await Promise.all(needsToken.map(f => { f.shareToken = generateToken(); return f.save(); }));
+      await Promise.all(needsToken.map(f => withTokenRetry(() => { f.shareToken = generateToken(); return f.save(); })));
     }
 
     const clientFiles = files.map(toClientFile);
+    // Unpaged requests keep their old shape (one response, newest first) but are
+    // bounded so a huge library can't turn one GET into an unbounded memory and
+    // bandwidth hit. `truncated` is only present when the cap actually bit; use
+    // ?page=&limit= to walk the rest. Raise it with GALLERY_MAX_ITEMS.
+    const truncated = !hasPaging && files.length >= GALLERY_MAX_ITEMS;
     if (hasPaging) {
       return res.status(200).json({
         count: files.length, files: clientFiles, total, page, limit,
         hasMore: page * limit < total,
       });
     }
-    res.status(200).json({ count: files.length, files: clientFiles });
+    res.status(200).json({ count: files.length, files: clientFiles, ...(truncated ? { truncated: true } : {}) });
   } catch (e) { serverError(res, e); }
 };
 
@@ -585,7 +593,10 @@ export const setVisibility = async (req, res) => {
 
     let file;
     try {
-      file = await File.findByIdAndUpdate(req.params.id, update, { new: true });
+      file = await withTokenRetry(() => {
+        if (update.shareToken) update.shareToken = generateToken(); // fresh token if the last one collided
+        return File.findByIdAndUpdate(req.params.id, update, { new: true });
+      });
     } catch (e) {
       if (rotated) await undoRotation(supabase, BUCKET, existing.filePath, rotated.filePath);
       throw e;

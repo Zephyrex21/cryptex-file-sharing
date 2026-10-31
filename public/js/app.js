@@ -242,7 +242,9 @@ document.getElementById('encToggle')?.addEventListener('change',e=>{
 function refreshVaultSelect(){
   const sel=document.getElementById('vaultSelect');
   const current=sel.value;
-  const vaults=allFolders.filter(f=>f.encrypted&&encKeyCache.has(f._id));
+  // Vaults are private, so the PUBLIC folder list (allFolders) reloads without them;
+  // anything we hold a key for is still resolvable from the known-items registry.
+  const vaults=[...encKeyCache.keys()].map(id=>findKnownFolder(id)).filter(f=>f&&f.encrypted);
   sel.innerHTML='<option value="">Standalone (its own key)</option>'+vaults.map(f=>`<option value="${f._id}">${escH(f.name)}</option>`).join('');
   if(vaults.some(f=>f._id===current))sel.value=current;
 }
@@ -288,6 +290,7 @@ uzone.addEventListener('dragleave',e=>{if(!uzone.contains(e.relatedTarget))uzone
 uzone.addEventListener('drop',e=>{e.preventDefault();uzone.classList.remove('drag-over');[...e.dataTransfer.files].forEach(doUpload);});
 
 function getLimit(m){return 50;} // flat 50MB cap for every file type
+const ENC_OVERHEAD_BYTES=16; // AES-GCM auth tag: ciphertext is 16 bytes larger than the plaintext
 const ALLOWED=['image/jpeg','image/png','image/gif','image/webp','video/mp4','video/webm','video/ogg','video/quicktime','video/x-msvideo','application/pdf','application/zip','application/x-zip-compressed','text/plain','text/csv','application/xml','text/xml','application/msword','application/vnd.ms-powerpoint','application/vnd.openxmlformats-officedocument.wordprocessingml.document','application/vnd.openxmlformats-officedocument.spreadsheetml.sheet','application/vnd.openxmlformats-officedocument.presentationml.presentation','text/x-python','application/x-ipynb+json','text/javascript','text/jsx','text/typescript','text/tsx','application/json','text/markdown','text/x-java','text/x-c','text/x-c++','text/x-c-header','text/x-c++-header','text/css','text/html','application/sql','text/yaml','application/x-sh'];
 
 // Most OSes have no registered MIME type for these extensions, so
@@ -324,7 +327,7 @@ function doUpload(f){
   // inspect it either way — so that restriction has nothing left to protect
   // once encryption is on, and encrypted mode can accept any file type.
   if(!encrypt&&!ALLOWED.includes(f.type))return toast(`"${f.type}" not supported`,'error');
-  if(f.size>getLimit(f.type)*1024*1024)return toast(`${f.name} exceeds ${getLimit(f.type)}MB`,'error');
+  if(f.size>getLimit(f.type)*1024*1024-(encrypt?ENC_OVERHEAD_BYTES:0))return toast(`${f.name} exceeds ${getLimit(f.type)}MB`,'error');
   if(!queue.length&&!busy)batchTotal=0; // starting a fresh batch
   queue.push({file:f,encrypt,vaultFolderId});batchTotal++;proc();
 }
@@ -348,7 +351,7 @@ function proc(){
       celebrateIfFirstTime('cv-first-upload',uzone);
       const isLast=queue.length===0;
       if(isLast){pf.classList.add('success');pp.innerHTML=ICONS.check+' Done';ptr.classList.add('pop');}
-      setTimeout(()=>{pw.classList.remove('show');uzone.classList.remove('busy');pf.classList.remove('success');ptr.classList.remove('pop');loadFiles();proc();},isLast?1000:750);
+      setTimeout(()=>{if(!busy){pw.classList.remove('show');uzone.classList.remove('busy');pf.classList.remove('success');ptr.classList.remove('pop');}loadFiles();proc();},isLast?1000:750); // `busy`: a file dropped during this delay already started — keep ITS progress bar
     }
     else{let m='Upload failed';try{m=JSON.parse(xhr.responseText).message||m;}catch{}toast(m,'error');pw.classList.remove('show');uzone.classList.remove('busy');proc();}
   };
@@ -409,7 +412,7 @@ async function uploadEncrypted(f,pos,ui,vaultFolderId){
         pf.style.width='100%';pp.textContent='100%';
         const isLast=queue.length===0;
         if(isLast){pf.classList.add('success');pp.innerHTML=ICONS.check+' Done';ptr.classList.add('pop');}
-        setTimeout(()=>{pw.classList.remove('show');uzone.classList.remove('busy');pf.classList.remove('success');ptr.classList.remove('pop');loadFiles();proc();},isLast?1000:750);
+        setTimeout(()=>{if(!busy){pw.classList.remove('show');uzone.classList.remove('busy');pf.classList.remove('success');ptr.classList.remove('pop');}loadFiles();proc();},isLast?1000:750); // `busy`: a file dropped during this delay already started — keep ITS progress bar
         celebrateIfFirstTime('cv-first-upload',uzone);
         if(vaultFolderId){
           // The vault's own link (shown once, at creation) is what matters
@@ -523,6 +526,7 @@ async function loadFiles(){
   try{
     const res=await fetch(API);if(!res.ok)throw new Error();
     const data=await res.json();allFiles=data.files||[];
+    if(data.truncated)toast(`Showing the newest ${allFiles.length} files`,'info');
     renderAll();
     document.getElementById('badge').textContent=`${allFiles.length} file${allFiles.length!==1?'s':''}`;
   }catch{toast('Cannot reach server','error');}

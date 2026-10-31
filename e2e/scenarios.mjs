@@ -277,6 +277,45 @@ db.log.length = 0;
 await S.ev(`openShare(0)`); await S.tick(20);
 ok(hit(/\/token\/abc123/).length >= 1, "views already used up → falls back to the normal token lookup (shows the limit message)");
 
+// ───────────────────────── S20: the vault stays selectable after the folder list reloads ─────────────────────────
+section("S20 A vault you hold the key for stays in the upload dropdown after loadFolders() replaces the public list");
+reset(); S = await boot();
+const v20 = JSON.parse(await S.ev(`(()=>{
+  const v={_id:'v1',name:'My Vault',encrypted:true,visibility:'private',shareToken:'tok123',files:[]};
+  allFolders=[v]; rememberItem(v); encKeyCache.set('v1','KEY');
+  encKeyCache.set('file-not-a-folder','KEY2'); // standalone encrypted file keys live in the same cache
+  refreshVaultSelect(); const before=[...document.getElementById('vaultSelect').options].map(o=>o.textContent);
+  allFolders=[]; // what loadFolders() does: replaces the list with the PUBLIC folders only
+  refreshVaultSelect(); const after=[...document.getElementById('vaultSelect').options].map(o=>o.textContent);
+  return JSON.stringify({before,after});
+})()`));
+ok(v20.before.length === 2 && v20.after.length === 2 && v20.after[1] === "My Vault", "vault option survives the reload; file keys don't create phantom options", JSON.stringify(v20));
+
+// ───────────────────────── S21: encrypted size limit accounts for the GCM tag ─────────────────────────
+section("S21 Size limit: plain files up to exactly 50 MB; encrypted files 16 bytes less (AES-GCM tag)");
+reset(); S = await boot();
+const MB50 = 50 * 1024 * 1024;
+const r21 = JSON.parse(await S.ev(`(()=>{
+  proc=()=>{}; // we only care whether the file is accepted into the queue
+  const chk=(enc,size,type)=>{document.getElementById('encToggle').checked=enc;queue.length=0;doUpload({name:'f.bin',type,size});return queue.length;};
+  return JSON.stringify({
+    plainAtLimit:   chk(false,${MB50},'image/png'),
+    plainOver:      chk(false,${MB50}+1,'image/png'),
+    encAtLimit:     chk(true,${MB50}-16,'application/octet-stream'),
+    encJustOver:    chk(true,${MB50}-15,'application/octet-stream'),
+  });
+})()`));
+ok(r21.plainAtLimit === 1 && r21.plainOver === 0, "plain: exactly 50 MB accepted, 1 byte over refused", JSON.stringify(r21));
+ok(r21.encAtLimit === 1 && r21.encJustOver === 0, "encrypted: 50 MB − 16 B accepted, one byte more refused (ciphertext would exceed the server cap)", JSON.stringify(r21));
+ok(/exceeds 50MB/.test(toastText(S)), "refusal says so");
+
+// ───────────────────────── S22: truncated gallery is announced ─────────────────────────
+section("S22 When the server caps the gallery response, the UI says so");
+reset(); S = await boot();
+await S.ev(`(async()=>{ const real=fetch; fetch=async(u,o)=>String(u).endsWith('/api/files')?{ok:true,json:async()=>({files:[],truncated:true})}:real(u,o); await loadFiles(); })()`);
+await S.tick(10);
+ok(/Showing the newest/.test(toastText(S)), "toast: Showing the newest N files");
+
 // ───────────────────────── S13: every inline handler resolves ─────────────────────────
 section("S13 Static check: every inline onclick/onkeydown target is a real function");
 reset(); mkFile(); mkFolder(); S = await boot();

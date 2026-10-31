@@ -67,8 +67,8 @@ Cryptex allows users to upload files, organize them into folders, generate uniqu
 ### 1. Clone the Repository
 
 ```bash
-git clone https://github.com/Zephyrex21/Cryptex_File_Sharing.git
-cd cryptex
+git clone https://github.com/Zephyrex21/cryptex-file-sharing.git
+cd cryptex-file-sharing
 ```
 
 ### 2. Install Dependencies
@@ -144,6 +144,10 @@ VIRUSTOTAL_FAIL_CLOSED=
 
 # Optional — set to "true" to stop serving the Swagger UI at /api-docs.
 DISABLE_API_DOCS=
+# Optional — safety cap on how many files an UNPAGED gallery request returns
+# (newest first). Default 1000. The response gets "truncated": true when it bites;
+# ?page=&limit= walks the rest.
+GALLERY_MAX_ITEMS=
 ```
 ---
 
@@ -242,6 +246,11 @@ This app has no login/user system — it's a personal, share-by-link drop box, n
 - **VirusTotal is a known-hash reputation check only** — it can't catch a new file, and on the free tier it'll often be rate-limited. When a key is set but no verdict is reached it now logs a warning; set `VIRUSTOTAL_FAIL_CLOSED=true` to refuse those uploads rather than accept them unchecked.
 - **Honest threat model for encryption:** the server only stores ciphertext and never receives the key, but (as with any web app) your browser runs JavaScript this server delivers, so you're trusting the operator not to ship tampered code. The landing page now says so.
 - `package.json` pins `minimatch` to `^11.0.1` via `overrides`: a newly published advisory (denial of service) affects the older copy that `archiver` and `nodemon` pull in transitively. This app never passes user input to a glob, so it wasn't exploitable here, but the override clears `npm audit` and was verified against real ZIP generation and `nodemon`.
+- **Share-token collisions are retried.** Tokens are 6 characters and the DB enforces uniqueness, so two items can occasionally draw the same one. A duplicate-key error on `shareToken` now just picks a fresh token (up to 5 attempts) on upload, link, folder creation and token regeneration, instead of failing the request. The models' own default token also works now (it was being handed Mongoose's document as the `length` argument and returned an empty string — masked because every create path passes an explicit token).
+- **The unpaged gallery response is bounded** (`GALLERY_MAX_ITEMS`, default 1000, newest first; `"truncated": true` appears only when the cap bites and the UI says so). `?page=&limit=` paging is unchanged.
+- Unknown `/api/...` paths answer with JSON `404`, not the HTML 404 page.
+- Small UI fixes: a vault you hold the key for stays in the upload dropdown after the folder list reloads; an encrypted file's size limit accounts for the 16-byte AES-GCM tag (a file a hair under 50 MB used to pass the client check and fail on the server); a "done" animation no longer hides the progress bar of a file dropped during its delay.
+- CI now also runs the jsdom e2e suite and `npm audit --omit=dev --audit-level=high`. `nodemon` is a dev dependency, and the package is named `cryptex-file-sharing`.
 - The unused server-side `/api/qr` route and its `qrcode` dependency were removed (QR codes are generated in the browser). Set `DISABLE_API_DOCS=true` to stop serving `/api-docs`.
 - Uploaded file content is verified against its declared type using magic-byte signatures, not just the client-reported MIME type (see `verifyMagicBytes` in `controllers/fileUpload.js`).
 - Unencrypted uploads get a best-effort malware pre-screen via VirusTotal's hash-lookup API — see `utils/malwareScan.js` for exactly what this does and doesn't catch (it's a known-hash lookup, not a full scan, and fails open if VirusTotal is unreachable or no API key is configured).

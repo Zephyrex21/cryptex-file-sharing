@@ -59,7 +59,10 @@ const fileSchema = new mongoose.Schema(
       unique:  true,
       sparse:  true,
       index:   true,
-      default: generateToken,
+      // Wrapped on purpose: Mongoose calls a default function with the DOCUMENT as its
+      // first argument, and generateToken's first parameter is `length` — passing the
+      // function bare made it loop zero times and return an empty string.
+      default: () => generateToken(),
     },
 
     // public  → appears in main gallery

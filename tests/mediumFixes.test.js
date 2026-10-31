@@ -134,10 +134,10 @@ describe("M9 — link preview images are mirrored into our storage, never hot-li
       process.env.SUPABASE_URL = saved;
     });
     it("the gallery list goes through the same filter", async () => {
-      File.find.mockReturnValue({ sort: () => Promise.resolve([
+      File.find.mockReturnValue({ sort: () => ({ limit: () => Promise.resolve([
         { _id: "a", visibility: "public", shareToken: "t1", linkImage: "https://tracker.example/p.png" },
         { _id: "b", visibility: "public", shareToken: "t2", linkImage: "https://dummy.supabase.co/storage/x.png" },
-      ]) });
+      ]) }) });
       Folder.find.mockReturnValue({ lean: async () => [] });
       const res = mockRes(); await getAllFiles({ query: {} }, res);
       const files = jsonOf(res).files;

@@ -1,7 +1,7 @@
 {
-  "name": "cloudvault",
+  "name": "cryptex-file-sharing",
   "version": "1.0.0",
-  "description": "CloudVault file manager — Supabase Storage edition",
+  "description": "Cryptex — token-based file sharing with optional end-to-end encryption (MERN + Supabase Storage)",
   "main": "index.js",
   "type": "module",
   "scripts": {
@@ -21,12 +21,12 @@
     "express-rate-limit": "^8.5.2",
     "mongoose": "^9.6.3",
     "multer": "^2.5.0",
-    "nodemon": "^3.1.14",
     "swagger-ui-express": "^5.0.1"
   },
   "devDependencies": {
     "@eslint/js": "^10.0.1",
     "eslint": "^10.9.1",
+    "nodemon": "^3.1.14",
     "vitest": "^2.1.4"
   },
   "overrides": {

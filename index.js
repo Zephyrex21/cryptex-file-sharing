@@ -109,6 +109,8 @@ app.get("/app", (req, res) => {
 // old bare "*" syntax, but a path-less middleware works identically on both
 // Express 4 and 5 since it isn't doing pattern matching at all.
 app.use((req, res) => {
+  // API clients (and the frontend's fetch calls) expect JSON, not an HTML page.
+  if (req.path.startsWith("/api/")) return res.status(404).json({ message: "Not found" });
   res.status(404).sendFile(path.join(__dirname, "public", "404.html"));
 });
 

@@ -7,6 +7,7 @@ import { canAccessFolder, canLeaveFolder, canMutateFile, canDeleteFolder, canMov
 import { generateToken } from "../utils/token.js";
 import { toClientFolder } from "../utils/clientView.js";
 import { serverError } from "../utils/httpError.js";
+import { withTokenRetry } from "../utils/tokenRetry.js";
 
 // Same defense-in-depth as fileUpload.js's sanitizeOriginalName — strip
 // control characters and cap length before anything reaches storage.
@@ -35,14 +36,14 @@ export const createFolder = async (req, res) => {
       return res.status(400).json({ message: "Folder name is required" });
     }
 
-    const folder = await Folder.create({
+    const folder = await withTokenRetry(() => Folder.create({
       name:        sanitizeFolderName(name),
       // An encrypted vault is always private — same reasoning as encrypted
       // files: a public folder nobody has the key for has no purpose.
       visibility:  encrypted ? "private" : (visibility || "public"),
       encrypted:   !!encrypted,
       shareToken:  generateToken(),
-    });
+    }));
 
     res.status(201).json({ message: "Folder created!", folder });
   } catch (e) { serverError(res, e); }
@@ -60,7 +61,7 @@ export const getAllFolders = async (req, res) => {
     // One-time migration: assign tokens to any legacy folders that don't have one.
     const needsToken = folders.filter(f => !f.shareToken);
     if (needsToken.length > 0) {
-      await Promise.all(needsToken.map(f => { f.shareToken = generateToken(); return f.save(); }));
+      await Promise.all(needsToken.map(f => withTokenRetry(() => { f.shareToken = generateToken(); return f.save(); })));
     }
 
     // fileCount intentionally reflects the TOTAL number of files assigned to this
@@ -213,11 +214,10 @@ export const setFolderVisibility = async (req, res) => {
       update.viewCount = 0;
     }
 
-    const folder = await Folder.findByIdAndUpdate(
-      req.params.id,
-      update,
-      { new: true }
-    );
+    const folder = await withTokenRetry(() => {
+      if (update.shareToken) update.shareToken = generateToken(); // fresh token if the last one collided
+      return Folder.findByIdAndUpdate(req.params.id, update, { new: true });
+    });
     if (!folder) return res.status(404).json({ message: "Folder not found" });
 
     res.status(200).json({ message: `Visibility set to ${visibility}`, folder });

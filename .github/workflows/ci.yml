@@ -23,6 +23,48 @@ jobs:
 
       - run: npm test
 
+  # The jsdom smoke test drives the REAL frontend (public/js/app.js) against a
+  # fake API built on the server's real auth/token code — it catches UI
+  # regressions the unit tests can't. Separate job so a failure here is clearly
+  # a frontend/browser-side problem.
+  e2e:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: |
+            package-lock.json
+            e2e/package-lock.json
+
+      - run: npm ci
+
+      - run: npm ci
+        working-directory: e2e
+
+      - run: npm test
+        working-directory: e2e
+
+  # Known-vulnerable PRODUCTION dependencies fail the build (high/critical only,
+  # so a freshly published low/moderate advisory doesn't block unrelated work —
+  # those still show up in the log). Dev-only tooling is excluded.
+  audit:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
+      - run: npm ci
+
+      - run: npm audit --omit=dev --audit-level=high
+
   # A Docker-build job belongs here once the project has a Dockerfile
   # (tracked separately on the roadmap) — deliberately not stubbed in yet,
   # since a CI step referencing a build that doesn't exist would just fail
