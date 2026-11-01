@@ -1,273 +1,370 @@
-# Cryptex - End-to-End Encrypted, Token-Based File Sharing
+<p align="center">
+  <img src="docs/banner.svg" alt="Cryptex — token-based file sharing with optional end-to-end encryption" width="100%">
+</p>
 
-A secure file sharing platform built with the MERN stack and Supabase Storage — with an optional client-side, zero-knowledge encryption layer on top of its token-based sharing model.
+<h1 align="center">Cryptex</h1>
 
-Cryptex allows users to upload files, organize them into folders, generate unique share tokens, and control access through public/private visibility settings. File contents are stored in Supabase Storage while metadata is managed through MongoDB. Any upload can also be encrypted entirely in the browser before it's sent — in that mode, the server only ever stores ciphertext and never sees the decryption key.
+<p align="center">
+  <b>Token-based file sharing with optional end-to-end encryption.</b><br>
+  Upload, organize and share files with short access tokens — and lock anything in the browser before it ever leaves your device.
+</p>
 
-[![Live Demo](https://img.shields.io/badge/Live-Demo-brightgreen?style=for-the-badge)](https://cryptex-file-sharing.onrender.com/)
-[![CI](https://github.com/Zephyrex21/cryptex-file-sharing/actions/workflows/ci.yml/badge.svg)](https://github.com/Zephyrex21/cryptex-file-sharing/actions/workflows/ci.yml)
+<p align="center">
+  <a href="https://cryptex-file-sharing.onrender.com/"><img alt="Live demo" src="https://img.shields.io/badge/live-demo-2ea44f?style=flat-square"></a>
+  <a href="https://github.com/Zephyrex21/cryptex-file-sharing/actions/workflows/ci.yml"><img alt="CI" src="https://github.com/Zephyrex21/cryptex-file-sharing/actions/workflows/ci.yml/badge.svg"></a>
+  <img alt="Node.js 20+" src="https://img.shields.io/badge/node-%E2%89%A5%2020-339933?style=flat-square&logo=node.js&logoColor=white">
+  <img alt="Express 5" src="https://img.shields.io/badge/express-5-000000?style=flat-square&logo=express&logoColor=white">
+  <img alt="MongoDB" src="https://img.shields.io/badge/mongodb-atlas-47A248?style=flat-square&logo=mongodb&logoColor=white">
+  <img alt="Supabase Storage" src="https://img.shields.io/badge/supabase-storage-3ECF8E?style=flat-square&logo=supabase&logoColor=white">
+  <img alt="License: ISC" src="https://img.shields.io/badge/license-ISC-blue?style=flat-square">
+</p>
 
-
-# Features
-
-### 🔐 End-to-End Encryption (Zero-Knowledge)
-- AES-256-GCM encryption performed entirely client-side via the Web Crypto API
-- Content, filename, and MIME type are all encrypted — not just the bytes
-- The decryption key is generated in the browser and only ever travels inside a URL **fragment** (`#key=...`), which browsers never send in HTTP requests — the server, its logs, and Supabase never see it
-- Encrypted files are always private, can't be renamed (the name is ciphertext), and can't be made public
-- **Trade-off, by design:** if a share link is lost, the file is permanently unrecoverable — there is no server-side reset, because there's nothing on the server that could reconstruct the key
-
-### 🗝️ Encrypted Vaults (folder-level encryption)
-- A folder can be created as an encrypted vault — every file added to it is encrypted under **one shared key**, generated once in the browser at vault creation
-- One link (`?token=...#key=...`) unlocks the entire vault, rather than needing a separate key per file
-- Each file still gets its own random IV even under the shared key — required for AES-GCM's safety guarantee regardless of key reuse
-- Vaults are always private and can never be made public, enforced server-side
-- Uploading into a vault and uploading a standalone encrypted file use the exact same client-side encryption code — only which key gets used differs
-- Known limitation: an existing plaintext (or differently-encrypted) file can't be added into a vault after the fact — vault membership is decided at upload time, not by moving files in later
-
-### File Management
-- Upload files securely (with real magic-byte content verification for unencrypted uploads)
-- Download files
-- Preview supported files
-- Rename files
-- Delete files
-
-### Folder Management
-- Create folders
-- Organize files into folders
-- Rename folders
-- Delete folders
-- Download an entire folder as a ZIP
-
-### Token-Based Sharing
-- Short, easy-to-remember **6-character share token** (lowercase letters + digits, e.g. `k3x9a2`) generated for every file and folder — simple enough to read out loud or type from memory. Items shared before this change keep their original long tokens, which still work.
-- Access shared content without exposing database IDs
-- Expiring tokens, view limits, and one-click regeneration to rotate a leaked token
-- The token box on the page forgives caps-lock and stray spaces
-
-### My Shares (your own token history)
-- A **My Shares** button in the top bar lists the tokens of the files and folders you made private (or encrypted) **from this browser** — so you can always get back to something you shared without having to remember or save the token yourself. One-click copy token / copy link / open / remove.
-- It's stored **locally in your browser only** (`localStorage`): nothing is sent to the server, only you can see it, and it's cleared if you clear your browser cache/site data (the panel says so, too). Lose it and nothing is lost on the server — you just no longer have the reminder.
-- For encrypted items it keeps the token only — **never the decryption key, and never the real filename** — so it doesn't weaken the zero-knowledge design. (Encrypted entries therefore have no "Copy link": the key lives only in the link you saved when you created it.)
-
-### Visibility Controls
-- Public files/folders
-- Private files/folders
-- Toggle visibility anytime (encrypted files are private-only — see above)
-
-### Storage Architecture
-- MongoDB stores metadata
-- Supabase Storage stores actual files (ciphertext, for encrypted uploads)
-- Express API handles uploads and access control
+<p align="center">
+  <a href="https://cryptex-file-sharing.onrender.com/"><b>Live demo</b></a> ·
+  <a href="#architecture">Architecture</a> ·
+  <a href="#security-model">Security model</a> ·
+  <a href="#getting-started">Getting started</a> ·
+  <a href="#api-reference">API</a>
+</p>
 
 ---
 
-## Installation
+## Contents
 
-### 1. Clone the Repository
+- [Overview](#overview)
+- [Features](#features)
+- [Architecture](#architecture)
+- [Security model](#security-model)
+- [Tech stack](#tech-stack)
+- [Getting started](#getting-started)
+- [Configuration](#configuration)
+- [API reference](#api-reference)
+- [Testing and quality](#testing-and-quality)
+- [Deployment and operations](#deployment-and-operations)
+- [Known limitations and roadmap](#known-limitations-and-roadmap)
+- [License](#license)
+
+## Overview
+
+Cryptex is a full-stack file-sharing app built around **short share tokens** instead of user accounts. Anyone can drop a file or a link in, put it in a folder, and share it publicly or privately; a private item is reachable only with its token. For sensitive material, an upload can be **end-to-end encrypted in the browser** (AES-256-GCM): the server then stores only ciphertext and never receives the key.
+
+Metadata lives in **MongoDB**, file bytes live in **Supabase Storage**, and an **Express 5** API enforces access control, validation and abuse limits in between. The frontend is a dependency-free vanilla JavaScript single-page app served by the same server.
+
+## Features
+
+**Sharing**
+- Files, links (with title/description/preview image) and folders, each with a 6-character share token (`[0-9a-z]`, for example `k3x9a2`).
+- Public or private visibility, switchable at any time. Private items are invisible in listings and reachable only by token.
+- Per-token controls: expiry, view limits, and one-click regeneration to rotate a leaked token.
+- **My Shares**: a local-only (browser `localStorage`) list of the private items you created, so you never have to remember a token. It never stores decryption keys or real names of encrypted items.
+
+**End-to-end encryption**
+- Opt-in per upload. Content, filename and MIME type are all encrypted client-side with the Web Crypto API (AES-256-GCM, fresh random IV for every field).
+- The key travels only in the link's URL fragment (`#key=…`), which browsers never send to a server.
+- **Encrypted vaults**: a folder whose files all share one browser-generated key, unlocked by a single link.
+
+**Files and folders**
+- 50 MB per file; images, video, PDF, Office documents, ZIP archives, plain text/CSV and source code. Plain uploads are verified by magic-byte signature, not just by the declared type.
+- Inline preview for images, video and PDF; everything else downloads.
+- Rename, delete, move between folders, download a folder or a selection as a ZIP.
+
+**Built-in protections**
+- Per-IP rate limits, upload concurrency and size guards, optional global storage cap, optional VirusTotal known-hash screening, SSRF-safe link previews. Details in [Security model](#security-model).
+
+## Architecture
+
+### System overview
+
+```mermaid
+flowchart LR
+  subgraph Browser["Browser · vanilla JS single-page app"]
+    UI["UI<br/>app.js"]
+    Crypto["Web Crypto<br/>AES-256-GCM"]
+    LS[("localStorage<br/>My Shares tokens")]
+    UI --> Crypto
+    UI --> LS
+  end
+
+  subgraph Server["Express 5 API · Node.js"]
+    MW["Middleware<br/>security headers · rate limits<br/>upload guard"]
+    RT["Routes<br/>/api/files · /api/folders"]
+    CT["Controllers<br/>files · folders · link preview"]
+    UT["Utilities<br/>tokens · storage paths · client view<br/>malware scan · quota · purge"]
+    MW --> RT --> CT --> UT
+  end
+
+  DB[("MongoDB Atlas<br/>metadata: File, Folder")]
+  OBJ[("Supabase Storage<br/>objects: plain or ciphertext")]
+  VT["VirusTotal<br/>SHA-256 lookup (optional)"]
+  WEB["Linked websites<br/>SSRF-guarded fetch"]
+
+  UI -- "HTTPS · JSON / multipart" --> MW
+  CT --> DB
+  CT --> OBJ
+  CT -.-> VT
+  CT -.-> WEB
+```
+
+**Design principles**
+
+| Principle | How it shows up |
+|---|---|
+| **Separate metadata from bytes** | MongoDB holds records, tokens and relationships; Supabase holds the objects. Neither alone is enough to reconstruct a private file. |
+| **The token is the permission** | There are no accounts. A private item's current, unexpired token authorizes access; public items are open by design (a "drop box" model). |
+| **Don't trust the server with secrets** | Encryption keys are generated and used in the browser and never appear in a request, response, log or database row. |
+| **Thin controllers, shared rules** | Access rules live in one module (`middleware/auth.js`), so every route applies them identically. |
+| **Fail closed on privacy actions** | If a storage operation required for a privacy change fails, the change is rejected rather than reported as done. |
+
+### Upload flow
+
+```mermaid
+sequenceDiagram
+  autonumber
+  actor U as User
+  participant B as Browser
+  participant A as Express API
+  participant V as VirusTotal
+  participant S as Supabase Storage
+  participant M as MongoDB
+
+  U->>B: choose file, optionally enable encryption
+  alt End-to-end encrypted
+    B->>B: generate AES-256-GCM key<br/>encrypt content, name and MIME type
+    B->>A: POST /api/files/upload (ciphertext and IVs)
+  else Standard
+    B->>A: POST /api/files/upload (file)
+    A->>A: check type, size and magic bytes
+    A-->>V: SHA-256 reputation lookup (optional)
+  end
+  A->>S: store object at a random 128-bit path
+  A->>M: save metadata and share token
+  A-->>B: 201 with token (no storage URL for private items)
+  B-->>U: share link — for encrypted items the key rides in the URL fragment
+```
+
+### Access control
+
+| Item | Read (view, download) | Change (rename, visibility, delete, move) |
+|---|---|---|
+| Public file or folder | Anyone | Anyone (drop-box model) |
+| Private file | Valid, unexpired token | Valid, unexpired token¹ |
+| Encrypted file | Ciphertext and encrypted metadata by id (unusable without the key) | Valid, unexpired token¹ |
+| Private folder or vault | Valid, unexpired token | Valid, unexpired token¹; uploads into a vault need the vault's token |
+
+¹ Deleting also works with an *expired* token (it must still be the current one), so expiry can never strand data.
+
+### Data model
+
+| `File` | `Folder` |
+|---|---|
+| `originalName`, `fileType`, `fileSize` | `name` |
+| `itemType` (`file` or `link`) and `link*` fields | `files[]` (references) |
+| `filePath`, `fileUrl` (hidden from clients when private) | `visibility` (`public` or `private`) |
+| `visibility`, `shareToken`, `tokenExpiresAt`, `maxViews`, `viewCount` | `shareToken`, `tokenExpiresAt`, `maxViews`, `viewCount` |
+| `encrypted`, `encryptionIV`, `encryptedName*`, `encryptedMimeType*` | `encrypted` (vault flag) |
+| `folderId`, timestamps | timestamps |
+
+`shareToken` carries a unique, sparse index on both collections.
+
+### Project structure
+
+```text
+.
+├── index.js                  # App bootstrap: headers, CORS, routers, error handling, optional purge job
+├── config/                   # MongoDB connection, Supabase client
+├── routes/                   # Route tables and per-route rate limiters
+├── controllers/
+│   ├── fileUpload.js         # Upload, access, preview/download, visibility, links, ZIP
+│   ├── folderController.js   # Folder CRUD, membership, folder ZIP
+│   └── linkPreview.js        # SSRF-guarded fetching and HTML/image parsing for link items
+├── middleware/
+│   ├── auth.js               # Token / visibility access rules (single source of truth)
+│   └── uploadGuard.js        # Concurrency and declared-size limits for uploads
+├── models/                   # Mongoose schemas: File, Folder
+├── utils/                    # Tokens, storage paths, client-safe views, malware scan,
+│                             # storage quota, expired-file purge, error helper, token retry
+├── public/                   # Static frontend: landing page, app, CSS, vanilla JS
+├── scripts/                  # One-off maintenance (re-key private storage objects)
+├── tests/                    # Vitest unit and integration-style tests
+├── e2e/                      # jsdom end-to-end suite that drives the real frontend
+├── openapi.json              # OpenAPI spec, served at /api-docs
+└── .github/workflows/ci.yml  # Lint, unit tests, e2e, dependency audit
+```
+
+## Security model
+
+**Encryption**
+- AES-256-GCM via the Web Crypto API; keys are generated in the browser. Content, filename and MIME type are each encrypted with their own random IV.
+- Encrypted files are always private and cannot be renamed or made public (the name is ciphertext).
+- A lost share link means an unrecoverable file: there is nothing on the server that could rebuild the key.
+- **Honest threat model:** as with any browser-based encryption tool, your browser runs JavaScript delivered by the server, so you trust the operator not to serve modified code. The source is public; you can host your own copy.
+
+**Access control and storage**
+- A private item is reachable only with its current, unexpired token, enforced server-side on every route. Rotating a token invalidates the old one immediately.
+- Storage objects use unguessable 128-bit random paths. `fileUrl` and `filePath` are never returned to clients for private items; their bytes flow through the token-checked `/preview` and `/download` routes.
+- When a file goes public → private, or its token is regenerated, the object is moved to a fresh random path so any previously seen URL stops working. If that move fails, the action fails.
+- Deletes remove the database record first and the storage object afterwards, so a failure can never leave a record pointing at missing bytes.
+
+**Input handling**
+- Plain uploads are checked against an allow-list and verified by magic-byte signature; request fields reaching database queries must be plain strings (no operator injection).
+- Only images, video and PDF render inline; every other type is forced to download with `Content-Security-Policy: sandbox`, so uploaded HTML or SVG cannot run on the app's origin.
+- Optional VirusTotal screening compares an upload's SHA-256 against known malware. It is a known-hash reputation check only: it cannot catch a new file and may be rate-limited on a free key.
+
+**Link previews (SSRF defence)**
+- Every URL and every redirect hop is resolved and rejected if it points at private, loopback, link-local, reserved or otherwise internal addresses (IPv4 and every IPv6 notation, including mapped and NAT64 forms).
+- One deadline covers headers and body; responses are size-capped; preview images are verified from their bytes and mirrored into your own storage, so visitors' browsers never contact third-party sites.
+- Parsing uses a bounded, linear-time scanner (no backtracking regexes).
+
+**Abuse resistance**
+
+| Control | Default |
+|---|---|
+| Failed token attempts (per IP, per router) | 30 / minute |
+| File reads / uploads / ZIP downloads / link creation (per IP) | 60 / 20 / 10 / 10 per minute |
+| Concurrent uploads (global) | 4 (`MAX_CONCURRENT_UPLOADS`); beyond that `503` with `Retry-After` |
+| Declared upload size | `413` before the body is read |
+| Total storage | Optional cap via `MAX_TOTAL_STORAGE_MB` (`507` when full) |
+
+**Hardening**
+- Security headers: `X-Content-Type-Options`, `X-Frame-Options`, `Referrer-Policy: no-referrer`, HSTS, and a CSP pinning `frame-ancestors`, `object-src`, `base-uri` and `form-action`. `X-Powered-By` is disabled.
+- Unexpected errors return a generic message (details go to the server log); malformed ids and JSON return `400`.
+- Share-token collisions are retried transparently; the CI pipeline audits production dependencies.
+
+## Tech stack
+
+| Layer | Technology |
+|---|---|
+| Runtime and API | Node.js 20+, Express 5, `express-rate-limit`, Multer 2 |
+| Database | MongoDB Atlas via Mongoose (multi-document transactions) |
+| Object storage | Supabase Storage |
+| Frontend | Vanilla JavaScript, HTML and CSS; Web Crypto API; bundled `qrcode` library for QR codes (generated in the browser) |
+| Archives | `archiver` (streamed ZIP downloads) |
+| Quality | Vitest, ESLint, jsdom end-to-end suite, GitHub Actions |
+| API docs | OpenAPI 3 via Swagger UI at `/api-docs` |
+
+## Getting started
+
+### Prerequisites
+
+- **Node.js 20 or newer**
+- A **MongoDB Atlas** cluster (or any replica-set deployment: the app uses transactions)
+- A **Supabase** project with a Storage bucket. Create the bucket as **public**: public items are served by their storage URL, while private items are protected by random object paths and server-side access checks.
+
+### Run locally
 
 ```bash
 git clone https://github.com/Zephyrex21/cryptex-file-sharing.git
 cd cryptex-file-sharing
-```
-
-### 2. Install Dependencies
-
-```bash
 npm install
+cp .env.example .env        # then fill in the values below
+npm run dev                 # nodemon, http://localhost:3000
 ```
 
-### 3. Configure Environment Variables
+For production use `npm start`.
 
-Create a `.env` file and add the required values.
+## Configuration
 
-### 4. Start Development Server
+Set these in `.env` (see [`.env.example`](.env.example)).
+
+| Variable | Required | Default | Purpose |
+|---|---|---|---|
+| `MONGO_URI` | yes | n/a | MongoDB connection string |
+| `SUPABASE_URL` | yes | n/a | Supabase project URL |
+| `SUPABASE_SERVICE_KEY` | yes | n/a | Supabase service-role key (server only, never exposed to clients) |
+| `SUPABASE_BUCKET` | no | `cloudvault-files` | Storage bucket name |
+| `PORT` | no | `3000` | HTTP port |
+| `TRUST_PROXY` | recommended in production | unset | Number of reverse proxies in front of the app (`1` on Render and most PaaS). Without it, all visitors share one IP for rate limiting |
+| `ALLOWED_ORIGIN` | no | unset | Enables CORS for one specific origin; the bundled frontend needs none |
+| `VIRUSTOTAL_API_KEY` | no | unset | Enables known-hash malware screening |
+| `VIRUSTOTAL_FAIL_CLOSED` | no | `false` | `true` rejects uploads when VirusTotal can't give a verdict |
+| `MAX_CONCURRENT_UPLOADS` | no | `4` | Global cap on simultaneous uploads (each is buffered in memory) |
+| `MAX_TOTAL_STORAGE_MB` | no | off | Global storage ceiling, e.g. `800` on a 1 GB plan |
+| `PURGE_EXPIRED_AFTER_DAYS` | no | off | Delete private files whose token expired this many days ago |
+| `GALLERY_MAX_ITEMS` | no | `1000` | Cap for unpaged gallery responses |
+| `DISABLE_API_DOCS` | no | `false` | `true` stops serving Swagger UI at `/api-docs` |
+
+## API reference
+
+Interactive documentation is served at **`/api-docs`** (Swagger UI, generated from [`openapi.json`](openapi.json)).
+
+**Authorization:** *Public* items need no token. For *private* items, send the item's current token as `?token=` or an `X-Share-Token` header. To remove a private file from a folder, the file's own token goes in `?fileToken=` (`X-File-Token`) because `?token=` carries the folder's. Moving a file out of a private folder also needs `?sourceToken=` (`X-Source-Token`).
+
+### Files
+
+| Method | Endpoint | Description | Access |
+|---|---|---|---|
+| `POST` | `/api/files/upload` | Upload a file (optionally encrypted; see below) | Open |
+| `POST` | `/api/files/link` | Save a link with a generated preview | Open |
+| `GET` | `/api/files` | List public files (`?page=&limit=` for paging) | Open |
+| `GET` | `/api/files/token/:token` | Open an item by its token | Token |
+| `GET` | `/api/files/:id` | File details | Public or token |
+| `GET` | `/api/files/:id/preview` | Inline preview (images, video, PDF) | Public or token |
+| `GET` | `/api/files/:id/download` | Download | Public or token |
+| `PATCH` | `/api/files/:id` | Rename | Public or token |
+| `PATCH` | `/api/files/:id/visibility` | Visibility, expiry, view limit, token rotation | Public or token |
+| `DELETE` | `/api/files/:id` | Delete | Public or token |
+| `POST` | `/api/files/batch-zip` | ZIP of selected public files | Open |
+
+### Folders
+
+| Method | Endpoint | Description | Access |
+|---|---|---|---|
+| `POST` | `/api/folders` | Create a folder or encrypted vault | Open |
+| `GET` | `/api/folders` | List public folders | Open |
+| `GET` | `/api/folders/token/:token` | Open a folder by its token | Token |
+| `GET` | `/api/folders/:id` | Folder with its files | Public or token |
+| `GET` | `/api/folders/:id/zip` | Download as ZIP | Public or token |
+| `PATCH` | `/api/folders/:id` | Rename | Public or token |
+| `PATCH` | `/api/folders/:id/visibility` | Visibility, expiry, view limit, token rotation | Public or token |
+| `DELETE` | `/api/folders/:id` | Delete (files are unlinked, not deleted) | Public or token |
+| `POST` | `/api/folders/:id/files` | Add a file to the folder | Folder and file access |
+| `DELETE` | `/api/folders/:id/files/:fileId` | Remove a file from the folder | Folder and file access |
+
+**Encrypted uploads** send `file` as ciphertext (`application/octet-stream`) plus the multipart fields `encrypted=true`, `iv`, `encryptedName`, `encryptedNameIV`, `encryptedMimeType` and `encryptedMimeTypeIV`. To upload into a vault, also send `vaultFolderId` and that vault's token (`?token=`).
+
+## Testing and quality
 
 ```bash
-npm run dev
+npm run lint                      # ESLint
+npm test                          # 311 unit and integration-style tests (Vitest)
+cd e2e && npm ci && npm test      # 80 end-to-end checks against the real frontend (jsdom)
 ```
 
-### 5. Start Production Server
+- Unit tests cover access rules, token handling, magic-byte verification, the SSRF guard, rate limiting, vault and encryption rules, storage rotation and error handling. Some suites run the real Mongoose schemas without a database to pin down indexes, enums and defaults.
+- The e2e suite loads the actual `public/js/app.js` in jsdom against a fake API built on the server's real auth code, and exercises uploads, sharing, vaults, key handling and UI flows.
+- **CI** (GitHub Actions) runs lint and unit tests, the e2e suite, and `npm audit --omit=dev --audit-level=high` on every push and pull request.
+- Real MongoDB behavior (transactions, index enforcement) is not covered by the automated suite; see [TESTING.md](TESTING.md) for scope and details.
 
-```bash
-npm start
-```
----
+## Deployment and operations
 
-## Environment Variables
+The app runs on any Node host; the live demo is deployed on Render.
 
-Create a `.env` file in the root directory.
+- **Build:** `npm install` · **Start:** `npm start`
+- Set the required environment variables, and set **`TRUST_PROXY=1`** behind Render or a similar proxy.
+- **Re-keying existing private files:** `node scripts/rotate-private-storage.js --dry-run`, then without `--dry-run`. Moves objects that were private before random paths existed to fresh random paths.
+- **Housekeeping:** `PURGE_EXPIRED_AFTER_DAYS` enables a background job that deletes long-expired private files. `MAX_TOTAL_STORAGE_MB` protects a free-tier quota.
 
-Example:
+## Known limitations and roadmap
 
-```env
-# MongoDB Atlas URI
-MONGO_URI=
+**Limitations (by design or not yet addressed)**
+- **No accounts.** A private item's token grants full control (view, rename, delete, change visibility, rotate the token), and public items can be modified by anyone.
+- **Web-delivered encryption** requires trusting the server's JavaScript (see [Security model](#security-model)).
+- Encryption happens at upload time only; existing plain files can't be encrypted in place or added to a vault afterwards.
+- Encrypted files are excluded from ZIP downloads.
+- The storage bucket is public; privacy of private objects rests on unguessable paths and server mediation rather than signed URLs.
+- Link-preview DNS validation and the actual connection resolve separately, leaving a narrow DNS-rebinding window.
 
-# Supabase Project URL
-SUPABASE_URL=
-
-# Supabase Service Role Key
-SUPABASE_SERVICE_KEY=
-
-# Supabase Storage Bucket Name
-SUPABASE_BUCKET=
-
-# Backend Port
-PORT=3000
-
-# Optional — set to the number of reverse proxies in front of the app (1 on
-# Render/Heroku/most PaaS). Without it, every visitor behind a proxy looks like
-# the same IP, so the per-IP rate limits become one shared bucket. Leave unset
-# when there is NO proxy (e.g. local dev): trusting X-Forwarded-For without one
-# lets clients spoof their IP and sidestep the limiters. (If your host logs
-# ERR_ERL_UNEXPECTED_X_FORWARDED_FOR, that's this setting telling you to set it.)
-TRUST_PROXY=
-
-# Optional — cap how many uploads may be in flight at once (each is buffered in
-# memory, up to 50 MB). Extra uploads get a 503 "retry in a few seconds".
-# Default 4; raise it only if your instance has plenty of RAM.
-MAX_CONCURRENT_UPLOADS=
-
-# Optional — global storage ceiling in MB (e.g. 800 on Supabase's 1 GB free
-# tier). When reached, uploads get a 507 instead of filling your quota.
-# Unset/0 = no cap.
-MAX_TOTAL_STORAGE_MB=
-
-# Optional — delete PRIVATE files whose share token expired more than this many
-# days ago (storage + record). Unset/0 = never delete anything automatically.
-PURGE_EXPIRED_AFTER_DAYS=
-# Optional — if a VirusTotal key is set but VirusTotal can't give a verdict
-# (down / free-tier rate limit), uploads are accepted unchecked by default (and a
-# warning is logged). Set to "true" to refuse those uploads instead.
-VIRUSTOTAL_FAIL_CLOSED=
-
-# Optional — set to "true" to stop serving the Swagger UI at /api-docs.
-DISABLE_API_DOCS=
-# Optional — safety cap on how many files an UNPAGED gallery request returns
-# (newest first). Default 1000. The response gets "truncated": true when it bites;
-# ?page=&limit= walks the rest.
-GALLERY_MAX_ITEMS=
-```
----
-
-
-## API Routes
-
-### File Routes
-
-| Method | Endpoint | Description |
-|----------|----------|-------------|
-| POST | `/api/files/upload` | Upload file |
-| GET | `/api/files` | Get all files |
-| GET | `/api/files/:id` | Get file details |
-| GET | `/api/files/:id/download` | Download file |
-| GET | `/api/files/:id/preview` | Preview file |
-| PATCH | `/api/files/:id` | Rename file 🔒 |
-| PATCH | `/api/files/:id/visibility` | Change visibility 🔒 |
-| DELETE | `/api/files/:id` | Delete file 🔒 |
-| GET | `/api/files/token/:token` | Access via token |
-
-> 🔒 = open for a **public** file, no questions asked; for a **private** one, needs that file's own current, unexpired `?token=` (as a query param or an `X-Share-Token` header) — see "Security Considerations". There's no separate owner login: a private item's token *is* the permission.
-
-> `POST /api/files/upload` accepts an optional encrypted-upload contract: multipart fields `encrypted=true`, `iv`, `encryptedName`, `encryptedNameIV`, `encryptedMimeType`, `encryptedMimeTypeIV` alongside `file` (sent as ciphertext, `application/octet-stream`). See `controllers/fileUpload.js` and `public/js/app.js` for the client/server contract.
-
----
-
-### Folder Routes
-
-| Method | Endpoint | Description |
-|----------|----------|-------------|
-| POST | `/api/folders` | Create folder |
-| GET | `/api/folders` | Get folders |
-| GET | `/api/folders/:id` | Folder details |
-| PATCH | `/api/folders/:id` | Rename folder 🔒 |
-| PATCH | `/api/folders/:id/visibility` | Change visibility 🔒 |
-| DELETE | `/api/folders/:id` | Delete folder 🔒 |
-| POST | `/api/folders/:id/files` | Add file to folder 🔒 |
-| DELETE | `/api/folders/:id/files/:fileId` | Remove file from folder 🔒 |
-| GET | `/api/folders/token/:token` | Access via token |
-
-> Moving a file out of a private folder (`POST /api/folders/:id/files`) additionally needs that folder's token as `?sourceToken=` (or `X-Source-Token`), because the file is being removed from it.
-
-> Same 🔒 rule as files, with one difference: a folder's own name/metadata is never encrypted (only what's *inside* a vault folder is, per-file), so a private folder's token is always required — there's no ciphertext-based bypass the way there is for an individual encrypted file.
-
----
-
-## How It Works
-
-**Standard upload:**
-1. User uploads a file.
-2. File is stored in Supabase Storage.
-3. Metadata is stored in MongoDB.
-4. A unique token is generated.
-5. Users can share the token to provide access.
-6. Visibility settings determine whether content appears publicly.
-
-**Encrypted upload:**
-1. User toggles "End-to-end encrypt" before uploading.
-2. The browser generates a random AES-256-GCM key and encrypts the file's content, filename, and MIME type — nothing plaintext leaves the device.
-3. Only ciphertext is uploaded and stored in Supabase; MongoDB stores ciphertext blobs for the name/type too, not the real values.
-4. The file is forced private and given a token, same as above.
-5. The share link is built as `.../app?token=<token>#key=<key>` — the `#key=` fragment is never transmitted to the server by the browser, so this is the only place the key exists outside the uploader's own session.
-6. Whoever opens that link decrypts the file locally in their browser; the server is never asked to, and couldn't if it were.
-
----
-
-## Security Considerations
-
-This app has no login/user system — it's a personal, share-by-link drop box, not a walled garden. **"Public" means exactly that**: anyone who can reach the API can see, download, rename, delete, or re-share a public file/folder, the same way they can already see it in the gallery. That's a deliberate trade-off for a zero-friction personal tool, not an oversight — if you want a real access boundary around the whole app (not just private items), put it in front at the infra level (a reverse-proxy auth gate, an IP allowlist, a private network) rather than in the app itself.
-
-- Sensitive credentials are stored in environment variables; the Supabase Service Role Key never leaves the server.
-- **Private is the one thing that's actually gated — and now consistently.** A private, unencrypted file/folder needs its own current, unexpired share token (`?token=...` as a query param, or an `X-Share-Token` header) for *everything*: reading it, downloading it, AND renaming/deleting/re-sharing it. Previously the token was only checked on the share-link lookup — a private item's `_id` (handed out the moment anyone opened its link) worked forever on almost every other route, including rename and delete, with no check at all. Regenerating or expiring the token didn't help, because nothing downstream was looking at it. A file/folder's `_id` was never actually secret (it's returned alongside the token in several responses) — the token is what matters, and it's now checked everywhere the id is used.
-- **A public item's mutations need no token at all** — same "public means public" rule as reading it. Specifically: going from public → private never needs a token (there isn't one yet), but anything touching an *already*-private item — including flipping it back to public — needs that item's current token, checked against the item's state as it exists right now in the database, not the state the request is trying to move it to. That specific ordering is what stops a stranger from quietly privatizing someone else's public file and keeping the new token for themselves.
-- Encrypted files are an exception to the "private needs a token" rule above, but only for *reading* them: their content is ciphertext either way, so the server has nothing meaningful to gate — the client-side AES key is the real (and only) protection, exactly as the zero-knowledge design intends. Mutating an encrypted file (renaming — which is blocked outright since the name is encrypted too — or deleting/re-sharing it) still needs the token: being unreadable doesn't make deleting it a free action. A vault *folder's* own name/metadata is always plain text (only what's inside is per-file encrypted), so folders get no encrypted exception anywhere, read or write.
-- Regenerating a share token immediately invalidates the old one everywhere it's checked, mutations included — not just the token-lookup route.
-- **Short tokens are a deliberate trade-off.** A 6-character token (36⁶ ≈ 2.18 billion possibilities) is far easier to remember than the old 64-bit one, but weaker against guessing — so the rate limiting is doing real work. Every route that checks a token is limited: the lookups and every rename/delete/visibility/membership route at 30/min, the read-by-id routes (metadata/preview/download) at 60/min, ZIP downloads at 10/min. For something genuinely sensitive, use **encrypted** sharing (the AES key, not the token, is what protects the content) or set an expiry/view limit.
-- **Set `TRUST_PROXY` when deployed behind a proxy** (see Environment Variables) — otherwise the per-IP limits above are shared by everyone.
-- **Moving a file between folders needs permission on both ends.** Pulling a file out of a private folder requires that folder's token (`sourceToken`), not just the destination's — otherwise anyone who knew a file's id could silently rip it out of someone's private folder.
-- Multi-document writes (move/remove a file from a folder, delete a folder, delete a file) run inside MongoDB transactions, so a failure partway through can't leave a file and its folder disagreeing. (Needs a replica set — MongoDB Atlas always is one.)
-- Responses carry `Referrer-Policy: no-referrer` (share links contain the token in the URL) and `Strict-Transport-Security`.
-- QR codes for share links are generated entirely client-side (see `public/js/vendor/qrcode.js`). This matters specifically for encrypted items, whose link includes the decryption key as a `#key=...` fragment — that fragment is never sent to any server, by anyone, for any reason, including rendering its own QR code.
-- **Private files' storage location is never disclosed and is revocable.** New uploads get an unguessable 128-bit random object path (the original name lives only in the DB), `fileUrl`/`filePath` are stripped from every API response for private items (their bytes are only reachable through the token-checked `/preview` and `/download` routes), and the object is moved to a fresh random path when a file goes public → private or its token is regenerated — so regenerating a token genuinely cuts off a recipient who saved an old URL. If that storage move fails, the action fails (it never reports success with the old URL still live). Files that were private *before* this change can be re-keyed in one go with `node scripts/rotate-private-storage.js` (`--dry-run` first).
-- **Uploaded active content can't run on this origin.** `/preview` only renders images, video and PDF inline; everything else (html, xml, svg, js, text…) is forced to download with `Content-Security-Policy: sandbox`. Private files are sent `Cache-Control: private, no-store`.
-- **Vaults can't be written to without their token.** An upload into a vault must present that vault's own current share token (`?token=` / `X-Share-Token`) — the vault `_id` alone is not enough — and existing files can't be added into a vault (or encrypted files into ordinary folders), so a foreign file can't be planted in one. The vault view also skips any undecryptable file instead of treating it as a wrong key.
-- Request fields that reach database lookups (`vaultFolderId`, `fileId`, encryption metadata) must be plain strings: multer expands `field[$gt]=x` into objects, which would otherwise become Mongo operators.
-- Link-preview HTML is scanned with a bounded linear-time scanner (no backtracking regexes), so a hostile page can't stall the server.
-- **The link-preview SSRF guard judges IPv6 by value.** Every textual form is parsed to numbers first, so hex-mapped IPv4 (`::ffff:7f00:1` = 127.0.0.1, `::ffff:a9fe:a9fe` = the cloud metadata IP), NAT64 (`64:ff9b::/96`), 6to4, Teredo, link-local, unique-local, multicast and malformed addresses are all rejected; anything unparseable fails closed. The fetch deadline covers the response *body* too — a server that stalls after sending headers can't hold a request open — and a page whose `<head>` arrived before it stalled still yields a preview.
-- **Removing a file from a folder checks the file, not just the folder.** The file must really be in that folder, and a *private* file also needs its own token (sent as `?fileToken=` since `?token=` carries the folder's).
-- **Expiry can't strand data.** An expired-but-still-current token can no longer read or modify an item, but it can still **delete** it, so owners can always remove their own files. Optionally set `PURGE_EXPIRED_AFTER_DAYS` to have the server delete private files that expired that long ago. (Regenerating a token still locks out everyone holding the old one — including for deletion.)
-- **Upload abuse backstops.** Uploads are buffered in memory, so `MAX_CONCURRENT_UPLOADS` (default 4) caps how many run at once (503 + `Retry-After` beyond that), a declared body size over the limit is refused with 413 *before* it's read, and `MAX_TOTAL_STORAGE_MB` (off by default) stops anonymous uploads from filling your storage quota (507).
-- **Deleting is DB-first.** The record (and its folder link) is removed in one transaction, and only then is the storage object removed (best-effort). If the transaction fails the file is untouched — it can no longer end up as a record pointing at bytes that were already deleted.
-- **Bulk actions aren't rate-limited by the guessing limiter.** The 30/min limit on token endpoints now counts only *failed* attempts, so deleting or moving 40 files at once works, while brute-forcing tokens is still capped.
-- **Link-preview images are mirrored into your own storage** (≤1.5 MB png/jpeg/gif/webp, type verified from the bytes, fetched through the same SSRF-safe path as the page) instead of being hot-linked, so viewing the gallery never makes a visitor's browser contact a third-party site. Links saved before this change keep working; their remote image is simply withheld.
-- **The decryption key is scrubbed from the address bar** (`#key=…`) once it has actually unlocked something, so it doesn't sit in browser history/sync or get copied with the URL. Use the Share panel to pass a link on — it rebuilds the full link. A page *refresh* no longer auto-reopens a token link (that would spend another view of a view-limited link); the token is just pre-filled. Opening an item from **My Shares** uses the by-id route, so it doesn't spend a view either.
-- **Errors don't leak internals.** Controllers return a generic message (full error goes to the server log); a malformed id is a `400`, malformed JSON is a JSON `400`, and `X-Powered-By` is off. CSP also pins `base-uri` and `form-action`.
-- **VirusTotal is a known-hash reputation check only** — it can't catch a new file, and on the free tier it'll often be rate-limited. When a key is set but no verdict is reached it now logs a warning; set `VIRUSTOTAL_FAIL_CLOSED=true` to refuse those uploads rather than accept them unchecked.
-- **Honest threat model for encryption:** the server only stores ciphertext and never receives the key, but (as with any web app) your browser runs JavaScript this server delivers, so you're trusting the operator not to ship tampered code. The landing page now says so.
-- `package.json` pins `minimatch` to `^11.0.1` via `overrides`: a newly published advisory (denial of service) affects the older copy that `archiver` and `nodemon` pull in transitively. This app never passes user input to a glob, so it wasn't exploitable here, but the override clears `npm audit` and was verified against real ZIP generation and `nodemon`.
-- **Share-token collisions are retried.** Tokens are 6 characters and the DB enforces uniqueness, so two items can occasionally draw the same one. A duplicate-key error on `shareToken` now just picks a fresh token (up to 5 attempts) on upload, link, folder creation and token regeneration, instead of failing the request. The models' own default token also works now (it was being handed Mongoose's document as the `length` argument and returned an empty string — masked because every create path passes an explicit token).
-- **The unpaged gallery response is bounded** (`GALLERY_MAX_ITEMS`, default 1000, newest first; `"truncated": true` appears only when the cap bites and the UI says so). `?page=&limit=` paging is unchanged.
-- Unknown `/api/...` paths answer with JSON `404`, not the HTML 404 page.
-- Small UI fixes: a vault you hold the key for stays in the upload dropdown after the folder list reloads; an encrypted file's size limit accounts for the 16-byte AES-GCM tag (a file a hair under 50 MB used to pass the client check and fail on the server); a "done" animation no longer hides the progress bar of a file dropped during its delay.
-- CI now also runs the jsdom e2e suite and `npm audit --omit=dev --audit-level=high`. `nodemon` is a dev dependency, and the package is named `cryptex-file-sharing`.
-- The unused server-side `/api/qr` route and its `qrcode` dependency were removed (QR codes are generated in the browser). Set `DISABLE_API_DOCS=true` to stop serving `/api-docs`.
-- Uploaded file content is verified against its declared type using magic-byte signatures, not just the client-reported MIME type (see `verifyMagicBytes` in `controllers/fileUpload.js`).
-- Unencrypted uploads get a best-effort malware pre-screen via VirusTotal's hash-lookup API — see `utils/malwareScan.js` for exactly what this does and doesn't catch (it's a known-hash lookup, not a full scan, and fails open if VirusTotal is unreachable or no API key is configured).
-- **Encrypted uploads are zero-knowledge by construction**, not just policy: the AES key never appears in any request body, response, log line, or database row this server controls. This also means magic-byte content verification is skipped for encrypted uploads — the server has no plaintext to check, which is the expected cost of not being able to read the file at all.
-- Known limitation: encryption happens at upload time only. There's currently no way to encrypt a file that's already been uploaded in plain — that would require downloading, encrypting, and re-uploading it, which isn't implemented yet.
-- Known limitation: encrypted files are excluded from folder ZIP downloads (bulk decryption would need a folder-level key exchange, which is a separate future feature, not a silent omission).
-- Known limitation: `controllers/linkPreview.js`'s SSRF guard re-validates the target IP on every redirect hop, but there's a narrow window between that check and the actual fetch where a DNS answer could theoretically change (DNS rebinding). Closing this fully needs pinning the validated IP for the actual connection instead of letting the HTTP client re-resolve it, which isn't implemented yet.
-- Upload, folder/link creation, and the public gallery/listing endpoints are intentionally open to anyone — that's the "drop box" model this app is built around, not a gap in it.
-
----
-
-## Author
-
-Built by Saurabh Raj Shekhar using MERN Stack and Supabase Storage.
-
----
+**Roadmap**
+- Separate read-only *view* tokens from *manage* tokens.
+- Private bucket with short-lived signed URLs.
+- Pin validated IPs for link-preview connections.
+- Bind ciphertext to its metadata (AES-GCM additional data) with a versioned format.
+- Dockerfile and containerized CI build.
 
 ## License
 
-This project is licensed under the ISC License.
+Released under the **ISC License**.
+
+<p align="center">
+  Maintained by <a href="https://github.com/Zephyrex21">@Zephyrex21</a>
+</p>
