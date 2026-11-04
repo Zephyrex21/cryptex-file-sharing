@@ -4,27 +4,50 @@
 // #preloader is optional (silently no-ops if absent).
 // ═══════════════════════════════════════════════════════════════════════
 // ── Preloader ────────────────────────────────────────────────────────────
-// Runs first, before anything else in this file, so it doesn't wait on the
-// nav/theme setup below. MIN_MS avoids a flash-then-vanish on fast
-// connections; the setTimeout fallback means it can never get stuck open
-// even if the 'load' event is delayed for some reason.
+// Dismisses only when the page is genuinely ready to be looked at: the load
+// event has fired AND the web fonts are in (so the text the visitor sees the
+// moment the loader lifts is already in its final typeface — no late swap that
+// re-flows the hero). Then it adds html.is-ready, which is what starts the
+// homepage's entrance choreography; that way the intro plays WHILE the loader
+// fades, instead of finishing unseen behind it. MIN_MS stops a flash-then-vanish
+// on fast connections; MAX_MS guarantees it can never get stuck open.
 (function(){
+  const root=document.documentElement;
   const pre=document.getElementById('preloader');
-  if(!pre)return;
-  const MIN_MS=550,MAX_MS=2500,shownAt=Date.now();
-  let dismissed=false;
-  function dismiss(){
-    if(dismissed)return;dismissed=true;
-    const wait=Math.max(0,MIN_MS-(Date.now()-shownAt));
-    setTimeout(()=>{
-      pre.classList.add('hidden');
-      document.body.style.overflow='';
-      setTimeout(()=>pre.remove(),450);
-    },wait);
+  const reduce=window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+  let finished=false;
+  function finish(){
+    if(finished)return;finished=true;
+    root.classList.add('is-ready');
+    root.classList.remove('is-loading');
+    window.dispatchEvent(new Event('cryptex:ready'));
+    if(!pre)return;
+    pre.classList.add('hidden');
+    let removed=false;
+    const remove=()=>{if(removed)return;removed=true;pre.remove();};
+    pre.addEventListener('transitionend',e=>{if(e.target===pre&&e.propertyName==='opacity')remove();});
+    setTimeout(remove,1100); // transitionend never fires if the tab is hidden — don't leak the node
   }
-  document.body.style.overflow='hidden';
-  window.addEventListener('load',dismiss);
-  setTimeout(dismiss,MAX_MS);
+  if(!pre){root.classList.add('is-ready');return;}
+  const MIN_MS=reduce?0:500,MAX_MS=3000,FONT_WAIT_MS=1800,shownAt=performance.now();
+  root.classList.add('is-loading');
+  const loaded=new Promise(res=>{
+    if(document.readyState==='complete')res();else window.addEventListener('load',res,{once:true});
+  });
+  // Ask for the families explicitly: document.fonts.ready alone can resolve
+  // before a font has even started loading.
+  const fonts=(document.fonts&&document.fonts.load)
+    ?Promise.race([
+        Promise.all([document.fonts.load('1em Inter'),document.fonts.load('1em "JetBrains Mono"')]).catch(()=>{}),
+        new Promise(res=>setTimeout(res,FONT_WAIT_MS))
+      ])
+    :Promise.resolve();
+  Promise.all([loaded,fonts]).then(()=>{
+    const wait=Math.max(0,MIN_MS-(performance.now()-shownAt));
+    // two frames: let the final-font layout actually paint before the loader lifts
+    setTimeout(()=>requestAnimationFrame(()=>requestAnimationFrame(finish)),wait);
+  });
+  setTimeout(finish,MAX_MS);
 })();
 // ── Navbar scroll state ─────────────────────────────────────────────────────
 (function(){

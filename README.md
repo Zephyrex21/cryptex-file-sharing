@@ -191,6 +191,18 @@ sequenceDiagram
 └── .github/workflows/ci.yml  # Lint, unit tests, e2e, dependency audit
 ```
 
+### Frontend performance
+
+The homepage is built to stay smooth on mid-range hardware, and a test suite keeps it that way:
+
+- **Compositor-only motion.** Every looping animation on the homepage moves only `transform` and `opacity`, so each layer is rasterized once and then just moved by the GPU. There are no SVG filters or blur layers on animated content, and the background grid drifts via a transform instead of repainting a full-viewport layer each frame.
+- **Animations only run when visible.** The hero and feature visuals pause while scrolled off-screen or in a background tab.
+- **Nothing re-flows while animating.** The headline's decrypt-in pins each character to its measured width and restores the original text afterwards; section headings rise out of a mask instead of being typed.
+- **A stable loading screen.** The loader moves only compositor properties, waits for the fonts (self-hosted and preloaded, with a metric-matched fallback) as well as the page, reserves the scrollbar gutter so lifting it can't shift the page, and hands over to the entrance animation as it fades.
+- Reduced-motion users get the finished composition with no looping, and the page is fully usable without JavaScript.
+
+Measured in headless Chromium without a GPU (so absolute numbers are pessimistic, the ratio is what matters): idle raster work dropped from about 936 ms to about 0.1 ms per second, the idle frame rate from about 2 fps to 60 fps, and layout shift to zero. `tests/homepagePerf.test.js` fails the build if layout-animating keyframes, SVG filters, third-party font requests or a missing preload creep back in.
+
 ## Security model
 
 **Encryption**
@@ -237,7 +249,7 @@ sequenceDiagram
 | Runtime and API | Node.js 20+, Express 5, `express-rate-limit`, Multer 2 |
 | Database | MongoDB Atlas via Mongoose (multi-document transactions) |
 | Object storage | Supabase Storage |
-| Frontend | Vanilla JavaScript, HTML and CSS; Web Crypto API; bundled `qrcode` library for QR codes (generated in the browser) |
+| Frontend | Vanilla JavaScript, HTML and CSS; Web Crypto API; bundled `qrcode` library for QR codes (generated in the browser); self-hosted Inter and JetBrains Mono fonts (SIL OFL, no third-party requests) |
 | Archives | `archiver` (streamed ZIP downloads) |
 | Quality | Vitest, ESLint, jsdom end-to-end suite, GitHub Actions |
 | API docs | OpenAPI 3 via Swagger UI at `/api-docs` |

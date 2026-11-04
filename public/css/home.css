@@ -3,7 +3,7 @@
    Requires shared.css to be loaded first (uses its design tokens).
    ═══════════════════════════════════════════════════════════════════════ */
 /* Hero — two columns on desktop (copy + illustration), stacks on narrow screens */
-.hero{display:grid;grid-template-columns:1.1fr 1fr;gap:48px;align-items:center;margin-bottom:64px;animation:fadeUp .5s var(--ease) both}
+.hero{display:grid;grid-template-columns:1.1fr 1fr;gap:48px;align-items:center;margin-bottom:64px}
 .hero-copy{text-align:left}
 .eyebrow{display:inline-flex;align-items:center;gap:6px;font-size:11px;font-weight:700;letter-spacing:.7px;text-transform:uppercase;color:var(--acc);background:var(--accs);border:.5px solid var(--accg);padding:5px 14px;border-radius:99px;margin-bottom:18px}
 .hero h1{font-size:clamp(36px,5vw,52px);font-weight:800;letter-spacing:-2.5px;line-height:1.05;margin-bottom:14px}
@@ -14,173 +14,222 @@
    scramble-reveal JS — which rewrites textContent — never has to touch or
    preserve nested markup. */
 .aes-highlight{position:relative;display:inline-block;color:var(--acc);font-weight:900}
-.aes-highlight::after{content:'';position:absolute;left:-5px;right:-5px;bottom:3px;height:0.32em;background:var(--accs);border-radius:3px;z-index:-1}
+.aes-highlight::after{content:'';position:absolute;left:-5px;right:-5px;bottom:3px;height:0.32em;background:var(--accs);border-radius:3px;z-index:-1;transform-origin:left center}
 [data-theme="dark"] .aes-highlight::after{background:rgba(139,124,246,0.28)}
 #heroLine1,#heroLine2{display:inline-block}
-#heroLine1.scrambling,#heroLine2.scrambling{font-family:var(--font-mono);letter-spacing:0}
+/* Per-character slots used by the decrypt-in (home.js). Each slot is pinned to the
+   exact pixel width that character has in the real text (kerning included), so
+   scrambling glyphs can never change a line's width — nothing re-flows, then or
+   when the plain text is restored at the end. */
+.dw{display:inline-block;white-space:nowrap}
+.dc{display:inline-block;white-space:pre;text-align:left}
+.dc.scr{color:transparent;-webkit-text-fill-color:transparent}
+.dc.scr::after{content:attr(data-s);position:absolute;left:0;top:0;width:100%;text-align:center;font-family:var(--font-mono);font-size:.74em;font-weight:600;letter-spacing:0;line-height:inherit;color:var(--acc);-webkit-text-fill-color:var(--acc);opacity:.9}
+.dc{position:relative}
+.sr-only{position:absolute;width:1px;height:1px;margin:-1px;padding:0;overflow:hidden;clip:rect(0 0 0 0);white-space:nowrap;border:0}
 .hero p{font-size:17px;color:var(--t2);line-height:1.6;max-width:440px}
 .hero-cta{margin-top:30px;display:flex;align-items:center;gap:12px;flex-wrap:wrap}
 .hero-trust{margin-top:22px;display:flex;flex-wrap:wrap;gap:8px 18px;font-size:12.5px;font-weight:600;color:var(--t3)}
 .hero-trust span{display:inline-flex;align-items:center;gap:5px}
 @media(max-width:860px){.hero-trust{justify-content:center}}
 
-/* Illustration — encryption vault: a plaintext file flows in, an armored
-   shield/lock core processes it (halo pulse, armor ring, glass shine sweep,
-   tight energy micro-orbit), ciphertext flows out the other side. Wrapped
-   in layered atmosphere: a slow radar sweep, 3 counter-rotating dashed
-   rings with 7 orbiting particles between them, circuit traces reaching to
-   corner nodes with data pulses, faint hex-lattice motifs, twinkling
-   sparks, and drifting hex/binary fragments. Four small badges (zero-
-   knowledge, verified, key access, hashing) round out the security theme. */
-.hero-illo{width:100%}
-.hero-illo svg{width:100%;height:auto;display:block}
-.illo-glow{opacity:0.14;transition:opacity .3s var(--ease);animation:illoGlowPulse 4.5s ease-in-out infinite}
-/* ── Theme-adaptive shading for both illustrations ──────────────────────────
-   Flat black/white overlay "shading" tricks only work in the theme they were
-   tuned against: a black tint barely darkens an already-dark surface, and a
-   white tint on an already-near-white surface does nothing at all. Rather
-   than guess one opacity that compromises both themes, each of these gets
-   its own light/dark value so the isometric depth cues and shadows actually
-   read correctly in both. */
-.illo-dropshadow{flood-color:#000;flood-opacity:0.16}
-.illo-dropshadow-sm{flood-color:#000;flood-opacity:0.18}
-.feat-dropshadow{flood-color:#000;flood-opacity:0.18}
-[data-theme="dark"] .illo-dropshadow{flood-opacity:0.55}
-[data-theme="dark"] .illo-dropshadow-sm{flood-opacity:0.6}
-[data-theme="dark"] .feat-dropshadow{flood-opacity:0.55}
-.illo-fold-shadow{fill:#000;opacity:0.07}
-.illo-fold-shadow-accent{fill:#000;opacity:0.05}
-.illo-fold-crease{fill:none;stroke:#000;stroke-width:1;opacity:0.15}
-[data-theme="dark"] .illo-fold-shadow{opacity:0.3}
-[data-theme="dark"] .illo-fold-shadow-accent{opacity:0.22}
-[data-theme="dark"] .illo-fold-crease{stroke:#fff;opacity:0.12}
-/* Base (neutral-surface) isometric platform — surf2 flips from near-white to
-   near-black across themes, so its side-face shadows need much more opacity
-   in dark mode to keep the same perceived contrast against the top face,
-   and the top-face highlight (invisible on an already-white surface) only
-   ever does real work in dark mode, where it's worth boosting slightly. */
-.iso-shadow-1{fill:#000;opacity:0.1}
-.iso-shadow-2{fill:#000;opacity:0.18}
-.iso-highlight{fill:#fff;opacity:0.04}
-[data-theme="dark"] .iso-shadow-1{opacity:0.4}
-[data-theme="dark"] .iso-shadow-2{opacity:0.55}
-[data-theme="dark"] .iso-highlight{opacity:0.1}
-/* Accent-gradient isometric platform (middle/shield) — already sits on a
-   saturated color rather than a neutral one, so black/white overlays stay
-   visible in both themes; still nudged slightly for extra definition. */
-.iso-shadow-accent-1{fill:#000;opacity:0.14}
-.iso-shadow-accent-2{fill:#000;opacity:0.24}
-.iso-highlight-accent{fill:#fff;opacity:0.08}
-[data-theme="dark"] .iso-shadow-accent-1{opacity:0.22}
-[data-theme="dark"] .iso-shadow-accent-2{opacity:0.34}
-[data-theme="dark"] .iso-highlight-accent{opacity:0.12}
-[data-theme="dark"] .illo-glow{opacity:0.24;animation-name:illoGlowPulseDark}
-@keyframes illoGlowPulse{0%,100%{opacity:.13}50%{opacity:.20}}
-@keyframes illoGlowPulseDark{0%,100%{opacity:.22}50%{opacity:.30}}
-/* Ambient float bob — a slow, gentle vertical drift with no cursor-tracking.
-   (The magnetic mouse-parallax that used to also feed this via --px/--py
-   has been removed from home.js; the custom properties simply stay at their
-   0px default now, leaving just this bob.) */
-.illo-layer{--px:0px;--py:0px;animation:illoFloat 5.5s ease-in-out infinite}
-.illo-back{animation-duration:7s;animation-delay:.15s}
-.illo-mid{animation-duration:6s;animation-delay:.4s}
-.illo-front{animation-duration:4.8s}
-.illo-ghost{animation-duration:8.5s;animation-delay:0s}
-@keyframes illoFloat{
-  0%,100%{transform:translate(var(--px),var(--py)) translateY(0)}
-  50%{transform:translate(var(--px),var(--py)) translateY(-9px)}
+/* ═══ Hero + feature visuals ═══════════════════════════════════════════════
+   Replaces the old SVG illustrations. Those ran ~45 simultaneous animations
+   INSIDE two SVGs, with Gaussian-blur / drop-shadow filters on the moving
+   parts: SVG child animations are main-thread, and a filtered group has to be
+   re-rasterized every frame — on the idle page that kept the raster thread
+   ~96% busy forever (hence the jitter that creeps in after a while).
+
+   These scenes are plain layered HTML. Every moving part is transform or
+   opacity ONLY (compositor-driven: each layer is rasterized once, then just
+   moved by the GPU), filters are gone entirely (shadows/glows are static
+   box-shadows / gradients), and animations only run while the scene is
+   on-screen and the tab is visible (home.js toggles .is-playing).
+
+   Sizing: everything is in `em`, and the scene's font-size is 1/52 (hero) or
+   1/38 (features) of its container width — so the whole composition scales
+   as one piece at any width, with no media-query breakpoints. */
+.hero-illo{width:100%;container-type:inline-size}
+.vs-scene,.fs-scene{position:relative;contain:layout style;isolation:isolate;font-size:10px;line-height:1.25;font-family:var(--font)}
+@supports (width:1cqw){
+  .vs-scene{font-size:calc(100cqw / 52)}
+  .feat-illo-wrap{container-type:inline-size}
+  .fs-scene{font-size:calc(100cqw / 38)}
 }
-/* Radar sweep — a slow rotating wedge of light pivoting on the shield's own
-   center (view-box origin, not fill-box — the wedge's own bounding-box
-   center doesn't coincide with its pivot point, so it needs the explicit
-   coordinate the same way the orbits below do) */
-.illo-radar-sweep{transform-box:view-box;transform-origin:260px 220px;animation:illoRadarSpin 9s linear infinite}
-@keyframes illoRadarSpin{to{transform:rotate(360deg)}}
-/* Orbiting particles — three independent rings, alternating direction and
-   speed so the motion never feels mechanical/synced */
-.illo-orbit{transform-box:view-box;transform-origin:260px 220px;animation:illoOrbitSpin 16s linear infinite}
-.illo-orbit-2{animation:illoOrbitSpinRev 11s linear infinite}
-.illo-orbit-3{animation:illoOrbitSpin 13.5s linear infinite}
-.illo-orbit-micro{animation:illoOrbitSpinRev 6s linear infinite}
-@keyframes illoOrbitSpin{to{transform:rotate(360deg)}}
-@keyframes illoOrbitSpinRev{to{transform:rotate(-360deg)}}
-/* Dashed background rings — three, alternating rotation direction/speed —
-   "gears within gears" depth cue behind the orbiting particles */
-.illo-ring{transform-box:fill-box;transform-origin:center;animation:illoRingSpin 32s linear infinite}
-.illo-ring-2{animation:illoOrbitSpin 22s linear infinite}
-.illo-ring-3{animation:illoRingSpin 15s linear infinite}
-@keyframes illoRingSpin{to{transform:rotate(-360deg)}}
-/* Shield/lock core — gentle breathing pulse, reads as "actively encrypting" */
-.illo-shield{transform-box:fill-box;transform-origin:center;animation:illoShieldPulse 3.4s ease-in-out infinite}
-@keyframes illoShieldPulse{0%,100%{transform:scale(1)}50%{transform:scale(1.045)}}
-/* Soft halo just behind the shield — pulses opacity/scale independently of
-   the badge itself, reads as an "energy field" radiating from the core */
-.illo-shield-halo{transform-box:fill-box;transform-origin:center;animation:illoHaloPulse 3.4s ease-in-out infinite}
-@keyframes illoHaloPulse{0%,100%{opacity:.18;transform:scale(1)}50%{opacity:.32;transform:scale(1.15)}}
-/* Diagonal shine sweeping across the shield — a "glass sheen" premium touch,
-   clipped to the shield's own rounded-rect shape so it never spills outside it */
-.illo-scan{animation:illoScanSweep 3.2s ease-in-out infinite}
-@keyframes illoScanSweep{0%{transform:translateX(0);opacity:0}12%{opacity:.7}55%{opacity:.5}85%{opacity:0}100%{transform:translateX(300px);opacity:0}}
-/* Small floating accent badges (zero-knowledge / verified / key / hash) —
-   each on its own float rhythm so the scene never moves in lockstep */
-.illo-chip{animation-duration:5.2s}
-.illo-chip-a{animation-delay:.6s}
-.illo-chip-b{animation-duration:6.4s;animation-delay:1.3s}
-.illo-chip-c{animation-duration:5.8s;animation-delay:2.1s}
-.illo-chip-d{animation-duration:6.9s;animation-delay:.9s}
-/* Twinkling sparks — quick opacity blinks, staggered so they never sync up */
-.illo-spark{animation:illoSparkTwinkle 2.6s ease-in-out infinite;opacity:0}
-.illo-spark-a{animation-delay:0s}
-.illo-spark-b{animation-delay:.9s}
-.illo-spark-c{animation-delay:1.8s}
-.illo-spark-d{animation-delay:1.3s;animation-duration:2.2s}
-.illo-spark-e{animation-delay:2.4s;animation-duration:3s}
-@keyframes illoSparkTwinkle{0%,80%,100%{opacity:0;transform:scale(.6)}40%{opacity:1;transform:scale(1)}}
-/* Flow connectors — marching-dash effect suggests data moving: in/out of the
-   shield (flow/flow-2), and along the circuit traces to the corner nodes
-   (flow-3/flow-4) */
-.illo-flow{fill:none;stroke:url(#illoGrad);stroke-width:2.5;stroke-linecap:round;stroke-dasharray:5 9;animation:illoFlowMove 1s linear infinite}
-.illo-flow-2{animation-delay:.5s}
-.illo-flow-3{stroke-width:1.8;stroke-dasharray:3 7;animation-duration:1.6s;animation-delay:.3s}
-.illo-flow-4{stroke-width:1.8;stroke-dasharray:3 7;animation-duration:1.6s;animation-delay:1s}
-@keyframes illoFlowMove{to{stroke-dashoffset:-28}}
-/* Faint hex/binary fragments — slow independent fades, staggered so they
-   never all breathe in sync */
-.illo-hex{animation:illoHexFade 5s ease-in-out infinite}
-.illo-hex-a{animation-delay:0s}
-.illo-hex-b{animation-delay:1.2s}
-.illo-hex-c{animation-delay:2.4s}
-.illo-hex-d{animation-delay:3.6s}
-@keyframes illoHexFade{0%,100%{opacity:.14}50%{opacity:.38}}
+.vs-scene{aspect-ratio:52/44}
+.fs-scene{aspect-ratio:38/40}
+.vs-scene svg,.fs-scene svg{display:block}
+
+/* Pause everything the moment the scene is off-screen or the tab is hidden */
+.js .vs-scene:not(.is-playing) *,.js .vs-scene:not(.is-playing) *::before,.js .vs-scene:not(.is-playing) *::after,
+.js .fs-scene:not(.is-playing) *,.js .fs-scene:not(.is-playing) *::before,.js .fs-scene:not(.is-playing) *::after{animation-play-state:paused!important}
+/* Entrance: items stay hidden until the scene is first revealed (JS only — without JS everything simply shows) */
+.js .vs-scene:not(.is-visible) .vs-item,.js .fs-scene:not(.is-visible) .fs-item{opacity:0}
+.js .vs-scene.is-visible .vs-item{animation:vsIn 1.1s var(--ease-out) both;animation-delay:calc(var(--n,0)*.13s + .12s)}
+.js .fs-scene.is-visible .fs-item{animation:vsIn 1.1s var(--ease-out) both;animation-delay:calc(var(--n,0)*.14s + .5s)}
+@keyframes vsIn{from{opacity:0;transform:translate3d(0,2.2em,0) scale(.965)}to{opacity:1;transform:none}}
+
+/* ── Ambient backdrop ── */
+.vs-bg{position:absolute;inset:0;pointer-events:none}
+.vs-blob{position:absolute;width:36em;height:36em;border-radius:50%;animation:vsDrift 17s ease-in-out infinite alternate}
+.vs-blob-a{left:-3em;top:1em;background:radial-gradient(circle,rgba(var(--acc-rgb),.34) 0%,rgba(var(--acc-rgb),.18) 30%,rgba(var(--acc-rgb),.05) 55%,transparent 70%)}
+.vs-blob-b{right:-6em;bottom:-5em;background:radial-gradient(circle,rgba(var(--acc2-rgb),.30) 0%,rgba(var(--acc2-rgb),.15) 30%,rgba(var(--acc2-rgb),.04) 55%,transparent 70%);animation-duration:21s;animation-delay:-6s;animation-direction:alternate-reverse}
+[data-theme="dark"] .vs-blob-a{background:radial-gradient(circle,rgba(var(--acc-rgb),.30) 0%,rgba(var(--acc-rgb),.15) 30%,rgba(var(--acc-rgb),.04) 55%,transparent 70%)}
+[data-theme="dark"] .vs-blob-b{background:radial-gradient(circle,rgba(var(--acc2-rgb),.26) 0%,rgba(var(--acc2-rgb),.12) 30%,rgba(var(--acc2-rgb),.03) 55%,transparent 70%)}
+@keyframes vsDrift{from{transform:translate3d(0,0,0) scale(1)}to{transform:translate3d(3.6em,-2.4em,0) scale(1.1)}}
+.vs-dots{position:absolute;inset:0;background-image:radial-gradient(circle,var(--b2) .1em,transparent .12em);background-size:2.8em 2.8em;opacity:.55;-webkit-mask-image:radial-gradient(closest-side at 50% 50%,#000 18%,transparent 78%);mask-image:radial-gradient(closest-side at 50% 50%,#000 18%,transparent 78%)}
+.vs-ring{position:absolute;inset:0;margin:auto;border-radius:50%;border:1px solid rgba(var(--acc-rgb),.16);animation:vsSpin 48s linear infinite}
+.vs-ring-1{width:41em;height:41em}
+.vs-ring-2{width:27em;height:27em;border-color:rgba(var(--acc2-rgb),.14);animation-duration:34s;animation-direction:reverse}
+.vs-ring i{position:absolute;left:50%;top:0;width:.7em;height:.7em;margin:-.35em 0 0 -.35em;border-radius:50%;background:linear-gradient(135deg,var(--acc),var(--acc2));box-shadow:0 0 1.3em .15em rgba(var(--acc-rgb),.55)}
+.vs-ring i:nth-child(2){top:auto;bottom:0;margin:0 0 -.3em -.3em;width:.55em;height:.55em;opacity:.7}
+@keyframes vsSpin{to{transform:rotate(360deg)}}
+.vs-spark{position:absolute;left:var(--x);top:var(--y);width:.9em;height:.9em;background:rgba(var(--acc-rgb),.75);opacity:0;clip-path:polygon(50% 0,63% 37%,100% 50%,63% 63%,50% 100%,37% 63%,0 50%,37% 37%);animation:vsTwinkle 4.4s ease-in-out infinite;animation-delay:var(--d,0s)}
+@keyframes vsTwinkle{0%,100%{opacity:0;transform:scale(.4) rotate(0)}45%{opacity:.9;transform:scale(1) rotate(45deg)}}
+
+/* ── Composition (tilt layer → entrance item → idle float → content) ── */
+.vs-tilt{position:absolute;inset:0;transform:perspective(95em) rotateX(var(--rx,0deg)) rotateY(var(--ry,0deg))}
+.js .vs-scene.is-playing .vs-tilt{will-change:transform}
+.vs-item{position:absolute}
+.vs-float{animation:vsFloat var(--dur,6s) ease-in-out infinite alternate;animation-delay:var(--del,0s)}
+/* (No explicit will-change on the floats: a running transform animation is promoted to its own
+   compositor layer by the browser anyway, and forcing it produced a faint clipped-shadow ghost
+   around the lock badge. The pointer-tilt layer above is JS-driven, so it does keep its hint.) */
+@keyframes vsFloat{from{transform:translate3d(0,.5em,0)}to{transform:translate3d(0,-.8em,0)}}
+.vs-i-card{left:1.2em;top:7.4em}
+.vs-i-lock{left:30.2em;top:3.1em}
+.vs-i-token{right:1.2em;bottom:3.2em}
+.vs-i-pill1{right:.6em;top:14.4em}
+.vs-i-pill2{left:2.4em;bottom:4.4em}
+
+/* Glass card */
+.vs-card{position:relative;width:34.4em;padding:1.8em 2em 1.6em;border-radius:2.2em;color:var(--t1);
+  background:linear-gradient(168deg,#fff 0%,rgba(255,255,255,.86) 100%);
+  border:1px solid rgba(255,255,255,.95);
+  box-shadow:0 0 0 1px var(--b1),0 .7em 1.6em rgba(24,24,60,.07),0 2.6em 5.2em -1.4em rgba(var(--acc-rgb),.32)}
+.vs-card::before{content:"";position:absolute;left:12%;right:12%;top:0;height:1px;background:linear-gradient(90deg,transparent,rgba(var(--acc-rgb),.55),transparent)}
+.vs-card::after{content:"";position:absolute;z-index:-1;inset:1.3em -1.5em -1.5em 1.5em;border-radius:2.2em;background:linear-gradient(168deg,rgba(255,255,255,.7),rgba(255,255,255,.35));border:1px solid rgba(255,255,255,.8);box-shadow:0 0 0 1px var(--b1),0 1.6em 3em -1em rgba(var(--acc-rgb),.22)}
+[data-theme="dark"] .vs-card::after{background:linear-gradient(168deg,rgba(44,44,66,.7),rgba(26,26,38,.5));border-color:rgba(255,255,255,.06);box-shadow:0 0 0 1px rgba(255,255,255,.03),0 1.6em 3em -1em rgba(0,0,0,.6)}
+[data-theme="dark"] .vs-card{background:linear-gradient(168deg,rgba(40,40,60,.94) 0%,rgba(22,22,32,.92) 100%);border-color:rgba(255,255,255,.09);
+  box-shadow:0 0 0 1px rgba(255,255,255,.03),0 .7em 1.6em rgba(0,0,0,.4),0 2.6em 5.2em -1.2em rgba(0,0,0,.7),0 0 4em -1em rgba(var(--acc-rgb),.28)}
+.vs-head{display:flex;align-items:center;gap:1.1em}
+.vs-file{flex:none;width:3.6em;height:3.6em;border-radius:1.1em;display:flex;align-items:center;justify-content:center;background:rgba(var(--acc-rgb),.12);color:var(--acc)}
+.vs-file svg{width:1.9em;height:1.9em;fill:none;stroke:currentColor;stroke-width:1.8;stroke-linecap:round;stroke-linejoin:round}
+.vs-meta{flex:1;min-width:0;display:flex;flex-direction:column;gap:.25em}
+.vs-meta b{font-size:1.22em;font-weight:650;letter-spacing:-.01em;white-space:nowrap}
+.vs-meta small{font-size:1.05em;color:var(--t3);font-weight:500}
+.vs-state{position:relative;flex:none;width:8.4em;height:2.4em}
+.vs-st{position:absolute;right:0;top:50%;display:inline-flex;align-items:center;gap:.5em;margin-top:-1.2em;height:2.4em;padding:0 .95em;border-radius:99px;font-size:1.02em;font-weight:650;white-space:nowrap}
+.vs-st-1{background:rgba(var(--acc-rgb),.12);color:var(--acc);animation:vsSt1 9s ease-in-out infinite}
+.vs-st-2{background:rgba(34,197,94,.14);color:var(--grn);opacity:0;animation:vsSt2 9s ease-in-out infinite}
+.vs-st svg{width:1.25em;height:1.25em;fill:none;stroke:currentColor;stroke-width:2.6;stroke-linecap:round;stroke-linejoin:round}
+.vs-live{width:.6em;height:.6em;border-radius:50%;background:currentColor;animation:vsBlink 1.1s ease-in-out infinite}
+@keyframes vsBlink{50%{opacity:.25}}
+.vs-bar{height:.55em;margin:1.6em 0 1.5em;border-radius:99px;background:var(--b1);overflow:hidden}
+.vs-bar-fill{display:block;height:100%;border-radius:inherit;background:linear-gradient(90deg,var(--acc),var(--acc2));transform-origin:left center;transform:scaleX(0);animation:vsBar 9s cubic-bezier(.4,0,.2,1) infinite}
+.vs-lines{display:flex;flex-direction:column;gap:1.05em}
+.vs-ln{position:relative;height:1.5em}
+.vs-ln .p{position:absolute;left:0;top:.28em;height:.95em;border-radius:99px;background:var(--b2);animation:vsPlain 9s ease-in-out infinite;animation-delay:calc(var(--i)*.26s)}
+.vs-ln .c{position:absolute;left:0;top:0;font-family:var(--font-mono);font-size:1.2em;font-weight:600;letter-spacing:.06em;color:var(--acc);opacity:0;white-space:nowrap;animation:vsCipher 9s ease-in-out infinite;animation-delay:calc(var(--i)*.26s)}
+.vs-foot{display:flex;align-items:center;gap:.7em;margin-top:1.6em;padding-top:1.2em;border-top:1px solid var(--b1);font-size:1em;font-weight:550;color:var(--t3)}
+.vs-foot svg{flex:none;width:1.35em;height:1.35em;fill:none;stroke:var(--acc);stroke-width:2;stroke-linecap:round;stroke-linejoin:round}
+
+/* The loop (9s, every part keyed to the same timeline so they stay in lockstep):
+   0–50% progress fills · 40–52% plain lines → ciphertext · ~55% lock snaps shut ·
+   ~57% label flips · 62–68% share token appears · hold · 92–100% quietly resets */
+@keyframes vsBar{0%{opacity:0;transform:scaleX(0)}5%{opacity:1;transform:scaleX(0)}50%{opacity:1;transform:scaleX(1)}88%{opacity:1;transform:scaleX(1)}96%,100%{opacity:0;transform:scaleX(1)}}
+@keyframes vsSt1{0%{opacity:0;transform:translate3d(0,.5em,0)}6%,50%{opacity:1;transform:none}56%,100%{opacity:0;transform:translate3d(0,-.5em,0)}}
+@keyframes vsSt2{0%,52%{opacity:0;transform:translate3d(0,.5em,0)}58%,90%{opacity:1;transform:none}96%,100%{opacity:0;transform:translate3d(0,-.5em,0)}}
+@keyframes vsPlain{0%,40%{opacity:1}47%,89%{opacity:0}95%,100%{opacity:1}}
+@keyframes vsCipher{0%,40%{opacity:0;transform:translate3d(-.5em,0,0)}47%,89%{opacity:1;transform:none}95%,100%{opacity:0;transform:translate3d(-.5em,0,0)}}
+
+/* Share token chip & pills */
+.vs-token{display:flex;align-items:center;gap:.8em;padding:1.1em 1.6em;border-radius:99px;font-family:var(--font-mono);font-size:1.25em;font-weight:600;color:var(--t2);white-space:nowrap;
+  background:linear-gradient(168deg,#fff,rgba(255,255,255,.9));border:1px solid rgba(255,255,255,.95);box-shadow:0 0 0 1px var(--b1),0 1.6em 3.4em -1em rgba(var(--acc-rgb),.35);
+  animation:vsToken 9s ease-in-out infinite}
+[data-theme="dark"] .vs-token{background:linear-gradient(168deg,rgba(40,40,60,.95),rgba(24,24,34,.95));border-color:rgba(255,255,255,.09);box-shadow:0 0 0 1px rgba(255,255,255,.03),0 1.6em 3.4em -.8em rgba(0,0,0,.75)}
+.vs-token svg{flex:none;width:1.25em;height:1.25em;fill:none;stroke:var(--acc);stroke-width:2.2;stroke-linecap:round;stroke-linejoin:round}
+.vs-token .t-tok{color:var(--acc);font-weight:800;letter-spacing:.08em}
+.vs-token .t-key{color:var(--t3);font-weight:500}
+@keyframes vsToken{0%,58%{opacity:0;transform:translate3d(0,1.4em,0) scale(.96)}67%,90%{opacity:1;transform:none}96%,100%{opacity:0;transform:translate3d(0,-.6em,0) scale(.98)}}
+.vs-pill{display:inline-flex;align-items:center;gap:.55em;padding:.75em 1.25em;border-radius:99px;font-size:1.12em;font-weight:650;white-space:nowrap;color:var(--grn);
+  background:rgba(34,197,94,.13);border:1px solid rgba(34,197,94,.28)}
+.vs-pill svg{width:1.2em;height:1.2em;fill:none;stroke:currentColor;stroke-width:2.6;stroke-linecap:round;stroke-linejoin:round}
+.vs-pill-alt{color:var(--acc);background:rgba(var(--acc-rgb),.11);border-color:rgba(var(--acc-rgb),.27)}
+[data-theme="dark"] .vs-pill{background:rgba(74,222,128,.12);border-color:rgba(74,222,128,.26)}
+
+/* Lock badge (shared by the hero and the features scene). Built from plain boxes
+   rather than an SVG so the shackle can animate as a compositor transform. */
+.lockbadge{position:relative;width:7.4em;height:7.4em;border-radius:2.3em;background:linear-gradient(145deg,var(--acc),var(--acc2));
+  box-shadow:0 2em 3.6em -1em rgba(var(--acc-rgb),.6),0 .5em 1.2em rgba(var(--acc-rgb),.3),inset 0 .15em .25em rgba(255,255,255,.5),inset 0 -.3em .6em rgba(0,0,0,.14)}
+.lockbadge::before{content:"";position:absolute;inset:.45em;border-radius:1.9em;border:1px solid rgba(255,255,255,.26)}
+.lockbadge::after{content:"";position:absolute;inset:0;border-radius:inherit;background:linear-gradient(180deg,rgba(255,255,255,.3) 0%,rgba(255,255,255,0) 52%);pointer-events:none}
+/* (The gloss shares the badge's own radius. An earlier version used oversized bottom radii; CSS then scaled ALL
+   four radii down to fit, so its top corners came out tighter than the badge's and a sliver of white showed
+   outside the rounded corners.) */
+.lb-halo{position:absolute;inset:-.2em;border-radius:2.5em;border:.18em solid rgba(var(--acc-rgb),.55);opacity:0;animation:lbHalo 9s ease-out infinite}
+.lb-body{position:absolute;inset:0;z-index:1}
+.lb-box{position:absolute;left:50%;top:3.55em;width:3.5em;height:2.8em;margin-left:-1.75em;border-radius:.85em;background:#fff;box-shadow:0 .3em .7em rgba(0,0,0,.14)}
+.lb-box::after{content:"";position:absolute;left:50%;top:.85em;width:.6em;height:.6em;margin-left:-.3em;border-radius:50%;background:var(--acc);box-shadow:0 .5em 0 -.04em var(--acc)}
+.lb-shackle{position:absolute;left:50%;top:1.55em;width:2.4em;height:2.3em;margin-left:-1.2em;border:.55em solid #fff;border-bottom:0;border-radius:1.3em 1.3em 0 0;transform-origin:15% 100%;animation:lbShackle 9s cubic-bezier(.3,1.4,.5,1) infinite}
+@keyframes lbShackle{0%,52%{transform:translate3d(0,-.7em,0) rotate(-16deg)}56.5%,90%{transform:none}95%,100%{transform:translate3d(0,-.7em,0) rotate(-16deg)}}
+@keyframes lbHalo{0%,55%{opacity:0;transform:scale(.9)}57%{opacity:.7}78%,100%{opacity:0;transform:scale(1.55)}}
+
+/* ── Features scene: a stack of access "layers" ── */
+.fs-glow{position:absolute;left:50%;top:56%;width:36em;height:36em;margin:-18em 0 0 -18em;border-radius:50%;
+  background:radial-gradient(circle,rgba(var(--acc-rgb),.3) 0%,rgba(var(--acc-rgb),.14) 32%,rgba(var(--acc2-rgb),.04) 56%,transparent 70%);animation:fsBreathe 7s ease-in-out infinite alternate}
+[data-theme="dark"] .fs-glow{background:radial-gradient(circle,rgba(var(--acc-rgb),.26) 0%,rgba(var(--acc-rgb),.12) 32%,rgba(var(--acc2-rgb),.03) 56%,transparent 70%)}
+@keyframes fsBreathe{from{transform:scale(.94);opacity:.8}to{transform:scale(1.06);opacity:1}}
+.fs-stage{position:absolute;left:50%;top:58%;width:21em;height:21em;margin:-10.5em 0 0 -10.5em;perspective:130em}
+.fs-bob{position:absolute;inset:0;animation:vsFloat 6.4s ease-in-out infinite alternate}
+.fs-stack{position:absolute;inset:0;transform-style:preserve-3d;transform:rotateX(60deg) rotateZ(-38deg)}
+/* assemble once (fill: both), THEN each plate starts breathing on its own offset. The
+   breathe delay is positive on purpose: a negative one would start it immediately and,
+   being later in the list, override the assemble from the very first frame. */
+.fs-plate{position:absolute;inset:0;border-radius:2.8em;transform:translateZ(var(--z,0em));animation:fsAssemble 1.4s var(--ease-out) both,fsLayer 6.4s ease-in-out infinite alternate;animation-delay:calc(var(--k)*.14s + .1s),calc(1.7s + var(--k)*.55s)}
+@keyframes fsAssemble{from{opacity:0;transform:translateZ(calc(var(--z)*.15)) scale(.92)}to{opacity:1;transform:translateZ(var(--z)) scale(1)}}
+@keyframes fsLayer{from{transform:translateZ(var(--z))}to{transform:translateZ(calc(var(--z) + 1.5em))}}
+.fs-p1{background:linear-gradient(145deg,var(--surf2),var(--bg2));border:1px solid var(--b2);box-shadow:inset 0 0 0 .5em rgba(255,255,255,.18)}
+.fs-p1::after,.fs-p2::after{content:"";position:absolute;inset:2.2em;border-radius:1.8em;border:1px dashed var(--b2)}
+.fs-p2{background:linear-gradient(145deg,rgba(var(--acc-rgb),.22),rgba(var(--acc2-rgb),.1));border:1px solid rgba(var(--acc-rgb),.38);box-shadow:inset 0 0 0 .5em rgba(255,255,255,.1)}
+.fs-p2::after{border-color:rgba(var(--acc-rgb),.3)}
+.fs-p3{background:linear-gradient(145deg,var(--acc),var(--acc2));border:1px solid rgba(255,255,255,.35);box-shadow:inset 0 .2em .5em rgba(255,255,255,.4),0 0 3em rgba(var(--acc-rgb),.45)}
+.fs-p3::before{content:"";position:absolute;inset:1.5em;border-radius:2em;border:1px solid rgba(255,255,255,.3)}
+.fs-p3::after{content:"";position:absolute;inset:0;border-radius:inherit;background:radial-gradient(circle at 30% 22%,rgba(255,255,255,.4),rgba(255,255,255,0) 60%)}
+[data-theme="dark"] .fs-p1{background:linear-gradient(145deg,#1d1d28,#12121a);border-color:rgba(255,255,255,.1);box-shadow:inset 0 0 0 .5em rgba(255,255,255,.03)}
+[data-theme="dark"] .fs-p2{background:linear-gradient(145deg,rgba(var(--acc-rgb),.3),rgba(var(--acc2-rgb),.14))}
+.fs-shadow{position:absolute;left:50%;top:81%;width:25em;height:7em;margin:0 0 0 -12.5em;border-radius:50%;background:radial-gradient(ellipse at center,rgba(20,20,50,.2) 0%,rgba(20,20,50,.07) 45%,transparent 70%);animation:fsShadow 6.4s ease-in-out infinite alternate}
+[data-theme="dark"] .fs-shadow{background:radial-gradient(ellipse at center,rgba(0,0,0,.6) 0%,rgba(0,0,0,.25) 45%,transparent 70%)}
+@keyframes fsShadow{from{transform:scale(1.04);opacity:1}to{transform:scale(.9);opacity:.72}}
+.fs-item{position:absolute}
+.fs-float{animation:vsFloat 5.4s ease-in-out infinite alternate;animation-delay:-1.6s}
+.fs-i-cap{left:50%;top:7.5%;margin-left:-3.7em}
+.fs-lab{display:flex;flex-direction:column;gap:.15em;padding:.9em 1.4em .9em 3em;border-radius:1.4em;white-space:nowrap;
+  background:linear-gradient(168deg,#fff,rgba(255,255,255,.88));border:1px solid rgba(255,255,255,.95);box-shadow:0 0 0 1px var(--b1),0 1.2em 2.6em -.8em rgba(var(--acc-rgb),.28)}
+[data-theme="dark"] .fs-lab{background:linear-gradient(168deg,rgba(40,40,60,.95),rgba(24,24,34,.95));border-color:rgba(255,255,255,.09);box-shadow:0 0 0 1px rgba(255,255,255,.03),0 1.2em 2.6em -.6em rgba(0,0,0,.7)}
+.fs-lab b{font-size:1.2em;font-weight:700;color:var(--t1);letter-spacing:-.01em}
+.fs-lab small{font-size:.98em;color:var(--t3);font-weight:550}
+.fs-dot{position:absolute;left:1.25em;top:50%;width:1em;height:1em;margin-top:-.5em;border-radius:50%}
+.fs-dot-acc{background:linear-gradient(135deg,var(--acc),var(--acc2));box-shadow:0 0 .9em rgba(var(--acc-rgb),.6)}
+.fs-dot-blu{background:var(--blu)}
+.fs-dot-mut{background:var(--t3)}
+.fs-lab-3{right:-1.5em;top:27%}
+.fs-lab-2{left:-1.5em;top:50%}
+.fs-lab-1{right:-1.5em;top:73%}
+
+/* Reduced motion: show the finished composition, no looping */
 @media(prefers-reduced-motion:reduce){
-  .illo-layer,.illo-orbit,.illo-ring,.illo-shield,.illo-shield-halo,.illo-flow,.illo-hex,.illo-glow,.illo-scan,.illo-spark,.illo-radar-sweep{animation:none}
-}
-/* Pause every animation inside an illustration when it's off-screen or the
-   tab itself is hidden (see the IntersectionObserver + visibilitychange
-   listener in home.js). The universal descendant selector means this keeps
-   working automatically for any animated element added to either
-   illustration later, without needing to enumerate each animation class
-   here by name. */
-.illo-paused,.illo-paused *{animation-play-state:paused!important}
-/* Mobile performance pass — SVG filters (feDropShadow/feGaussianBlur) are
-   genuinely expensive to composite on phone-class GPUs, more so on
-   elements that are simultaneously being transformed/animated, and this
-   page runs 17 of them across the two illustrations combined. Dropping
-   them below 640px removes that cost entirely; the illustrations still
-   read fine without the shadows/glows on a screen this size, where nobody
-   is scrutinizing that level of polish anyway. Also trims a handful of the
-   purely decorative animated elements (second/third orbit rings, the radar
-   sweep, sparks) to cut down the sheer count of things animating at once. */
-@media(max-width:640px){
-  .hero-illo [filter],.feat-illo-wrap [filter]{filter:none!important}
-  .illo-radar-sweep,.illo-spark,.illo-ring-2,.illo-ring-3,.illo-orbit-2,.illo-orbit-3,.illo-orbit-micro{display:none}
+  .vs-scene *,.vs-scene *::before,.vs-scene *::after,.fs-scene *,.fs-scene *::before,.fs-scene *::after{animation:none!important}
+  .js .vs-scene .vs-item,.js .fs-scene .fs-item{opacity:1!important}
+  .vs-bar-fill{transform:none}.vs-ln .p{opacity:0}.vs-ln .c{opacity:1}.vs-st-1{opacity:0}.vs-st-2{opacity:1}.vs-token{opacity:1}.lb-shackle{transform:none}
+  .fs-plate{opacity:1}
 }
 @media(max-width:860px){
   .hero{grid-template-columns:1fr;gap:36px;text-align:center}
   .hero-copy{text-align:center}
   .hero p{margin-left:auto;margin-right:auto}
   .hero-cta{justify-content:center}
-  .hero-illo{max-width:320px;margin:0 auto}
+  .hero-illo{max-width:440px;margin:0 auto}
 }
 /* FEATURES SECTION */
 /* content-visibility:auto lets the browser skip layout/paint work for
@@ -194,14 +243,15 @@
 .sec-wrap{max-width:1100px;margin:0 auto}
 .sec-eyebrow{font-size:11px;font-weight:700;letter-spacing:.7px;text-transform:uppercase;color:var(--acc);margin-bottom:12px}
 .sec-title{font-size:clamp(28px,4vw,40px);font-weight:800;letter-spacing:-1.5px;margin-bottom:12px}
-/* Typewriter reveal on section headings — plays once, the first time each
-   heading scrolls into view (see the IntersectionObserver in home.js, which
-   reuses the same trigger as the fade/lift .reveal system and disconnects
-   itself right after, same as that system does). The real text is always
-   present in the markup, so nothing breaks if JS never runs. */
-.sec-title .tw-line{display:inline-block;min-height:1em}
-.sec-title .tw-line.tw-typing::after{content:'';display:inline-block;width:3px;height:0.85em;margin-left:2px;background:currentColor;vertical-align:-0.12em;animation:twCursorBlink .8s step-end infinite}
-@keyframes twCursorBlink{50%{opacity:0}}
+/* Section headings: each line rises out of a mask (home.js wraps the text in
+   .tw-in). It used to be typed out one character at a time via setTimeout, which
+   re-flowed the heading — and everything beneath it — on every keystroke. This is
+   a single transform per line: no layout, no text mutation, nothing to shift. */
+.js .sec-title br{display:none}
+.js .sec-title .tw-line{display:block;overflow:hidden;padding-bottom:.14em;margin-bottom:-.14em}
+.js .tw-in{display:block;transform:translate3d(0,112%,0);transition:transform 1.05s var(--ease-out);transition-delay:calc(var(--l,0)*110ms + 120ms)}
+.js .sec-title.revealed .tw-in{transform:none}
+@media(prefers-reduced-motion:reduce){.js .tw-in{transform:none;transition:none}}
 .sec-sub{font-size:17px;color:var(--t2);max-width:540px;line-height:1.6;margin-bottom:48px}
 /* Features layout — illustration left, heading + compact list right. Mirrors
    .about-wrap's 2-column pattern but weighted slightly toward the text side
@@ -209,19 +259,14 @@
 .feat-layout{display:grid;grid-template-columns:0.85fr 1.15fr;gap:56px;align-items:center}
 .feat-illo-wrap{width:100%}
 .feat-illo-wrap svg{width:100%;height:auto;display:block}
-/* Orbit ring specific to the features illustration — its own transform
-   origin (this SVG's own center), never shared with the hero's .illo-orbit
-   classes, which pivot on the HERO's center coordinate and would swing this
-   ring wildly off-axis if reused directly. */
-.feat-orbit{transform-box:view-box;transform-origin:190px 195px;animation:illoOrbitSpin 18s linear infinite}
-@media(prefers-reduced-motion:reduce){.feat-orbit{animation:none}}
 /* Compact vertical feature list — icon + title + one-line description,
    stacked with a hairline divider instead of individual bordered cards. */
 .feat-list{display:flex;flex-direction:column}
-.feat-row{display:flex;gap:16px;align-items:flex-start;padding:18px 0;border-bottom:.5px solid var(--b1);transition:padding-left .25s var(--ease)}
+.feat-row{display:flex;gap:16px;align-items:flex-start;padding:18px 0;border-bottom:.5px solid var(--b1)}
+.feat-row>*{transition:transform .35s var(--ease-out)}
 .feat-row:last-child{border-bottom:none;padding-bottom:0}
 .feat-row:first-child{padding-top:0}
-.feat-row:hover{padding-left:6px}
+.feat-row:hover>*{transform:translate3d(6px,0,0)}
 .feat-row-ico{width:38px;height:38px;flex-shrink:0;border-radius:11px;display:flex;align-items:center;justify-content:center;margin-top:2px}
 .feat-row-ico svg{width:18px;height:18px;fill:none;stroke-width:1.9;stroke-linecap:round;stroke-linejoin:round}
 .feat-row-text h3{font-size:15.5px;font-weight:700;letter-spacing:-.2px;margin-bottom:4px;display:flex;align-items:center;gap:9px;flex-wrap:wrap}
@@ -229,9 +274,9 @@
 .feat-tag{font-size:9.5px;font-weight:700;letter-spacing:.4px;text-transform:uppercase;color:#fff;background:linear-gradient(135deg,var(--acc),var(--acc2));padding:2.5px 8px;border-radius:99px}
 .feat-row-hl .feat-row-ico{box-shadow:0 0 0 1px var(--accg)}
 /* Scroll-triggered reveal — elements fade/lift into place once, the first time they enter view */
-.reveal{opacity:0;transform:translateY(18px);transition:opacity .55s var(--ease),transform .55s var(--ease)}
-.reveal.revealed{opacity:1;transform:translateY(0)}
-@media(prefers-reduced-motion:reduce){.reveal{opacity:1;transform:none;transition:none}}
+.js .reveal{opacity:0;transform:translate3d(0,16px,0);transition:opacity .9s var(--ease-out),transform .9s var(--ease-out)}
+.js .reveal.revealed{opacity:1;transform:none}
+@media(prefers-reduced-motion:reduce){.js .reveal{opacity:1;transform:none;transition:none}}
 @media(max-width:900px){
   .feat-layout{grid-template-columns:1fr;gap:36px}
   .feat-illo-wrap{max-width:280px;margin:0 auto}
@@ -286,3 +331,21 @@
 .faq-item[open] .faq-chevron{transform:rotate(180deg);color:var(--acc)}
 .faq-item[open]>summary{color:var(--acc)}
 .faq-item p{font-size:13px;color:var(--t2);line-height:1.65;margin-top:10px;padding-right:26px;animation:fadeUp .25s var(--ease) both}
+
+/* ═══ Entrance choreography ════════════════════════════════════════════════
+   Starts when shared.js adds html.is-ready — i.e. as the loader begins to
+   fade — so the intro plays in view rather than finishing behind it. Only
+   opacity/transform move. The hidden start state exists only when JS is
+   running (.js) and motion is allowed, so nothing can be stranded invisible. */
+@media(prefers-reduced-motion:no-preference){
+  .js:not(.is-ready) .hero-copy>*{opacity:0}
+  .js.is-ready .hero-copy>*{animation:rise 1s var(--ease-out) both;animation-delay:calc(var(--i,0)*90ms + 140ms)}
+  .hero-copy>:nth-child(1){--i:0}.hero-copy>:nth-child(2){--i:1}.hero-copy>:nth-child(3){--i:2}.hero-copy>:nth-child(4){--i:3}.hero-copy>:nth-child(5){--i:4}
+  .js:not(.is-ready) nav{opacity:0}
+  .js.is-ready nav{animation:fadeIn .9s var(--ease-out) both}
+  .js:not(.is-ready) .aes-highlight::after{transform:scaleX(0)}
+  .js.is-ready .aes-highlight::after{animation:markerIn .9s var(--ease-out) 1.05s both}
+}
+@keyframes rise{from{opacity:0;transform:translate3d(0,1.5rem,0)}to{opacity:1;transform:none}}
+@keyframes fadeIn{from{opacity:0}to{opacity:1}}
+@keyframes markerIn{from{transform:scaleX(0)}to{transform:scaleX(1)}}
