@@ -75,3 +75,22 @@ describe("feature hover + encryption flow animation", () => {
     expect(rm).toMatch(/\.ev-lane\{animation:none;opacity:1\}/);
   });
 });
+
+describe("theme default", () => {
+  it("light is the default: no page or script falls back to the system dark preference", () => {
+    for (const f of ["index.html", "app.html", "404.html", "js/shared.js"]) {
+      expect(read(f), f).not.toMatch(/prefers-color-scheme/);
+    }
+    for (const f of ["index.html", "app.html", "404.html"]) expect(read(f), f).toMatch(/<html[^>]*data-theme="light"/);
+  });
+  it("a choice saved with the toggle still wins", () => {
+    expect(shared).toMatch(/if\(sv\)root\.setAttribute\('data-theme',sv\)/);
+  });
+});
+
+describe("features illustration placement", () => {
+  it("is centred in the free space left of the list, and reset on the stacked layout", () => {
+    expect(homeCss).toMatch(/\.feat-illo-wrap\{width:100%;[\s\S]*?left:calc\(-1 \* clamp\(0px,\(100vw - 1100px\)\/4 - 28px,180px\)\)\}/);
+    expect(homeCss).toMatch(/max-width:280px;margin:0 auto;left:0/);
+  });
+});

@@ -61,8 +61,8 @@
 // ── Theme ──────────────────────────────────────────────────────────────────
 const root=document.documentElement;
 const sv=localStorage.getItem('cv-theme');
+// Light is the default for everyone; only a choice made with the toggle (saved) overrides it.
 if(sv)root.setAttribute('data-theme',sv);
-else if(window.matchMedia('(prefers-color-scheme:dark)').matches)root.setAttribute('data-theme','dark');
 document.getElementById('themeBtn').onclick=()=>{
   const n=root.getAttribute('data-theme')==='dark'?'light':'dark';
   root.setAttribute('data-theme',n);localStorage.setItem('cv-theme',n);

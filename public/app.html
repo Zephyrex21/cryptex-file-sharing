@@ -18,7 +18,7 @@
 <script>
 // Override the default theme before first paint if the user has a saved
 // preference — avoids a flash of the wrong theme for returning dark-mode users.
-(function(){try{var s=localStorage.getItem('cv-theme');if(s)document.documentElement.setAttribute('data-theme',s);else if(window.matchMedia('(prefers-color-scheme:dark)').matches)document.documentElement.setAttribute('data-theme','dark');}catch(e){}})();
+(function(){try{var s=localStorage.getItem('cv-theme');if(s)document.documentElement.setAttribute('data-theme',s);}catch(e){}})();
 </script>
 <noscript><style>.preloader{display:none!important}</style></noscript>
 <!-- Fonts are self-hosted (see @font-face in shared.css). Preloaded so they arrive with the first paint instead of swapping in after it. -->

@@ -21,7 +21,7 @@
 // Override the default theme before first paint if the user has a saved
 // preference — avoids a flash of the wrong theme for returning dark-mode users.
 document.documentElement.classList.add('js');
-(function(){try{var s=localStorage.getItem('cv-theme');if(s)document.documentElement.setAttribute('data-theme',s);else if(window.matchMedia('(prefers-color-scheme:dark)').matches)document.documentElement.setAttribute('data-theme','dark');}catch(e){}})();
+(function(){try{var s=localStorage.getItem('cv-theme');if(s)document.documentElement.setAttribute('data-theme',s);}catch(e){}})();
 </script>
 <noscript><style>.preloader{display:none!important}</style></noscript>
 <!-- Fonts are self-hosted (see @font-face in shared.css). Preloaded so they arrive with the first paint instead of swapping in after it. -->
@@ -169,7 +169,7 @@ document.documentElement.classList.add('js');
         </div>
         <div class="feat-row reveal" style="--fc:var(--red)">
           <div class="feat-row-ico" style="background:var(--reds)"><svg viewBox="0 0 24 24" style="stroke:var(--red)"><path d="M21 12.79A9 9 0 1111.21 3 7 7 0 0021 12.79z"/></svg></div>
-          <div class="feat-row-text"><h3>Dark Mode</h3><p>A polished dark mode that follows your system preference, or toggle it manually any time.</p></div>
+          <div class="feat-row-text"><h3>Dark Mode</h3><p>Opens in a clean light theme. Switch to a polished dark mode with one click — your choice is remembered.</p></div>
         </div>
       </div>
     </div>

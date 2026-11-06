@@ -257,7 +257,13 @@
    .about-wrap's 2-column pattern but weighted slightly toward the text side
    since the list carries more content than the illustration does. */
 .feat-layout{display:grid;grid-template-columns:0.85fr 1.15fr;gap:56px;align-items:center}
-.feat-illo-wrap{width:100%}
+.feat-illo-wrap{width:100%;
+  /* Centre the artwork in the free space to the left of the feature list. That space is
+     (container-left − gap)/2 wider on the left than on the right, so nudge it left by
+     exactly that much: (viewport − 1100px)/4 − 28px (gap 56px ÷ 2). Capped (180px, i.e. exact
+     centring up to ~1820px wide) so it never drifts too far on ultra-wide screens, and 0 below 1100px where there is no spare room.
+     `left` (not transform) so it never fights the .reveal entrance. */
+  position:relative;left:calc(-1 * clamp(0px,(100vw - 1100px)/4 - 28px,180px))}
 .feat-illo-wrap svg{width:100%;height:auto;display:block}
 /* Compact vertical feature list — icon + title + one-line description,
    stacked with a hairline divider instead of individual bordered cards. */
@@ -303,7 +309,7 @@
 @media(prefers-reduced-motion:reduce){.js .reveal{opacity:1;transform:none;transition:none}}
 @media(max-width:900px){
   .feat-layout{grid-template-columns:1fr;gap:36px}
-  .feat-illo-wrap{max-width:280px;margin:0 auto}
+  .feat-illo-wrap{max-width:280px;margin:0 auto;left:0}
 }
 /* ENCRYPTION SECTION — 3-step flow + zero-knowledge callout */
 #encryption{padding:80px 20px;content-visibility:auto;contain-intrinsic-size:auto 800px}
