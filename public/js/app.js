@@ -260,7 +260,7 @@ function celebrate(originEl){
   if(window.matchMedia('(prefers-reduced-motion: reduce)').matches)return;
   const rect=originEl.getBoundingClientRect();
   const cx=rect.left+rect.width/2,cy=rect.top+rect.height/2;
-  const colors=['#7872F0','#A472F0','#4ADE80','#F0C040','#60A0F0','#F0529E'];
+  const colors=['#8B7DFF','#B78BFF','#4ADE80','#F0C040','#60A0F0','#F0529E'];
   for(let i=0;i<18;i++){
     const p=document.createElement('div');
     p.className='confetti-piece';
@@ -945,18 +945,18 @@ function showProp(id){
 function closeProp(){document.getElementById('propModal').classList.remove('open');}
 document.getElementById('propModal').addEventListener('click',e=>{if(e.target===document.getElementById('propModal'))closeProp();});
 
-document.addEventListener('keydown',e=>{if(e.key==='Escape'){closeLB();closeProp();document.getElementById('delModal').classList.remove('open');closeTokenModal();closeAtf();closeCreateFolder();closeRename();closeFolderDelConfirm();closeShortcuts();closeMyShares();}});
+document.addEventListener('keydown',e=>{if(e.key==='Escape'){closeLB();closeProp();document.getElementById('delModal').classList.remove('open');closeTokenModal();closeAtf();closeCreateFolder();closeRename();closeFolderDelConfirm();closeMyShares();}});
 
-// ── Keyboard shortcuts ───────────────────────────────────────────────────────
-// Ignored while typing in any input/textarea (except Escape, handled above)
-// so shortcuts never hijack normal typing.
+// ── Single-key hotkeys ───────────────────────────────────────────────────────
+// Ignored while typing in any input/textarea so they never hijack normal typing.
+// They are listed (with their keys) in the Ctrl/⌘+K command palette below.
 const SHORTCUT_KEYS={
   '/':()=>{document.getElementById('sInput').focus();},
   'u':()=>fInput.click(),
   'n':()=>showCreateFolder(),
   'l':()=>document.getElementById('linkInput').focus(),
   't':()=>document.getElementById('tInput')?.focus(),
-  '?':()=>toggleShortcuts(),
+  '?':()=>window.CryptexPalette.open(),
 };
 document.addEventListener('keydown',e=>{
   const tag=e.target.tagName;
@@ -965,9 +965,6 @@ document.addEventListener('keydown',e=>{
   const handler=SHORTCUT_KEYS[e.key];
   if(handler){e.preventDefault();handler();}
 });
-function toggleShortcuts(){document.getElementById('shortcutsModal').classList.toggle('open');}
-function closeShortcuts(){document.getElementById('shortcutsModal').classList.remove('open');}
-document.getElementById('shortcutsModal')?.addEventListener('click',e=>{if(e.target===document.getElementById('shortcutsModal'))closeShortcuts();});
 
 // ── Toast ──────────────────────────────────────────────────────────────────
 function toast(msg,type='info'){
@@ -2082,4 +2079,74 @@ loadFiles();
   const nav=(window.performance&&performance.getEntriesByType)?performance.getEntriesByType('navigation')[0]:null;
   if(nav&&nav.type==='reload'){toast('Token filled in — press Access to open it again','info');return;}
   setTimeout(()=>accessByToken(),350);
+})();
+
+// ── Command palette (Ctrl/⌘+K) ───────────────────────────────────────────────
+// Registers this page's quick actions with the shared palette (see shared.js).
+// Single-key hotkeys above are surfaced here as hints. Everything calls the same
+// functions the buttons call, so there is no second code path to keep in sync.
+(function(){
+  const P=window.CryptexPalette;
+  if(!P)return;
+  const $=(id)=>document.getElementById(id);
+  const focusEl=(id)=>{const el=$(id);if(el){el.scrollIntoView({behavior:'smooth',block:'center'});el.focus();}};
+  const filterTab=(f)=>()=>{switchSection('files');document.querySelector('.tab[data-f="'+f+'"]')?.click();$('fc')?.scrollIntoView({behavior:'smooth',block:'start'});};
+  const Q='Quick actions',G='Go to',T='Browse by type',A='App';
+  const commands=[
+    {group:Q,label:'Upload files',keywords:'add file picker choose',icon:'upload',kbd:['U'],run:()=>fInput.click()},
+    {group:Q,label:'Upload with end-to-end encryption',keywords:'encrypt e2e private secure',icon:'lock',run:()=>{const t=$('encToggle');if(t&&!t.checked){t.checked=true;t.dispatchEvent(new Event('change',{bubbles:true}));}fInput.click();}},
+    {group:Q,label:'Add a link to share',keywords:'url paste website preview',icon:'link',kbd:['L'],run:()=>focusEl('linkInput')},
+    {group:Q,label:'Open a private item with a token',keywords:'access code unlock',icon:'key',kbd:['T'],run:()=>focusEl('tInput')},
+    {group:Q,label:'New folder',keywords:'create collection',icon:'folderPlus',kbd:['N'],run:()=>showCreateFolder()},
+    {group:Q,label:'New encrypted vault',keywords:'folder e2e private secure',icon:'shield',run:()=>{showCreateFolder();const c=$('cfEncrypted');if(c)c.checked=true;}},
+    {group:Q,label:'Search files',keywords:'find filter',icon:'search',kbd:['/'],run:()=>focusEl('sInput')},
+
+    {group:G,label:'Files',keywords:'gallery public',icon:'file',run:()=>switchSection('files')},
+    {group:G,label:'Folders',keywords:'collections vaults',icon:'folder',run:()=>switchSection('folders')},
+    {group:G,label:'My Shares',keywords:'tokens private links saved',icon:'key',run:()=>openMyShares()},
+    {group:G,label:'Home page',keywords:'landing cryptex',icon:'home',run:()=>{location.href='/';}},
+
+    {group:T,label:'Images',keywords:'photos png jpg gif',icon:'image',searchOnly:true,run:filterTab('image')},
+    {group:T,label:'Videos',keywords:'mp4 movie',icon:'video',searchOnly:true,run:filterTab('video')},
+    {group:T,label:'PDFs',keywords:'documents',icon:'file',searchOnly:true,run:filterTab('pdf')},
+    {group:T,label:'ZIP archives',keywords:'compressed',icon:'archive',searchOnly:true,run:filterTab('zip')},
+    {group:T,label:'Docs',keywords:'word text document',icon:'file',searchOnly:true,run:filterTab('doc')},
+    {group:T,label:'Code',keywords:'source script',icon:'code',searchOnly:true,run:filterTab('code')},
+    {group:T,label:'Links',keywords:'urls websites',icon:'link',searchOnly:true,run:filterTab('link')},
+    {group:T,label:'All files',keywords:'reset clear filter',icon:'file',searchOnly:true,run:filterTab('all')},
+
+    {group:A,label:'Toggle light / dark theme',keywords:'appearance mode',icon:'theme',run:()=>$('themeBtn')?.click()},
+    {group:A,label:'Select multiple files',keywords:'bulk selection',icon:'check',searchOnly:true,run:()=>toggleSelectMode()},
+    {group:A,label:'Refresh files',keywords:'reload sync',icon:'refresh',searchOnly:true,run:()=>loadFiles()},
+    {group:A,label:'API documentation',keywords:'docs openapi swagger',icon:'book',searchOnly:true,run:()=>window.open('/api-docs','_blank','noopener')},
+    {group:A,label:'View source on GitHub',keywords:'repo code',icon:'github',run:()=>window.open('https://github.com/Zephyrex21/cryptex-file-sharing','_blank','noopener')}
+  ];
+  // Matches that depend on what is typed: your files, your folders, and a token.
+  const dynamic=(q)=>{
+    const low=q.toLowerCase(),out=[];
+    allFiles.filter(f=>(f.originalName||'').toLowerCase().includes(low)).slice(0,5).forEach(f=>out.push({
+      group:'Files',label:f.originalName,sub:'Show in gallery',icon:'file',
+      run:()=>{switchSection('files');const si=$('sInput');si.value=f.originalName;searchQ=f.originalName;renderAll();$('fc')?.scrollIntoView({behavior:'smooth',block:'start'});}
+    }));
+    allFolders.filter(f=>(f.name||'').toLowerCase().includes(low)).slice(0,4).forEach(f=>out.push({
+      group:'Folders',label:f.name,sub:'Open folder',icon:'folder',
+      run:()=>{switchSection('folders');openFolder(f._id);}
+    }));
+    if(/^[a-z0-9]{6}$/i.test(q))out.push({
+      group:'Token',label:'Open private item with token “'+q.toLowerCase()+'”',icon:'key',
+      run:()=>{$('tInput').value=q;accessByToken();}
+    });
+    return out;
+  };
+  // Folders are normally fetched only when the Folders tab is opened, so fetch them
+  // (silently, once) the first time the palette opens — otherwise folder search is empty.
+  let foldersPrimed=false;
+  const onOpen=()=>{
+    if(foldersPrimed||allFolders.length)return;
+    foldersPrimed=true;
+    fetch(FOLDERS_API).then(r=>r.ok?r.json():null).then(d=>{
+      if(d&&Array.isArray(d.folders)&&!allFolders.length){allFolders=d.folders;P.refresh();}
+    }).catch(()=>{});
+  };
+  P.register({commands,dynamic,onOpen});
 })();

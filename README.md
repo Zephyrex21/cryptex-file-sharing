@@ -338,8 +338,8 @@ Interactive documentation is served at **`/api-docs`** (Swagger UI, generated fr
 
 ```bash
 npm run lint                      # ESLint
-npm test                          # 311 unit and integration-style tests (Vitest)
-cd e2e && npm ci && npm test      # 80 end-to-end checks against the real frontend (jsdom)
+npm test                          # 374 unit and integration-style tests (Vitest)
+cd e2e && npm ci && npm test      # 101 end-to-end checks against the real frontend (jsdom)
 ```
 
 - Unit tests cover access rules, token handling, magic-byte verification, the SSRF guard, rate limiting, vault and encryption rules, storage rotation and error handling. Some suites run the real Mongoose schemas without a database to pin down indexes, enums and defaults.

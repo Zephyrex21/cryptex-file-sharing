@@ -15,7 +15,7 @@
    preserve nested markup. */
 .aes-highlight{position:relative;display:inline-block;color:var(--acc);font-weight:900}
 .aes-highlight::after{content:'';position:absolute;left:-5px;right:-5px;bottom:3px;height:0.32em;background:var(--accs);border-radius:3px;z-index:-1;transform-origin:left center}
-[data-theme="dark"] .aes-highlight::after{background:rgba(139,124,246,0.28)}
+[data-theme="dark"] .aes-highlight::after{background:rgba(139,125,255,0.28)}
 #heroLine1,#heroLine2{display:inline-block}
 /* Per-character slots used by the decrypt-in (home.js). Each slot is pinned to the
    exact pixel width that character has in the real text (kerning included), so
@@ -261,13 +261,37 @@
 .feat-illo-wrap svg{width:100%;height:auto;display:block}
 /* Compact vertical feature list — icon + title + one-line description,
    stacked with a hairline divider instead of individual bordered cards. */
-.feat-list{display:flex;flex-direction:column}
-.feat-row{display:flex;gap:16px;align-items:flex-start;padding:18px 0;border-bottom:.5px solid var(--b1)}
-.feat-row>*{transition:transform .35s var(--ease-out)}
-.feat-row:last-child{border-bottom:none;padding-bottom:0}
-.feat-row:first-child{padding-top:0}
-.feat-row:hover>*{transform:translate3d(6px,0,0)}
-.feat-row-ico{width:38px;height:38px;flex-shrink:0;border-radius:11px;display:flex;align-items:center;justify-content:center;margin-top:2px}
+/* Rows carry their own horizontal padding (cancelled by the negative list margin) so
+   the hover card can appear *around* the text without anything ever moving sideways.
+   Hover = a card tinted with the row's own colour (--fc), a gradient hairline ring, a
+   spotlight that follows the pointer (.feat-glow, injected by home.js), the icon
+   popping forward — and the other rows quietly stepping back. Nothing changes size. */
+.feat-list{display:flex;flex-direction:column;margin:0 -16px}
+.feat-row{--fc:var(--acc);position:relative;isolation:isolate;overflow:hidden;display:flex;gap:16px;align-items:flex-start;padding:17px 16px;border-radius:16px;background:linear-gradient(var(--b1),var(--b1)) 16px 100%/calc(100% - 32px) 1px no-repeat}
+.feat-row:last-child{background-image:none}
+.feat-row>:not(.feat-glow){position:relative;z-index:2}
+.feat-row::before{content:'';position:absolute;inset:0;z-index:0;border-radius:inherit;background:var(--surf2);opacity:0;transition:opacity .35s var(--ease-out)}
+@supports(background:color-mix(in srgb,red 10%,blue)){
+  .feat-row::before{background:linear-gradient(135deg,color-mix(in srgb,var(--fc) 10%,var(--surf2)),var(--surf2) 62%)}
+}
+.feat-row::after{content:'';position:absolute;inset:0;z-index:1;border-radius:inherit;padding:1px;pointer-events:none;background:linear-gradient(135deg,var(--fc),transparent 58%);-webkit-mask:linear-gradient(#000 0 0) content-box,linear-gradient(#000 0 0);-webkit-mask-composite:xor;mask:linear-gradient(#000 0 0) content-box,linear-gradient(#000 0 0);mask-composite:exclude;opacity:0;transition:opacity .35s var(--ease-out)}
+.feat-glow{position:absolute;left:0;top:0;width:240px;height:240px;margin:-120px 0 0 -120px;z-index:1;border-radius:50%;pointer-events:none;opacity:0;background:radial-gradient(circle,rgba(var(--acc-rgb),.22),transparent 65%);transform:translate3d(var(--mx,70px),var(--my,30px),0);transition:opacity .35s var(--ease-out)}
+@supports(background:color-mix(in srgb,red 10%,blue)){
+  .feat-glow{background:radial-gradient(circle,color-mix(in srgb,var(--fc) 26%,transparent),transparent 65%)}
+}
+.feat-row-text{transition:opacity .35s var(--ease-out)}
+@media(hover:hover){
+  .feat-row:hover{background-size:0 1px}
+  .feat-row:hover::before,.feat-row:hover::after,.feat-row:hover .feat-glow{opacity:1}
+  .feat-row:hover .feat-row-ico{transform:translate3d(0,-2px,0) scale(1.12) rotate(-6deg);box-shadow:0 0 0 5px rgba(var(--acc-rgb),.12),0 10px 20px -8px rgba(var(--acc-rgb),.6)}
+  .feat-list:hover .feat-row:not(:hover) .feat-row-ico,.feat-list:hover .feat-row:not(:hover) .feat-row-text{opacity:.5}
+}
+@supports(background:color-mix(in srgb,red 10%,blue)){
+  @media(hover:hover){
+    .feat-row:hover .feat-row-ico{box-shadow:0 0 0 5px color-mix(in srgb,var(--fc) 14%,transparent),0 10px 20px -8px color-mix(in srgb,var(--fc) 60%,transparent)}
+  }
+}
+.feat-row-ico{width:38px;height:38px;flex-shrink:0;border-radius:11px;display:flex;align-items:center;justify-content:center;margin-top:2px;transition:transform .5s var(--spring),box-shadow .35s var(--ease-out),opacity .35s var(--ease-out)}
 .feat-row-ico svg{width:18px;height:18px;fill:none;stroke-width:1.9;stroke-linecap:round;stroke-linejoin:round}
 .feat-row-text h3{font-size:15.5px;font-weight:700;letter-spacing:-.2px;margin-bottom:4px;display:flex;align-items:center;gap:9px;flex-wrap:wrap}
 .feat-row-text p{font-size:13.5px;color:var(--t2);line-height:1.55}
@@ -284,10 +308,10 @@
 /* ENCRYPTION SECTION — 3-step flow + zero-knowledge callout */
 #encryption{padding:80px 20px;content-visibility:auto;contain-intrinsic-size:auto 800px}
 .enc-steps{display:grid;grid-template-columns:1fr auto 1fr auto 1fr;gap:20px;align-items:stretch;margin-bottom:32px}
-.enc-step{background:var(--bg);border:.5px solid var(--b1);border-radius:var(--r3);padding:24px;transition:transform .3s var(--spring),box-shadow .3s var(--ease),border-color .3s var(--ease)}
+.enc-step{position:relative;isolation:isolate;overflow:hidden;background:var(--bg);border:.5px solid var(--b1);border-radius:var(--r3);padding:24px;transition:transform .3s var(--spring),box-shadow .3s var(--ease),border-color .3s var(--ease)}
 .enc-step:hover{transform:translateY(-4px);box-shadow:var(--sh2);border-color:var(--accg)}
-.enc-step-icowrap{position:relative;width:44px;height:44px;margin-bottom:16px}
-.enc-step-ico{width:44px;height:44px;padding:11px;border-radius:var(--r2);background:var(--accs);color:var(--acc);box-sizing:border-box}
+.enc-step-icowrap{position:relative;z-index:2;width:44px;height:44px;margin:-22px 0 16px 2px}
+.enc-step-ico{width:44px;height:44px;padding:11px;border-radius:var(--r2);background:var(--surf2);color:var(--acc);box-sizing:border-box;box-shadow:0 0 0 4px var(--bg),0 0 0 5px var(--accg),var(--sh1)}
 .enc-step-num{position:absolute;top:-6px;right:-6px;width:20px;height:20px;border-radius:50%;background:linear-gradient(135deg,var(--acc),var(--acc2));color:#fff;font-size:11px;font-weight:800;display:flex;align-items:center;justify-content:center;box-shadow:0 0 0 3px var(--bg);animation:encNumPulse 2.6s ease-in-out infinite}
 @keyframes encNumPulse{0%,100%{transform:scale(1)}50%{transform:scale(1.15)}}
 .enc-step h3{font-size:15px;font-weight:700;letter-spacing:-.2px;margin-bottom:8px}
@@ -297,9 +321,75 @@
 .enc-step-arrow svg{width:64px;height:24px;overflow:visible}
 .enc-arrow-line{stroke:var(--b2);stroke-width:2}
 .enc-arrow-head{fill:none;stroke:var(--t3);stroke-width:2;stroke-linecap:round;stroke-linejoin:round}
-.enc-arrow-packet{fill:var(--acc);animation:encPacketFlow 1.8s ease-in-out infinite}
-@keyframes encPacketFlow{0%{transform:translateX(0);opacity:0}12%{opacity:1}88%{opacity:1}100%{transform:translateX(40px);opacity:0}}
-@media(prefers-reduced-motion:reduce){.enc-step-num{animation:none}.enc-arrow-packet{animation:none;opacity:1}}
+/* One shared 7s timeline drives the whole flow: step 1 lights up (the file is
+   scanned and turns into ciphertext), a packet crosses arrow 1, step 2 lights up
+   (ciphertext blocks ship to the server), a packet crosses arrow 2, step 3 lights up
+   (the link splits: the server only sees the token, the recipient gets token + key).
+   Only transform/opacity animate, and every loop pauses when the section is off-screen
+   (.is-playing, set by home.js). */
+.enc-steps{--cy:7s}
+.enc-arrow-packet{fill:var(--acc);opacity:0;animation:encPacket var(--cy) ease-in-out infinite;animation-delay:calc(1.5s + var(--k,0)*2.2s)}
+@keyframes encPacket{0%{transform:translateX(0);opacity:0}3%{opacity:1}12%{opacity:1;transform:translateX(40px)}14%,100%{transform:translateX(40px);opacity:0}}
+.enc-step::before{content:'';position:absolute;inset:0;z-index:3;border-radius:inherit;pointer-events:none;box-shadow:inset 0 0 0 1.5px var(--acc),inset 0 0 46px rgba(var(--acc-rgb),.14);opacity:0;animation:encStepOn var(--cy) ease-in-out infinite;animation-delay:calc(var(--k,0)*2.2s)}
+@keyframes encStepOn{0%{opacity:0}5%{opacity:1}28%{opacity:1}36%,100%{opacity:0}}
+.enc-viz{--lift:13px;position:relative;container-type:inline-size;height:138px;padding-bottom:26px;margin:-24px -24px 0;border-radius:var(--r3) var(--r3) 0 0;background:linear-gradient(160deg,rgba(var(--acc-rgb),.11),rgba(var(--acc2-rgb),.05));border-bottom:.5px solid var(--b1);overflow:hidden;display:flex;align-items:center;justify-content:center}
+.enc-viz::before{content:'';position:absolute;inset:0;background-image:radial-gradient(rgba(var(--acc-rgb),.22) 1px,transparent 1px);background-size:14px 14px;-webkit-mask-image:radial-gradient(ellipse at center,#000 25%,transparent 72%);mask-image:radial-gradient(ellipse at center,#000 25%,transparent 72%)}
+.enc-viz>*{position:relative}
+/* 1 · encrypt: plain lines are scanned and swap to ciphertext */
+.ev-file{width:62%;max-width:210px;background:var(--surf2);border:.5px solid var(--b2);border-radius:12px;box-shadow:var(--sh1);padding:8px 10px 10px}
+.ev-fhead{display:flex;align-items:center;gap:6px;font-size:10.5px;font-weight:600;color:var(--t2);margin-bottom:7px}
+.ev-fhead i{width:8px;height:10px;border-radius:2px;background:linear-gradient(135deg,var(--acc),var(--acc2))}
+.ev-body{position:relative;height:42px;overflow:hidden;border-radius:6px}
+.ev-plain,.ev-cipher{position:absolute;inset:0;display:flex;flex-direction:column;justify-content:center;gap:6px}
+.ev-plain b{display:block;height:6px;width:var(--w);border-radius:3px;background:var(--b2)}
+.ev-cipher code{font-family:var(--font-mono);font-size:9.5px;line-height:1;color:var(--acc);letter-spacing:.3px;white-space:nowrap}
+.ev-plain{animation:encPlain var(--cy) ease-in-out infinite}
+.ev-cipher{opacity:0;animation:encCipher var(--cy) ease-in-out infinite}
+.ev-scan{position:absolute;top:-4px;bottom:-4px;left:0;width:40%;background:linear-gradient(90deg,transparent,rgba(var(--acc-rgb),.6),transparent);opacity:0;animation:encScan var(--cy) ease-in-out infinite}
+.ev-keychip{position:absolute;top:-10px;right:-10px;width:26px;height:26px;border-radius:50%;display:flex;align-items:center;justify-content:center;color:#fff;background:linear-gradient(135deg,var(--acc),var(--acc2));box-shadow:0 0 0 3px var(--bg),0 4px 12px rgba(var(--acc-rgb),.45);opacity:0;animation:encKey var(--cy) ease-in-out infinite}
+.ev-keychip svg{width:13px;height:13px}
+@keyframes encPlain{0%,20%{opacity:1}26%,90%{opacity:0}97%,100%{opacity:1}}
+@keyframes encCipher{0%,20%{opacity:0}26%,90%{opacity:1}97%,100%{opacity:0}}
+@keyframes encScan{0%{transform:translateX(-100%);opacity:0}3%{opacity:1}22%{transform:translateX(250%);opacity:1}24%,100%{transform:translateX(250%);opacity:0}}
+@keyframes encKey{0%{transform:scale(.6) rotate(-25deg);opacity:0}8%{transform:scale(1.15) rotate(0);opacity:1}12%,86%{transform:scale(1) rotate(0);opacity:1}94%,100%{transform:scale(.8);opacity:0}}
+/* 2 · upload: ciphertext blocks ship to a server that only ever sees noise */
+.ev-dev{left:16cqw}
+.ev-srv{right:16cqw}
+.ev-node{position:absolute;top:calc(50% - 30px - var(--lift));z-index:1;width:46px;height:46px;border-radius:14px;display:flex;align-items:center;justify-content:center;color:var(--t2);background:var(--surf2);border:.5px solid var(--b2);box-shadow:var(--sh1)}
+.ev-node svg{width:22px;height:22px}
+.ev-node em{position:absolute;top:calc(100% + 7px);left:50%;transform:translateX(-50%);font-style:normal;font-size:9.5px;font-weight:700;letter-spacing:.3px;color:var(--t3);white-space:nowrap}
+.ev-srv{color:var(--acc)}
+.ev-srv::after{content:'';position:absolute;inset:-5px;border-radius:18px;border:1.5px solid var(--acc);opacity:0;animation:encArrive var(--cy) ease-out infinite;animation-delay:2.9s}
+.ev-track{position:absolute;left:calc(16cqw + 46px);right:calc(16cqw + 46px);top:calc(50% - 7px - var(--lift));height:0;border-top:1.5px dashed rgba(var(--acc-rgb),.35)}
+.ev-pkt{position:absolute;left:calc(16cqw + 46px);top:calc(50% - 14px - var(--lift));width:16px;height:14px;border-radius:4px;opacity:0;background:linear-gradient(135deg,var(--acc),var(--acc2));box-shadow:0 2px 8px rgba(var(--acc-rgb),.4);animation:encShip var(--cy) cubic-bezier(.4,0,.2,1) infinite;animation-delay:calc(2.1s + var(--j,0)*.3s)}
+@keyframes encShip{0%{opacity:0;transform:translateX(0) scale(.6)}3%{opacity:1;transform:translateX(0) scale(1)}13%{opacity:1;transform:translateX(calc(68cqw - 92px - 16px)) scale(1)}15%,100%{opacity:0;transform:translateX(calc(68cqw - 92px - 16px)) scale(.7)}}
+@keyframes encArrive{0%{opacity:0;transform:scale(.9)}2%{opacity:.9;transform:scale(1)}10%,100%{opacity:0;transform:scale(1.3)}}
+/* 3 · key in the link: the server only sees ?token, the recipient gets both */
+.ev3{flex-direction:column;gap:7px;padding:0 14px;align-items:stretch}
+.ev-url{display:flex;align-items:center;justify-content:center;gap:2px;padding:5px 10px;border-radius:99px;font-family:var(--font-mono);font-size:10.5px;color:var(--t3);white-space:nowrap;overflow:hidden;background:var(--surf2);border:.5px solid var(--b2);box-shadow:var(--sh1)}
+.ev-url b,.ev-lane b{color:var(--blu);font-weight:600}
+.ev-url u,.ev-lane u{text-decoration:none;color:#fff;font-weight:600;padding:1px 5px;border-radius:5px;background:linear-gradient(135deg,var(--acc),var(--acc2))}
+.ev-lane{display:flex;align-items:center;gap:6px;font-family:var(--font-mono);font-size:10px;white-space:nowrap;opacity:0;animation:encLane var(--cy) ease-out infinite}
+.ev-lane em{width:84px;flex-shrink:0;font-family:var(--font);font-style:normal;font-size:9.5px;font-weight:700;letter-spacing:.3px;text-transform:uppercase;color:var(--t3)}
+.ev-lane s{color:var(--t3);opacity:.6}
+.ev-l1{animation-delay:4.6s}
+.ev-l2{animation-delay:5.3s}
+@keyframes encLane{0%{opacity:0;transform:translateX(-8px)}5%,30%{opacity:1;transform:translateX(0)}36%,100%{opacity:0;transform:translateX(0)}}
+/* callout: a slow sheen across the zero-knowledge note */
+.enc-callout{position:relative;overflow:hidden}
+.enc-callout::after{content:'';position:absolute;top:0;bottom:0;left:0;width:38%;pointer-events:none;background:linear-gradient(100deg,transparent,rgba(var(--acc-rgb),.16),transparent);transform:translateX(-130%)}
+.enc-callout.is-playing::after{animation:encSheen 6s ease-in-out infinite}
+.enc-callout.is-playing .enc-callout-ico{animation:encShield 3.4s ease-in-out infinite}
+@keyframes encSheen{0%{transform:translateX(-130%)}45%,100%{transform:translateX(330%)}}
+@keyframes encShield{0%,100%{transform:scale(1)}50%{transform:scale(1.12)}}
+.js .enc-steps:not(.is-playing) *,.js .enc-steps:not(.is-playing) *::before,.js .enc-steps:not(.is-playing) *::after{animation-play-state:paused}
+@media(prefers-reduced-motion:reduce){
+  .enc-step-num,.enc-step::before,.enc-callout::after,.enc-callout-ico{animation:none!important}
+  .enc-arrow-packet{animation:none;opacity:1}
+  .ev-plain{animation:none;opacity:0}.ev-cipher{animation:none;opacity:1}
+  .ev-scan,.ev-pkt,.ev-srv::after{display:none}
+  .ev-keychip{animation:none;opacity:1}.ev-lane{animation:none;opacity:1}
+}
 @media(max-width:900px){
   .enc-steps{grid-template-columns:1fr}
   .enc-step-arrow{width:24px;height:64px;margin:0 auto;align-self:center}

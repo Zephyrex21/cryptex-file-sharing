@@ -150,6 +150,8 @@ function watchScene(el,{waitForReady=false}={}){
 }
 watchScene(document.getElementById('vsScene'),{waitForReady:true});
 watchScene(document.getElementById('fsScene'));
+watchScene(document.getElementById('encSteps'));   // encryption flow loops pause off-screen
+watchScene(document.getElementById('encCallout'));
 
 // ── Hero scene: gentle pointer tilt ─────────────────────────────────────────
 // Eases the card cluster a few degrees toward the cursor. The rAF loop only runs
@@ -211,4 +213,43 @@ document.querySelectorAll('.sec-title .tw-line').forEach((line,i)=>{
   groups.forEach(list=>{
     list.forEach((el,i)=>{el.style.transitionDelay=Math.min(i*70,420)+'ms';io.observe(el);});
   });
+})();
+
+// ── Feature rows: per-row spotlight that follows the pointer ──────────────────
+// The glow is one absolutely-positioned element moved with a transform (no layout,
+// no repaint of the row). Touch devices have no hover, so they skip it entirely.
+(function(){
+  if(REDUCE_MOTION||!window.matchMedia('(hover:hover)').matches)return;
+  document.querySelectorAll('.feat-row').forEach(row=>{
+    const glow=document.createElement('span');
+    glow.className='feat-glow';glow.setAttribute('aria-hidden','true');
+    row.prepend(glow);
+    row.addEventListener('pointermove',e=>{
+      const r=row.getBoundingClientRect();
+      row.style.setProperty('--mx',(e.clientX-r.left)+'px');
+      row.style.setProperty('--my',(e.clientY-r.top)+'px');
+    });
+  });
+})();
+
+// ── Command palette (Ctrl/⌘+K) ───────────────────────────────────────────────
+(function(){
+  const P=window.CryptexPalette;
+  if(!P)return;
+  const go=(id)=>()=>navTo(id);
+  const commands=[
+    {group:'Sections',label:'Home',keywords:'top start hero',icon:'home',run:go('home')},
+    {group:'Sections',label:'Features',keywords:'token private anonymous folders dark mode',icon:'sparkle',run:go('features')},
+    {group:'Sections',label:'How the encryption works',keywords:'zero-knowledge aes gcm key fragment ciphertext',icon:'lock',run:go('encryption')},
+    {group:'Sections',label:'About & FAQ',keywords:'questions help answers',icon:'info',run:go('about')},
+    {group:'Vault',label:'Open Vault',keywords:'app upload start share files',icon:'folder',run:()=>{location.href='/app';}},
+    {group:'Vault',label:'API documentation',keywords:'docs openapi swagger rest',icon:'book',run:()=>window.open('/api-docs','_blank','noopener')},
+    {group:'More',label:'Toggle light / dark theme',keywords:'appearance mode',icon:'theme',run:()=>document.getElementById('themeBtn')?.click()},
+    {group:'More',label:'View source on GitHub',keywords:'repo code',icon:'github',run:()=>window.open('https://github.com/Zephyrex21/cryptex-file-sharing','_blank','noopener')}
+  ];
+  const dynamic=(q)=>/^[a-z0-9]{6}$/i.test(q)?[{
+    group:'Token',label:'Open token “'+q.toLowerCase()+'” in the Vault',icon:'key',
+    run:()=>{location.href='/app?token='+encodeURIComponent(q.toLowerCase());}
+  }]:[];
+  P.register({commands,dynamic});
 })();
