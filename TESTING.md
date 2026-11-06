@@ -7,7 +7,7 @@ stale versions and make things look broken when they aren't.
 
 ## Automated tests
 
-`npm test` runs 374 Vitest cases covering the security-critical logic that's
+`npm test` runs 383 Vitest cases covering the security-critical logic that's
 otherwise easy to silently break: magic-byte content verification (every
 supported file type, plus mismatch/tampering cases), the SSRF protections in
 `isSafeUrl` (private IPs, IPv6, cloud metadata address, mixed-resolution,
@@ -30,6 +30,24 @@ The high-severity fixes — IPv6 SSRF notations, body-stall deadline, folder-rem
 The medium-severity fixes — failure-only token limiter vs bulk actions, link-image mirroring and the third-party-image filter, malware-scan fail-open/closed, generic error responses — are in `tests/mediumFixes.test.js`; the browser-side ones (Properties in folders, key scrubbing, My Shares not spending views) are e2e scenarios S17–S19.
 The low-severity fixes — share-token collision retry, the gallery cap, and **schema contracts that run the real Mongoose models** (unique/sparse `shareToken` index, enums, defaults, validation; no database needed, since the other suites mock the models) — are in `tests/lowFixes.test.js`; the browser-side ones are e2e scenarios S20–S22.
 The **command palette** (Ctrl/⌘+K) and the feature-hover / encryption-flow animations — static guards in `tests/commandPalette.test.js` (old shortcuts modal gone, Esc handled in the capture phase, focus never parked in the hidden field, user text escaped, every `enc*` keyframe compositor-only, loops pause off-screen, reduced-motion fallback), with the behaviour itself driven end-to-end in e2e scenario S23.
+## Keeping CI green
+
+CI runs the unit tests on **Node 20, 22 and 24** (the lowest one is whatever
+`engines.node` in `package.json` says), the e2e suite on Node 22 (its jsdom needs it)
+and a production-dependency audit. The classic way to break CI is a bug that only
+shows on a different Node than the one you develop with — so:
+
+- `npm run verify` — what CI runs (lint, unit tests, and e2e when `e2e/` deps are installed).
+  A **pre-push git hook** runs it automatically (enabled by `npm install` / `npm ci`
+  via the `prepare` script) and stops a push that would fail CI. Skip once with
+  `SKIP_VERIFY=1 git push`.
+- `npm run test:node20` — the unit tests on Node 20 (via `npx -p node@20`), without
+  installing anything. Use it if you develop on a newer Node.
+- `.nvmrc` pins the Node version for local work.
+- `tests/supabaseClient.test.js` reproduces the Node < 22 "no native WebSocket"
+  crash on **any** Node, and checks that CI's Node matrix still includes the minimum
+  supported version.
+
 The homepage **performance budget** — compositor-only keyframes, no filters on animated content, self-hosted fonts with preload, a stable loader, and a headline animation that can't re-flow — is pinned in `tests/homepagePerf.test.js` (static checks, no browser required). What is still *not* covered is real MongoDB behaviour (transactions, actual index enforcement), which needs a live replica set.
 
 There's also an **optional website smoke test** in `e2e/` (`cd e2e && npm install

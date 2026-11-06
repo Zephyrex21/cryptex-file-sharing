@@ -9,7 +9,10 @@
     "dev": "nodemon index.js",
     "lint": "eslint .",
     "test": "vitest run",
-    "test:watch": "vitest"
+    "test:watch": "vitest",
+    "verify": "node scripts/verify.mjs",
+    "test:node20": "npx -y -p node@20 -c \"node node_modules/vitest/vitest.mjs run\"",
+    "prepare": "node scripts/setup-hooks.mjs"
   },
   "author": "Saurabh Raj Shekhar",
   "license": "ISC",
@@ -31,5 +34,8 @@
   },
   "overrides": {
     "minimatch": "^11.0.1"
+  },
+  "engines": {
+    "node": ">=20"
   }
 }

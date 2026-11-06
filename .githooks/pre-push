@@ -1,0 +1,3 @@
+#!/bin/sh
+# Stops a push that would fail CI. Bypass once with:  SKIP_VERIFY=1 git push
+exec node scripts/verify.mjs
