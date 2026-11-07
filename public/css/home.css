@@ -88,19 +88,20 @@
 @keyframes vsTwinkle{0%,100%{opacity:0;transform:scale(.4) rotate(0)}45%{opacity:.9;transform:scale(1) rotate(45deg)}}
 
 /* ── Composition (tilt layer → entrance item → idle float → content) ── */
-.vs-tilt{position:absolute;inset:0;transform:perspective(95em) rotateX(var(--rx,0deg)) rotateY(var(--ry,0deg))}
+.vs-tilt{position:absolute;inset:0;transform-style:preserve-3d;transform:perspective(140em) rotateX(var(--rx,0deg)) rotateY(var(--ry,0deg))}
 .js .vs-scene.is-playing .vs-tilt{will-change:transform}
-.vs-item{position:absolute}
+.vs-item{position:absolute;translate:0 0 var(--z,0em)}
 .vs-float{animation:vsFloat var(--dur,6s) ease-in-out infinite alternate;animation-delay:var(--del,0s)}
 /* (No explicit will-change on the floats: a running transform animation is promoted to its own
    compositor layer by the browser anyway, and forcing it produced a faint clipped-shadow ghost
    around the lock badge. The pointer-tilt layer above is JS-driven, so it does keep its hint.) */
 @keyframes vsFloat{from{transform:translate3d(0,.5em,0)}to{transform:translate3d(0,-.8em,0)}}
 .vs-i-card{left:1.2em;top:7.4em}
-.vs-i-lock{left:30.2em;top:3.1em}
+.vs-i-lock{left:31em;top:1.9em}
 .vs-i-token{right:1.2em;bottom:3.2em}
 .vs-i-pill1{right:.6em;top:14.4em}
 .vs-i-pill2{left:2.4em;bottom:4.4em}
+.vs-i-srv{right:1.3em;top:19em}
 
 /* Glass card */
 .vs-card{position:relative;width:34.4em;padding:1.8em 2em 1.6em;border-radius:2.2em;color:var(--t1);
@@ -127,7 +128,7 @@
 @keyframes vsBlink{50%{opacity:.25}}
 .vs-bar{height:.55em;margin:1.6em 0 1.5em;border-radius:99px;background:var(--b1);overflow:hidden}
 .vs-bar-fill{display:block;height:100%;border-radius:inherit;background:linear-gradient(90deg,var(--acc),var(--acc2));transform-origin:left center;transform:scaleX(0);animation:vsBar 9s cubic-bezier(.4,0,.2,1) infinite}
-.vs-lines{display:flex;flex-direction:column;gap:1.05em}
+.vs-lines{position:relative;display:flex;flex-direction:column;gap:1.05em}
 .vs-ln{position:relative;height:1.5em}
 .vs-ln .p{position:absolute;left:0;top:.28em;height:.95em;border-radius:99px;background:var(--b2);animation:vsPlain 9s ease-in-out infinite;animation-delay:calc(var(--i)*.26s)}
 .vs-ln .c{position:absolute;left:0;top:0;font-family:var(--font-mono);font-size:1.2em;font-weight:600;letter-spacing:.06em;color:var(--acc);opacity:0;white-space:nowrap;animation:vsCipher 9s ease-in-out infinite;animation-delay:calc(var(--i)*.26s)}
@@ -158,6 +159,32 @@
 .vs-pill-alt{color:var(--acc);background:rgba(var(--acc-rgb),.11);border-color:rgba(var(--acc-rgb),.27)}
 [data-theme="dark"] .vs-pill{background:rgba(74,222,128,.12);border-color:rgba(74,222,128,.26)}
 
+/* ── Hero · v2: scan beam, a server that only ever receives ciphertext, key pulse ──
+   Everything is keyed to the same 9s loop as the card (see the timeline above):
+   8–46%  a beam sweeps the file as the progress bar fills
+   ~52–66% three ciphertext blocks leave the card and land on the server tile
+   ~54–62% the key icon in the footer pulses ("the key stays in your browser") */
+.vs-scanwrap{position:absolute;inset:-.5em -.4em;overflow:hidden;border-radius:.8em;pointer-events:none}
+.vs-scan{position:absolute;top:0;bottom:0;left:0;width:11%;opacity:0;background:linear-gradient(90deg,transparent,rgba(var(--acc-rgb),.1) 40%,rgba(var(--acc2-rgb),.34) 86%,rgba(var(--acc2-rgb),.85) 100%);border-radius:.5em;animation:vsScan 9s cubic-bezier(.4,0,.2,1) infinite}
+.vs-scan::after{content:"";position:absolute;right:0;top:-.2em;bottom:-.2em;width:.16em;border-radius:99px;background:#fff;box-shadow:0 0 .9em .25em rgba(var(--acc2-rgb),.75)}
+@keyframes vsScan{0%,6%{opacity:0;transform:translate3d(-100%,0,0)}9%{opacity:1}44%{opacity:1}49%,100%{opacity:0;transform:translate3d(930%,0,0)}}
+.vs-foot svg{animation:vsKey 9s ease-in-out infinite}
+@keyframes vsKey{0%,52%{transform:scale(1) rotate(0)}57%{transform:scale(1.4) rotate(-14deg)}64%,100%{transform:scale(1) rotate(0)}}
+
+.vs-srv{position:relative;width:11.6em;padding:1.3em 1.4em 1.1em;border-radius:1.9em;display:flex;flex-direction:column;gap:.8em;
+  background:linear-gradient(168deg,#fff,rgba(255,255,255,.9));border:1px solid rgba(255,255,255,.95);
+  box-shadow:0 0 0 1px var(--b1),0 .6em 1.4em rgba(24,24,60,.06),0 2em 3.8em -1.1em rgba(var(--acc-rgb),.34)}
+.vs-srv::after{content:"";position:absolute;inset:-.35em;border-radius:2.2em;border:.16em solid rgba(var(--acc-rgb),.55);opacity:0;animation:vsLand 9s ease-out infinite}
+[data-theme="dark"] .vs-srv{background:linear-gradient(168deg,rgba(40,40,60,.95),rgba(24,24,34,.95));border-color:rgba(255,255,255,.09);box-shadow:0 0 0 1px rgba(255,255,255,.03),0 2em 3.8em -1em rgba(0,0,0,.75)}
+.vs-unit{display:flex;align-items:center;gap:.9em;height:2.9em;padding:0 1.1em;border-radius:1em;background:rgba(var(--acc-rgb),.08);border:1px solid rgba(var(--acc-rgb),.16)}
+.vs-led{flex:none;width:.7em;height:.7em;border-radius:50%;background:var(--grn);box-shadow:0 0 .8em rgba(34,197,94,.7)}
+.vs-bars{flex:1;height:.5em;border-radius:99px;background:linear-gradient(90deg,rgba(var(--acc-rgb),.5) 0 38%,transparent 38% 46%,rgba(var(--acc-rgb),.3) 46% 70%,transparent 70% 78%,rgba(var(--acc-rgb),.18) 78% 100%)}
+.vs-srv small{text-align:center;font-family:var(--font-mono);font-size:.95em;font-weight:700;letter-spacing:.04em;color:var(--t3);white-space:nowrap}
+.vs-trk{position:absolute;right:calc(100% - .4em);top:2.7em;width:4.6em;height:0;border-top:1px dashed rgba(var(--acc-rgb),.4)}
+.vs-blk{position:absolute;left:-4.4em;top:2.05em;width:1.6em;height:1.3em;border-radius:.4em;opacity:0;background:linear-gradient(135deg,var(--acc),var(--acc2));box-shadow:0 0 1.2em rgba(var(--acc-rgb),.55);animation:vsShip 9s cubic-bezier(.4,0,.2,1) infinite;animation-delay:calc(var(--j)*.32s)}
+@keyframes vsShip{0%,52%{opacity:0;transform:translate3d(0,0,0) scale(.5)}55%{opacity:1;transform:translate3d(0,0,0) scale(1)}63%{opacity:1;transform:translate3d(5.4em,0,0) scale(1)}65.5%,100%{opacity:0;transform:translate3d(6.4em,0,0) scale(.5)}}
+@keyframes vsLand{0%,60%{opacity:0;transform:scale(.97)}63%{opacity:.8;transform:scale(1)}74%,100%{opacity:0;transform:scale(1.08)}}
+
 /* Lock badge (shared by the hero and the features scene). Built from plain boxes
    rather than an SVG so the shackle can animate as a compositor transform. */
 .lockbadge{position:relative;width:7.4em;height:7.4em;border-radius:2.3em;background:linear-gradient(145deg,var(--acc),var(--acc2));
@@ -180,7 +207,7 @@
   background:radial-gradient(circle,rgba(var(--acc-rgb),.3) 0%,rgba(var(--acc-rgb),.14) 32%,rgba(var(--acc2-rgb),.04) 56%,transparent 70%);animation:fsBreathe 7s ease-in-out infinite alternate}
 [data-theme="dark"] .fs-glow{background:radial-gradient(circle,rgba(var(--acc-rgb),.26) 0%,rgba(var(--acc-rgb),.12) 32%,rgba(var(--acc2-rgb),.03) 56%,transparent 70%)}
 @keyframes fsBreathe{from{transform:scale(.94);opacity:.8}to{transform:scale(1.06);opacity:1}}
-.fs-stage{position:absolute;left:50%;top:58%;width:21em;height:21em;margin:-10.5em 0 0 -10.5em;perspective:130em}
+.fs-stage{position:absolute;left:50%;top:60%;width:21em;height:21em;margin:-10.5em 0 0 -10.5em;perspective:130em}
 .fs-bob{position:absolute;inset:0;animation:vsFloat 6.4s ease-in-out infinite alternate}
 .fs-stack{position:absolute;inset:0;transform-style:preserve-3d;transform:rotateX(60deg) rotateZ(-38deg)}
 /* assemble once (fill: both), THEN each plate starts breathing on its own offset. The
@@ -217,12 +244,66 @@
 .fs-lab-2{left:-1.5em;top:50%}
 .fs-lab-1{right:-1.5em;top:73%}
 
+/* ── Features scene · v2: the layers now carry content ──
+   Plates sit further apart so each one's visible rim has room for its own detail:
+   public files on the bottom layer, a share token on the middle one, AES-256-GCM on
+   top. Two data packets rise through the stack and change colour on the way (grey →
+   violet) — "a file becomes encrypted". Hovering a feature row in the list highlights
+   the matching layer (home.js sets data-hl); that only uses `translate` + an opacity
+   veil, so it composes with the running transform animations instead of fighting them. */
+.fs-plate{translate:0 0 var(--lift,0em);transition:translate .6s var(--spring)}
+.fs-veil{position:absolute;inset:0;z-index:4;border-radius:inherit;background:var(--bg);opacity:0;pointer-events:none;transition:opacity .45s var(--ease-out)}
+.fs-doc{position:absolute;left:var(--x);top:var(--y);width:3.6em;height:4.5em;border-radius:.75em;background:linear-gradient(160deg,var(--surf2),var(--bg2));border:1px solid var(--b2);box-shadow:0 .5em 1em -.4em rgba(24,24,60,.28)}
+.fs-doc::before{content:"";position:absolute;right:-1px;top:-1px;width:1.2em;height:1.2em;border-radius:0 .75em 0 .5em;background:linear-gradient(225deg,transparent 50%,var(--b2) 50%)}
+.fs-doc::after{content:"";position:absolute;left:.75em;right:.75em;top:1.9em;height:1.4em;background:linear-gradient(var(--b2),var(--b2)) 0 0/100% .28em no-repeat,linear-gradient(var(--b2),var(--b2)) 0 .55em/70% .28em no-repeat,linear-gradient(var(--b2),var(--b2)) 0 1.1em/85% .28em no-repeat}
+.fs-tok{position:absolute;right:3.6em;bottom:1.1em;display:inline-flex;align-items:center;gap:.55em;padding:.55em .95em;border-radius:99px;font-family:var(--font-mono);font-size:1.02em;font-weight:700;letter-spacing:.06em;color:var(--acc);background:linear-gradient(168deg,var(--surf2),rgba(255,255,255,.7));border:1px solid rgba(var(--acc-rgb),.4);box-shadow:0 .4em .9em -.3em rgba(var(--acc-rgb),.5)}
+.fs-scene .fs-tok svg{flex:none;width:1.15em;height:1.15em;fill:none;stroke:currentColor;stroke-width:2.2;stroke-linecap:round;stroke-linejoin:round}
+.fs-aes{position:absolute;left:0;right:0;top:50%;margin-top:-.8em;text-align:center;font-family:var(--font-mono);font-size:1.15em;font-weight:700;letter-spacing:.14em;color:rgba(255,255,255,.95);text-shadow:0 .1em .4em rgba(40,20,120,.35)}
+.fs-aes b{font-weight:800}
+.fs-pkt{position:absolute;left:var(--x);top:var(--y);width:1.7em;height:1.7em;margin:-.85em 0 0 -.85em;border-radius:.5em;opacity:0;animation:fsRise 7s cubic-bezier(.45,0,.3,1) infinite;animation-delay:var(--d,0s)}
+.fs-pkt::before,.fs-pkt::after{content:"";position:absolute;inset:0;border-radius:inherit}
+.fs-pkt::before{background:var(--t3);animation:fsPktA 7s linear infinite;animation-delay:var(--d,0s)}
+.fs-pkt::after{background:linear-gradient(135deg,var(--acc),var(--acc2));box-shadow:0 0 1.4em .2em rgba(var(--acc-rgb),.6);opacity:0;animation:fsPktB 7s linear infinite;animation-delay:var(--d,0s)}
+@keyframes fsRise{0%{opacity:0;transform:translateZ(1em) scale(.6)}8%{opacity:1;transform:translateZ(1.4em) scale(1)}78%{opacity:1;transform:translateZ(13.2em) scale(1)}90%,100%{opacity:0;transform:translateZ(14.6em) scale(.7)}}
+@keyframes fsPktA{0%,32%{opacity:1}46%,100%{opacity:0}}
+@keyframes fsPktB{0%,32%{opacity:0}46%,100%{opacity:1}}
+/* middle layer is blue — the same colour as the "Private" label's dot — so label ↔ layer reads at a glance */
+.fs-p2{background:linear-gradient(145deg,rgba(59,125,242,.2),rgba(var(--acc-rgb),.07));border-color:rgba(59,125,242,.4)}
+.fs-p2::after{border-color:rgba(59,125,242,.34)}
+[data-theme="dark"] .fs-p2{background:linear-gradient(145deg,rgba(106,165,255,.26),rgba(var(--acc-rgb),.1));border-color:rgba(106,165,255,.4)}
+.fs-tok{right:2.6em;bottom:1.5em;font-size:1.2em;color:var(--blu);border-color:rgba(59,125,242,.45);box-shadow:0 .4em .9em -.3em rgba(59,125,242,.5);transition:transform .5s var(--spring),box-shadow .35s var(--ease-out)}
+.fs-lk{position:absolute;left:2.4em;bottom:1.5em;width:3.1em;height:3.1em;border-radius:50%;display:flex;align-items:center;justify-content:center;color:var(--blu);background:linear-gradient(168deg,var(--surf2),rgba(255,255,255,.7));border:1px solid rgba(59,125,242,.45);box-shadow:0 .4em .9em -.3em rgba(59,125,242,.5)}
+.fs-scene .fs-lk svg{width:1.5em;height:1.5em;fill:none;stroke:currentColor;stroke-width:2.1;stroke-linecap:round;stroke-linejoin:round}
+[data-theme="dark"] .fs-tok,[data-theme="dark"] .fs-lk{background:linear-gradient(168deg,#262638,#1a1a26)}
+/* encryption pulse radiating across the top layer */
+.fs-wave{position:absolute;left:50%;top:50%;width:14em;height:14em;margin:-7em 0 0 -7em;border-radius:50%;border:.16em solid rgba(255,255,255,.55);opacity:0;animation:fsWave 5.2s ease-out infinite;animation-delay:var(--w,0s)}
+@keyframes fsWave{0%{opacity:0;transform:scale(.25)}12%{opacity:.7}100%{opacity:0;transform:scale(1.05)}}
+/* packets: grey (public) → blue (private) → violet (encrypted) as they rise */
+.fs-pkt{background:linear-gradient(135deg,#3b7df2,#5b6cf5);box-shadow:0 0 1.1em rgba(59,125,242,.55)}
+@keyframes fsPktA{0%,18%{opacity:1}28%,100%{opacity:0}}
+@keyframes fsPktB{0%,52%{opacity:0}62%,100%{opacity:1}}
+/* hover link: a feature row in the list lights up its layer (home.js sets data-hl) */
+[data-theme="dark"] .fs-doc{background:linear-gradient(160deg,#2c2c40,#1d1d2a);border-color:rgba(255,255,255,.14)}
+[data-theme="dark"] .fs-doc::after{background:linear-gradient(rgba(255,255,255,.24),rgba(255,255,255,.24)) 0 0/100% .28em no-repeat,linear-gradient(rgba(255,255,255,.24),rgba(255,255,255,.24)) 0 .55em/70% .28em no-repeat,linear-gradient(rgba(255,255,255,.24),rgba(255,255,255,.24)) 0 1.1em/85% .28em no-repeat}
+.fs-lab{transition:translate .5s var(--spring)}
+.fs-lab::after{content:"";position:absolute;inset:-1px;border-radius:inherit;border:1.5px solid var(--acc);opacity:0;pointer-events:none;transition:opacity .35s var(--ease-out)}
+.fs-lab-2::after{border-color:var(--blu)}
+.fs-lab-1::after{border-color:var(--t3)}
+.fs-scene[data-hl="enc"] .fs-p3,.fs-scene[data-hl="priv"] .fs-p2,.fs-scene[data-hl="tok"] .fs-p2,.fs-scene[data-hl="pub"] .fs-p1{--lift:2.8em}
+.fs-scene[data-hl="enc"] :is(.fs-p1,.fs-p2) .fs-veil,
+.fs-scene[data-hl="priv"] :is(.fs-p1,.fs-p3) .fs-veil,
+.fs-scene[data-hl="tok"] :is(.fs-p1,.fs-p3) .fs-veil,
+.fs-scene[data-hl="pub"] :is(.fs-p2,.fs-p3) .fs-veil{opacity:.5}
+.fs-scene[data-hl="enc"] .fs-lab-3,.fs-scene[data-hl="priv"] .fs-lab-2,.fs-scene[data-hl="tok"] .fs-lab-2,.fs-scene[data-hl="pub"] .fs-lab-1{translate:0 -.7em}
+.fs-scene[data-hl="enc"] .fs-lab-3::after,.fs-scene[data-hl="priv"] .fs-lab-2::after,.fs-scene[data-hl="tok"] .fs-lab-2::after,.fs-scene[data-hl="pub"] .fs-lab-1::after{opacity:1}
+.fs-scene[data-hl="tok"] .fs-tok{transform:scale(1.22);box-shadow:0 .6em 1.3em -.3em rgba(59,125,242,.7)}
 /* Reduced motion: show the finished composition, no looping */
 @media(prefers-reduced-motion:reduce){
   .vs-scene *,.vs-scene *::before,.vs-scene *::after,.fs-scene *,.fs-scene *::before,.fs-scene *::after{animation:none!important}
   .js .vs-scene .vs-item,.js .fs-scene .fs-item{opacity:1!important}
   .vs-bar-fill{transform:none}.vs-ln .p{opacity:0}.vs-ln .c{opacity:1}.vs-st-1{opacity:0}.vs-st-2{opacity:1}.vs-token{opacity:1}.lb-shackle{transform:none}
   .fs-plate{opacity:1}
+  .fs-pkt,.fs-wave,.vs-blk,.vs-scan{display:none}
 }
 @media(max-width:860px){
   .hero{grid-template-columns:1fr;gap:36px;text-align:center}

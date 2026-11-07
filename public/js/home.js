@@ -253,3 +253,18 @@ document.querySelectorAll('.sec-title .tw-line').forEach((line,i)=>{
   }]:[];
   P.register({commands,dynamic});
 })();
+
+// ── Features list ↔ 3D layers ────────────────────────────────────────────────
+// Pointing at a feature row lifts the matching layer in the illustration and fades
+// the others (pure CSS from there: the attribute is the only thing JS touches).
+(function(){
+  const scene=document.getElementById('fsScene'),rows=[...document.querySelectorAll('.feat-row')];
+  if(!scene||!rows.length||!window.matchMedia('(hover:hover)').matches)return;
+  // row order: E2E encryption · token access · private by default · anonymous · folders · dark mode
+  const LAYER=['enc','tok','priv','pub','pub',''];
+  const set=(v)=>{if(v)scene.setAttribute('data-hl',v);else scene.removeAttribute('data-hl');};
+  rows.forEach((row,i)=>{
+    row.addEventListener('pointerenter',()=>set(LAYER[i]||''));
+    row.addEventListener('pointerleave',()=>set(''));
+  });
+})();

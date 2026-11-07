@@ -105,17 +105,26 @@ document.documentElement.classList.add('js');
               <span class="vs-state"><span class="vs-st vs-st-1"><i class="vs-live"></i>Encrypting</span><span class="vs-st vs-st-2"><svg viewBox="0 0 24 24"><path d="M5 12.5l4.5 4.5L19 7.5"/></svg>Encrypted</span></span>
             </div>
             <div class="vs-bar"><i class="vs-bar-fill"></i></div>
-            <div class="vs-lines">
+            <div class="vs-lines"><span class="vs-scanwrap"><i class="vs-scan"></i></span>
               <div class="vs-ln" style="--i:0"><span class="p" style="width:92%"></span><span class="c">9F3D 2A7C E1B0 4D58</span></div>
               <div class="vs-ln" style="--i:1"><span class="p" style="width:78%"></span><span class="c">B7A2 0C61 F94E 13D0</span></div>
               <div class="vs-ln" style="--i:2"><span class="p" style="width:54%"></span><span class="c">5E8B C3F7 A21D</span></div>
             </div>
             <div class="vs-foot"><svg viewBox="0 0 24 24"><circle cx="8" cy="15" r="4"/><path d="M11 12l8.5-8.5M16 7l3 3"/></svg><span>AES-256-GCM · key never leaves your browser</span></div>
           </div></div></div>
-          <div class="vs-item vs-i-lock" style="--n:1"><div class="vs-float" style="--dur:5.2s;--del:-1.4s"><div class="lockbadge"><span class="lb-halo"></span><span class="lb-body"><i class="lb-shackle"></i><i class="lb-box"></i></span></div></div></div>
-          <div class="vs-item vs-i-token" style="--n:2"><div class="vs-float" style="--dur:7s;--del:-2.2s"><div class="vs-token"><svg viewBox="0 0 24 24"><path d="M10 13a5 5 0 007.54.54l3-3a5 5 0 00-7.07-7.07l-1.72 1.71"/><path d="M14 11a5 5 0 00-7.54-.54l-3 3a5 5 0 007.07 7.07l1.71-1.71"/></svg><span class="t-url">…?token=</span><b class="t-tok">k3x9a2</b><span class="t-key">#key</span></div></div></div>
-          <div class="vs-item vs-i-pill1" style="--n:3"><div class="vs-float" style="--dur:5.8s;--del:-.6s"><span class="vs-pill"><svg viewBox="0 0 24 24"><path d="M5 12.5l4.5 4.5L19 7.5"/></svg>Zero-knowledge</span></div></div>
-          <div class="vs-item vs-i-pill2" style="--n:4"><div class="vs-float" style="--dur:6.2s;--del:-3s"><span class="vs-pill vs-pill-alt">Token access</span></div></div>
+          <div class="vs-item vs-i-lock" style="--n:1;--z:4.5em"><div class="vs-float" style="--dur:5.2s;--del:-1.4s"><div class="lockbadge"><span class="lb-halo"></span><span class="lb-body"><i class="lb-shackle"></i><i class="lb-box"></i></span></div></div></div>
+          <div class="vs-item vs-i-token" style="--n:2;--z:5em"><div class="vs-float" style="--dur:7s;--del:-2.2s"><div class="vs-token"><svg viewBox="0 0 24 24"><path d="M10 13a5 5 0 007.54.54l3-3a5 5 0 00-7.07-7.07l-1.72 1.71"/><path d="M14 11a5 5 0 00-7.54-.54l-3 3a5 5 0 007.07 7.07l1.71-1.71"/></svg><span class="t-url">…?token=</span><b class="t-tok">k3x9a2</b><span class="t-key">#key</span></div></div></div>
+          <div class="vs-item vs-i-srv" style="--n:5;--z:2.5em"><div class="vs-float" style="--dur:6.8s;--del:-1.1s">
+            <span class="vs-trk"></span>
+            <i class="vs-blk" style="--j:0"></i><i class="vs-blk" style="--j:1"></i><i class="vs-blk" style="--j:2"></i>
+            <div class="vs-srv">
+              <div class="vs-unit"><i class="vs-led"></i><i class="vs-bars"></i></div>
+              <div class="vs-unit"><i class="vs-led"></i><i class="vs-bars"></i></div>
+              <small>Ciphertext only</small>
+            </div>
+          </div></div>
+          <div class="vs-item vs-i-pill1" style="--n:3;--z:3.5em"><div class="vs-float" style="--dur:5.8s;--del:-.6s"><span class="vs-pill"><svg viewBox="0 0 24 24"><path d="M5 12.5l4.5 4.5L19 7.5"/></svg>Zero-knowledge</span></div></div>
+          <div class="vs-item vs-i-pill2" style="--n:4;--z:3.5em"><div class="vs-float" style="--dur:6.2s;--del:-3s"><span class="vs-pill vs-pill-alt">Token access</span></div></div>
         </div>
       </div>
     </div>
@@ -131,10 +140,20 @@ document.documentElement.classList.add('js');
       <div class="fs-scene" id="fsScene">
         <span class="fs-glow"></span>
         <div class="fs-stage"><div class="fs-bob"><div class="fs-stack">
-          <span class="fs-plate fs-p1" style="--z:0em;--k:0"></span>
-          <span class="fs-plate fs-p2" style="--z:5.2em;--k:1"></span>
-          <span class="fs-plate fs-p3" style="--z:10.4em;--k:2"></span>
-        </div></div></div>
+            <span class="fs-plate fs-p1" style="--z:0em;--k:0"><i class="fs-veil"></i>
+              <span class="fs-doc" style="--x:2.6em;--y:12.7em"></span><span class="fs-doc" style="--x:8.1em;--y:13.9em"></span><span class="fs-doc" style="--x:13.6em;--y:12.7em"></span>
+            </span>
+            <span class="fs-plate fs-p2" style="--z:6.2em;--k:1"><i class="fs-veil"></i>
+              <span class="fs-lk"><svg viewBox="0 0 24 24"><rect x="4" y="11" width="16" height="10" rx="2.5"/><path d="M8 11V8a4 4 0 018 0v3"/></svg></span>
+              <span class="fs-tok"><svg viewBox="0 0 24 24"><circle cx="8" cy="15" r="4"/><path d="M11 12l8.5-8.5M16 7l3 3"/></svg>k3x9a2</span>
+            </span>
+            <span class="fs-plate fs-p3" style="--z:12.4em;--k:2"><i class="fs-veil"></i>
+              <i class="fs-wave" style="--w:0s"></i><i class="fs-wave" style="--w:-2.6s"></i>
+              <span class="fs-aes"><b>AES</b>-256-GCM</span>
+            </span>
+            <i class="fs-pkt" style="--x:6.2em;--y:9.4em;--d:0s"></i>
+            <i class="fs-pkt" style="--x:13.4em;--y:8.6em;--d:-3.5s"></i>
+          </div></div></div>
         <span class="fs-shadow"></span>
         <div class="fs-item fs-i-cap" style="--n:3"><div class="fs-float"><div class="lockbadge"><span class="lb-halo"></span><span class="lb-body"><i class="lb-shackle"></i><i class="lb-box"></i></span></div></div></div>
         <div class="fs-item fs-lab fs-lab-3" style="--n:2"><span class="fs-dot fs-dot-acc"></span><b>Encrypted</b><small>key lives in the link</small></div>
