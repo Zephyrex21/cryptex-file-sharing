@@ -7,7 +7,7 @@ stale versions and make things look broken when they aren't.
 
 ## Automated tests
 
-`npm test` runs 403 Vitest cases covering the security-critical logic that's
+`npm test` runs 409 Vitest cases covering the security-critical logic that's
 otherwise easy to silently break: magic-byte content verification (every
 supported file type, plus mismatch/tampering cases), the SSRF protections in
 `isSafeUrl` (private IPs, IPv6, cloud metadata address, mixed-resolution,

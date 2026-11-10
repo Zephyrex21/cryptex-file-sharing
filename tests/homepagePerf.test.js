@@ -35,7 +35,8 @@ const keyframes = (css) => {
 };
 
 // Only these can be animated on the compositor (no layout, no repaint)
-const COMPOSITOR_ONLY = new Set(["transform", "opacity"]);
+// (translate/scale/rotate are the individual transform properties; Chrome composes them with `transform`)
+const COMPOSITOR_ONLY = new Set(["transform", "opacity", "translate", "scale", "rotate"]);
 
 describe("animations only move compositor properties", () => {
   const all = { ...keyframes(shared), ...keyframes(home) };

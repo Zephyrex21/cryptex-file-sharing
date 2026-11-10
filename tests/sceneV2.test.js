@@ -46,7 +46,7 @@ describe("features v2", () => {
     expect(fsHtml.match(/class="fs-pkt"/g)).toHaveLength(2);
   });
   it("the layer highlight composes with the running animations: it uses `translate` and an opacity veil, never `transform`", () => {
-    expect(css).toMatch(/\.fs-plate\{translate:0 0 var\(--lift,0em\)/);
+    expect(css).toMatch(/\.fs-plate\{translate:0 0 calc\(var\(--z,0em\) \+ var\(--lift,0em\)\)/);
     const hl = css.match(/\.fs-scene\[data-hl[^{]*\{[^}]*\}/g) || [];
     expect(hl.length).toBeGreaterThan(4);
     for (const rule of hl) {
@@ -84,5 +84,38 @@ describe("reduced motion / theming for the new parts", () => {
   });
   it("dark theme has its own surfaces for the new tiles", () => {
     for (const sel of ['[data-theme="dark"] .vs-srv', '[data-theme="dark"] .fs-doc', '[data-theme="dark"] .fs-tok']) expect(css).toContain(sel);
+  });
+});
+
+// These guard the fixes for real jank found by tracing (see the comments in home.css):
+// the features scene used to keep the main thread ~85% busy while idle, because Chrome
+// could not run the plates' animations on the compositor.
+describe("animations stay on the compositor (regressions found by tracing)", () => {
+  const block = (name) => { const i = css.indexOf(`@keyframes ${name}{`); return css.slice(i, css.indexOf("\n", i)); };
+  it("plate keyframes are plain constants — no var() inside keyframes", () => {
+    for (const n of ["fsLayer", "fsAssemble"]) expect(block(n), n).not.toMatch(/var\(/);
+  });
+  it("the plates' idle breathing is the only animation on `transform`; its delay is negative (already running at t=0)", () => {
+    expect(block("fsLayer")).toMatch(/transform/);
+    expect(block("fsAssemble")).not.toMatch(/[^-]transform/);          // entrance uses opacity/scale/translate
+    expect(css).toMatch(/\.fs-plate\{[^}]*animation-delay:calc\(var\(--k\)\*\.14s \+ \.1s\),calc\(var\(--k\)\*-1\.7s\)/);
+    expect(css).toMatch(/\.fs-plate\{[^}]*animation:fsAssemble [^,]*backwards,fsLayer/);   // not `both`
+  });
+  it("the hero tilt writes `transform` directly — custom properties would re-resolve the whole scene's style on every pointer move", () => {
+    expect(js).toMatch(/tilt\.style\.transform=/);
+    expect(js).not.toMatch(/setProperty\('--r[xy]'/);
+    expect(css).not.toMatch(/var\(--r[xy]/);
+  });
+  it("the row ring is a cheap inset shadow, not a mask-composite gradient border", () => {
+    const rule = css.match(/\.feat-row::after\{[^}]*\}/)[0];
+    expect(rule).toMatch(/box-shadow:inset/);
+    expect(rule).not.toMatch(/mask/);
+  });
+  it("the scene holds still while a row is hovered (measurably fewer dropped frames)", () => {
+    expect(css).toMatch(/\.fs-scene\[data-hl\],\.fs-scene\[data-hl\] \*[^{]*\{animation-play-state:paused!important\}/);
+  });
+  it("no page-wide scroll pause: toggling ~500 animations at once caused a ~180ms hitch", () => {
+    expect(css).not.toMatch(/html\.is-scrolling/);
+    expect(js).not.toMatch(/is-scrolling/);
   });
 });

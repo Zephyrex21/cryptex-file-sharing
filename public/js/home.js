@@ -156,8 +156,8 @@ watchScene(document.getElementById('encCallout'));
 // ── Hero scene: gentle pointer tilt ─────────────────────────────────────────
 // Eases the card cluster a few degrees toward the cursor. The rAF loop only runs
 // while the cursor is moving or the tilt is still settling, then stops completely
-// (no idle per-frame work), and it only sets CSS variables — the tilt itself is a
-// compositor transform. Skipped on touch devices and with reduced motion.
+// (no idle per-frame work), and it only writes one `transform` on one element — the tilt
+// itself is a compositor transform. Skipped on touch devices and with reduced motion.
 (function(){
   const hero=document.getElementById('home'),scene=document.getElementById('vsScene'),tilt=document.getElementById('vsTilt');
   if(!hero||!scene||!tilt||REDUCE_MOTION)return;
@@ -166,8 +166,7 @@ watchScene(document.getElementById('encCallout'));
   let tx=0,ty=0,cx=0,cy=0,raf=0;
   function loop(){
     cx+=(tx-cx)*.085;cy+=(ty-cy)*.085;
-    tilt.style.setProperty('--ry',(cx*MAX_DEG).toFixed(3)+'deg');
-    tilt.style.setProperty('--rx',(-cy*MAX_DEG).toFixed(3)+'deg');
+    tilt.style.transform='perspective(140em) rotateX('+(-cy*MAX_DEG).toFixed(3)+'deg) rotateY('+(cx*MAX_DEG).toFixed(3)+'deg)';
     raf=(Math.abs(tx-cx)>.002||Math.abs(ty-cy)>.002)?requestAnimationFrame(loop):0;
   }
   const kick=()=>{if(!raf)raf=requestAnimationFrame(loop);};
@@ -239,7 +238,7 @@ document.querySelectorAll('.sec-title .tw-line').forEach((line,i)=>{
   const go=(id)=>()=>navTo(id);
   const commands=[
     {group:'Sections',label:'Home',keywords:'top start hero',icon:'home',run:go('home')},
-    {group:'Sections',label:'Features',keywords:'token private anonymous folders dark mode',icon:'sparkle',run:go('features')},
+    {group:'Sections',label:'Features',keywords:'token private anonymous sharing encryption',icon:'sparkle',run:go('features')},
     {group:'Sections',label:'How the encryption works',keywords:'zero-knowledge aes gcm key fragment ciphertext',icon:'lock',run:go('encryption')},
     {group:'Sections',label:'About & FAQ',keywords:'questions help answers',icon:'info',run:go('about')},
     {group:'Vault',label:'Open Vault',keywords:'app upload start share files',icon:'folder',run:()=>{location.href='/app';}},
@@ -260,8 +259,8 @@ document.querySelectorAll('.sec-title .tw-line').forEach((line,i)=>{
 (function(){
   const scene=document.getElementById('fsScene'),rows=[...document.querySelectorAll('.feat-row')];
   if(!scene||!rows.length||!window.matchMedia('(hover:hover)').matches)return;
-  // row order: E2E encryption · token access · private by default · anonymous · folders · dark mode
-  const LAYER=['enc','tok','priv','pub','pub',''];
+  // row order: E2E encryption · token access · private by default · anonymous sharing
+  const LAYER=['enc','tok','priv','pub'];
   const set=(v)=>{if(v)scene.setAttribute('data-hl',v);else scene.removeAttribute('data-hl');};
   rows.forEach((row,i)=>{
     row.addEventListener('pointerenter',()=>set(LAYER[i]||''));

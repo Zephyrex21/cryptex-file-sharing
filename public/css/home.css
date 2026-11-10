@@ -88,7 +88,10 @@
 @keyframes vsTwinkle{0%,100%{opacity:0;transform:scale(.4) rotate(0)}45%{opacity:.9;transform:scale(1) rotate(45deg)}}
 
 /* ── Composition (tilt layer → entrance item → idle float → content) ── */
-.vs-tilt{position:absolute;inset:0;transform-style:preserve-3d;transform:perspective(140em) rotateX(var(--rx,0deg)) rotateY(var(--ry,0deg))}
+/* The tilt is written straight to `transform` by home.js (no custom properties: they inherit, so
+   every pointer move re-resolved the style of the WHOLE scene subtree). will-change keeps the
+   layer promoted so a tilt update is a compositor-only change, not a repaint. */
+.vs-tilt{position:absolute;inset:0;transform-style:preserve-3d;will-change:transform;transform:perspective(140em)}
 .js .vs-scene.is-playing .vs-tilt{will-change:transform}
 .vs-item{position:absolute;translate:0 0 var(--z,0em)}
 .vs-float{animation:vsFloat var(--dur,6s) ease-in-out infinite alternate;animation-delay:var(--del,0s)}
@@ -213,9 +216,19 @@
 /* assemble once (fill: both), THEN each plate starts breathing on its own offset. The
    breathe delay is positive on purpose: a negative one would start it immediately and,
    being later in the list, override the assemble from the very first frame. */
-.fs-plate{position:absolute;inset:0;border-radius:2.8em;transform:translateZ(var(--z,0em));animation:fsAssemble 1.4s var(--ease-out) both,fsLayer 6.4s ease-in-out infinite alternate;animation-delay:calc(var(--k)*.14s + .1s),calc(1.7s + var(--k)*.55s)}
-@keyframes fsAssemble{from{opacity:0;transform:translateZ(calc(var(--z)*.15)) scale(.92)}to{opacity:1;transform:translateZ(var(--z)) scale(1)}}
-@keyframes fsLayer{from{transform:translateZ(var(--z))}to{transform:translateZ(calc(var(--z) + 1.5em))}}
+/* Plates: why the animations are split across different properties
+   • Static depth lives in the independent `translate` property (set in the v2 block below).
+   • The idle "breathing" (fsLayer) is the ONLY animation on `transform`, with a NEGATIVE delay
+     (a phase offset) so it is already running at t=0.
+   • The entrance (fsAssemble) animates opacity + the independent `scale`/`translate`
+     properties — never `transform`.
+   Chrome only promotes an animation to the compositor when its stack is simple. The previous
+   version (assemble `both` + a POSITIVE-delay fsLayer, both on `transform`, with var() inside
+   the keyframes) was kept on the main thread: a style recalc + pre-paint EVERY frame, ~85%
+   main-thread busy while this section was on screen. Now it costs ~0 (see tests/sceneV2). */
+.fs-plate{position:absolute;inset:0;border-radius:2.8em;animation:fsAssemble 1.4s var(--ease-out) backwards,fsLayer 6.4s ease-in-out infinite alternate;animation-delay:calc(var(--k)*.14s + .1s),calc(var(--k)*-1.7s)}
+@keyframes fsAssemble{from{opacity:0;scale:.92;translate:0 0 -5em}}   /* `to` = the plate's own resting values */
+@keyframes fsLayer{from{transform:translateZ(0)}to{transform:translateZ(1.5em)}}
 .fs-p1{background:linear-gradient(145deg,var(--surf2),var(--bg2));border:1px solid var(--b2);box-shadow:inset 0 0 0 .5em rgba(255,255,255,.18)}
 .fs-p1::after,.fs-p2::after{content:"";position:absolute;inset:2.2em;border-radius:1.8em;border:1px dashed var(--b2)}
 .fs-p2{background:linear-gradient(145deg,rgba(var(--acc-rgb),.22),rgba(var(--acc2-rgb),.1));border:1px solid rgba(var(--acc-rgb),.38);box-shadow:inset 0 0 0 .5em rgba(255,255,255,.1)}
@@ -251,7 +264,7 @@
    violet) — "a file becomes encrypted". Hovering a feature row in the list highlights
    the matching layer (home.js sets data-hl); that only uses `translate` + an opacity
    veil, so it composes with the running transform animations instead of fighting them. */
-.fs-plate{translate:0 0 var(--lift,0em);transition:translate .6s var(--spring)}
+.fs-plate{translate:0 0 calc(var(--z,0em) + var(--lift,0em));transition:translate .6s var(--spring)}
 .fs-veil{position:absolute;inset:0;z-index:4;border-radius:inherit;background:var(--bg);opacity:0;pointer-events:none;transition:opacity .45s var(--ease-out)}
 .fs-doc{position:absolute;left:var(--x);top:var(--y);width:3.6em;height:4.5em;border-radius:.75em;background:linear-gradient(160deg,var(--surf2),var(--bg2));border:1px solid var(--b2);box-shadow:0 .5em 1em -.4em rgba(24,24,60,.28)}
 .fs-doc::before{content:"";position:absolute;right:-1px;top:-1px;width:1.2em;height:1.2em;border-radius:0 .75em 0 .5em;background:linear-gradient(225deg,transparent 50%,var(--b2) 50%)}
@@ -297,6 +310,16 @@
 .fs-scene[data-hl="enc"] .fs-lab-3,.fs-scene[data-hl="priv"] .fs-lab-2,.fs-scene[data-hl="tok"] .fs-lab-2,.fs-scene[data-hl="pub"] .fs-lab-1{translate:0 -.7em}
 .fs-scene[data-hl="enc"] .fs-lab-3::after,.fs-scene[data-hl="priv"] .fs-lab-2::after,.fs-scene[data-hl="tok"] .fs-lab-2::after,.fs-scene[data-hl="pub"] .fs-lab-1::after{opacity:1}
 .fs-scene[data-hl="tok"] .fs-tok{transform:scale(1.22);box-shadow:0 .6em 1.3em -.3em rgba(59,125,242,.7)}
+/* ── Interaction smoothness ──
+   • While a feature row is hovered the scene holds still (its decorative packets and ripples hide).
+     The layer highlight reads better against a calm background, and the main thread is no longer
+     feeding ~18 running animations at the same time as pointer-driven style changes.
+   • The pointer spotlight is its own compositor layer, so following the cursor never repaints the row.
+   (Tried and removed: pausing every loop while the page scrolls. It made no difference to the average
+   frame time and added a ~180ms hitch at scroll start, because ~500 animated elements restyle at once.) */
+.fs-scene[data-hl],.fs-scene[data-hl] *,.fs-scene[data-hl] *::before,.fs-scene[data-hl] *::after{animation-play-state:paused!important}
+.fs-scene[data-hl] :is(.fs-pkt,.fs-wave){visibility:hidden}
+.feat-glow{will-change:transform}
 /* Reduced motion: show the finished composition, no looping */
 @media(prefers-reduced-motion:reduce){
   .vs-scene *,.vs-scene *::before,.vs-scene *::after,.fs-scene *,.fs-scene *::before,.fs-scene *::after{animation:none!important}
@@ -350,7 +373,7 @@
    stacked with a hairline divider instead of individual bordered cards. */
 /* Rows carry their own horizontal padding (cancelled by the negative list margin) so
    the hover card can appear *around* the text without anything ever moving sideways.
-   Hover = a card tinted with the row's own colour (--fc), a gradient hairline ring, a
+   Hover = a card tinted with the row's own colour (--fc), a hairline ring (lit on its top-left edges — a mask-composite gradient border looked the same but cost far more to composite), a
    spotlight that follows the pointer (.feat-glow, injected by home.js), the icon
    popping forward — and the other rows quietly stepping back. Nothing changes size. */
 .feat-list{display:flex;flex-direction:column;margin:0 -16px}
@@ -361,7 +384,10 @@
 @supports(background:color-mix(in srgb,red 10%,blue)){
   .feat-row::before{background:linear-gradient(135deg,color-mix(in srgb,var(--fc) 10%,var(--surf2)),var(--surf2) 62%)}
 }
-.feat-row::after{content:'';position:absolute;inset:0;z-index:1;border-radius:inherit;padding:1px;pointer-events:none;background:linear-gradient(135deg,var(--fc),transparent 58%);-webkit-mask:linear-gradient(#000 0 0) content-box,linear-gradient(#000 0 0);-webkit-mask-composite:xor;mask:linear-gradient(#000 0 0) content-box,linear-gradient(#000 0 0);mask-composite:exclude;opacity:0;transition:opacity .35s var(--ease-out)}
+.feat-row::after{content:'';position:absolute;inset:0;z-index:1;border-radius:inherit;pointer-events:none;opacity:0;box-shadow:inset 1px 1px 0 var(--fc),inset 0 0 0 1px rgba(var(--acc-rgb),.16);transition:opacity .35s var(--ease-out)}
+@supports(background:color-mix(in srgb,red 10%,blue)){
+  .feat-row::after{box-shadow:inset 1px 1px 0 var(--fc),inset 0 0 0 1px color-mix(in srgb,var(--fc) 20%,transparent)}
+}
 .feat-glow{position:absolute;left:0;top:0;width:240px;height:240px;margin:-120px 0 0 -120px;z-index:1;border-radius:50%;pointer-events:none;opacity:0;background:radial-gradient(circle,rgba(var(--acc-rgb),.22),transparent 65%);transform:translate3d(var(--mx,70px),var(--my,30px),0);transition:opacity .35s var(--ease-out)}
 @supports(background:color-mix(in srgb,red 10%,blue)){
   .feat-glow{background:radial-gradient(circle,color-mix(in srgb,var(--fc) 26%,transparent),transparent 65%)}
