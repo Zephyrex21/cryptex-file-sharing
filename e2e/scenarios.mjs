@@ -370,6 +370,62 @@ await kd({ key: "k", ctrlKey: true }); await S.tick(10);
 ok(!isOpen(), "Ctrl+K again toggles it closed");
 ok(S.errors.length === 0, "no uncaught JS errors", S.errors.join(" // "));
 
+// ───────────────────────── S24: key canary ─────────────────────────
+section("S24 Key canary: a full encrypted flow never sends, stores or logs the key anywhere");
+reset(); S = await boot();
+await S.ev(`(()=>{
+  const dBody=(b)=>{ if(b==null) return ''; if(typeof b==='string') return b;
+    if(typeof FormData!=='undefined'&&b instanceof FormData) return [...b.entries()].map(([k,v])=>k+'='+(typeof v==='string'?v:'[blob '+(v.size||0)+' bytes]')).join('&'); return String(b); };
+  const toAB=(blob)=>new Promise((res)=>{const r=new FileReader();r.onload=()=>res(r.result);r.readAsArrayBuffer(blob);});
+  window.__net=[]; window.__up=null; window.__cipher=null; window.__clip=null; window.__plain=null;
+  if(!File.prototype.arrayBuffer) File.prototype.arrayBuffer=function(){return toAB(this)};
+  const _f=window.fetch.bind(window);
+  window.fetch=(u,i)=>{ window.__net.push({k:'fetch',url:String(u),h:JSON.stringify((i&&i.headers)||{}),b:dBody(i&&i.body)});
+    if(String(u).endsWith('/download')&&window.__cipher) return Promise.resolve({ok:true,status:200,arrayBuffer:async()=>window.__cipher});
+    return _f(u,i); };
+  window.XMLHttpRequest=class{ constructor(){this.upload={};this.status=0;this.responseText='';}
+    open(m,u){this.m=m;this.u=u} setRequestHeader(k,v){(this.hd=this.hd||{})[k]=v}
+    send(b){ window.__net.push({k:'xhr',url:String(this.u),h:JSON.stringify(this.hd||{}),b:dBody(b)});
+      const f={}; if(b&&b.entries) for(const [k,v] of b.entries()) f[k]=v; window.__up=f;
+      toAB(f.file).then((ab)=>{window.__cipher=ab;});
+      this.status=201; this.responseText=JSON.stringify({file:{_id:'f'.repeat(24),shareToken:'tok321',encrypted:true,fileSize:f.file.size,createdAt:new Date().toISOString()}});
+      setTimeout(()=>this.onload&&this.onload(),0); } };
+  Object.defineProperty(navigator,'clipboard',{value:{writeText:(t)=>{window.__clip=t;return Promise.resolve();}},configurable:true});
+  URL.createObjectURL=(b)=>{window.__plain=b;return 'blob:canary'}; URL.revokeObjectURL=()=>{}; HTMLAnchorElement.prototype.click=()=>{};
+  document.getElementById('encToggle').checked=true;
+})()`);
+// 1) encrypt + upload a file exactly like the UI does
+await S.ev(`doUpload(new File(['hello secret world'],'secret-plan.txt',{type:'text/plain'}))`); await S.tick(500);
+const K = await S.ev(`encKeyCache.get('${"f".repeat(24)}')||''`);
+ok(typeof K === "string" && /^[A-Za-z0-9_-]{43}$/.test(K), "an AES-256 key was generated client-side for the upload", String(K).length);
+// 2) share it: link, QR code
+await S.ev(`togglePrivQr()`); await S.tick(60);
+const clip = await S.ev("window.__clip || ''");
+ok(clip.includes("?token=tok321#key=" + K) && !clip.split("#")[0].includes(K), "the copied link carries the key ONLY after the # (never in the path or query)", clip.slice(0, 60));
+// 3) recipient side: unlock with the key, decrypt, download
+await S.ev(`(async()=>{const u=window.__up;const f={_id:'${"f".repeat(24)}',encrypted:true,shareToken:'tok321',fileSize:window.__cipher.byteLength,createdAt:new Date().toISOString(),
+  encryptionIV:u.iv,encryptedName:u.encryptedName,encryptedNameIV:u.encryptedNameIV,encryptedMimeType:u.encryptedMimeType,encryptedMimeTypeIV:u.encryptedMimeTypeIV};
+  tokenModalFile=f; await renderUnlockedEncryptedModal(f,'${K}'); await decryptAndDownloadEnc(f._id);})()`); await S.tick(300);
+const dec = await S.ev(`(async()=>{const b=window.__plain; if(!b) return null; return await new Promise(r=>{const fr=new FileReader();fr.onload=()=>r(fr.result);fr.readAsText(b)})})()`);
+ok(dec === "hello secret world", "…and the recipient's browser decrypts it back to the exact original", String(dec));
+ok((S.$("#tmodalHead")?.innerHTML || "").includes('title="secret-plan.txt"'), "the real filename appears only after local decryption (the server only ever held ciphertext)");
+// 4) the canary itself
+const net = await S.ev("JSON.stringify(window.__net)");
+const forms = await S.ev(`(()=>{const raw=new Uint8Array(b64url2buf('${K}'));return JSON.stringify([ '${K}', '${K}'.replace(/-/g,'+').replace(/_/g,'/'), [...raw].map(x=>x.toString(16).padStart(2,'0')).join('') ]);})()`);
+const needles = JSON.parse(forms);
+const reqs = JSON.parse(net);
+ok(reqs.some((r) => r.k === "xhr") && reqs.some((r) => /\/download$/.test(r.url)), "the spy saw the upload and the download (so the next checks mean something)", reqs.map((r) => r.k + " " + r.url).join(" | "));
+const leaks = reqs.filter((r) => needles.some((n) => (r.url + r.h + r.b).includes(n)));
+ok(leaks.length === 0, "the key (url-safe, standard base64, or hex) appears in NO request URL, header or body", JSON.stringify(leaks).slice(0, 160));
+const up = reqs.find((r) => r.k === "xhr");
+const fields = up.b.split("&").map((x) => x.split("=")[0]);
+ok(fields.every((f) => ["encrypted", "iv", "encryptedName", "encryptedNameIV", "encryptedMimeType", "encryptedMimeTypeIV", "file"].includes(f)), "the upload carries only ciphertext + IVs — no key field", fields.join(","));
+ok(!/secret-plan|hello secret world/.test(up.b + up.url), "neither the real filename nor the plaintext is in the upload request");
+const stores = await S.ev(`JSON.stringify([JSON.stringify(localStorage),JSON.stringify(sessionStorage),document.cookie])`);
+ok(needles.every((n) => !stores.includes(n)), "the key is not in localStorage, sessionStorage or cookies");
+ok(needles.every((n) => !db.log.join("\n").includes(n)), "the server-side request log never contains the key");
+ok(S.errors.length === 0, "no uncaught JS errors", S.errors.join(" // "));
+
 // ───────────────────────── S13: every inline handler resolves ─────────────────────────
 section("S13 Static check: every inline onclick/onkeydown target is a real function");
 reset(); mkFile(); mkFolder(); S = await boot();

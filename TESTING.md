@@ -7,7 +7,7 @@ stale versions and make things look broken when they aren't.
 
 ## Automated tests
 
-`npm test` runs 409 Vitest cases covering the security-critical logic that's
+`npm test` runs 427 Vitest cases covering the security-critical logic that's
 otherwise easy to silently break: magic-byte content verification (every
 supported file type, plus mismatch/tampering cases), the SSRF protections in
 `isSafeUrl` (private IPs, IPv6, cloud metadata address, mixed-resolution,
@@ -31,6 +31,8 @@ The medium-severity fixes — failure-only token limiter vs bulk actions, link-i
 The low-severity fixes — share-token collision retry, the gallery cap, and **schema contracts that run the real Mongoose models** (unique/sparse `shareToken` index, enums, defaults, validation; no database needed, since the other suites mock the models) — are in `tests/lowFixes.test.js`; the browser-side ones are e2e scenarios S20–S22.
 The **command palette** (Ctrl/⌘+K) and the feature-hover / encryption-flow animations — static guards in `tests/commandPalette.test.js` (old shortcuts modal gone, Esc handled in the capture phase, focus never parked in the hidden field, user text escaped, every `enc*` keyframe compositor-only, loops pause off-screen, reduced-motion fallback), with the behaviour itself driven end-to-end in e2e scenario S23.
 The **hero / features illustrations** — `tests/sceneV2.test.js` pins the v2 pieces (scan beam, server tile, layer content, the list↔layer hover link that must use `translate` + a veil rather than `transform`, reduced-motion and dark-theme fallbacks); the generic performance rules in `tests/homepagePerf.test.js` automatically police every new `vs*`/`fs*` keyframe.
+
+The **end-to-end encryption** — `tests/cryptoAudit.test.js` runs the *real* browser crypto functions (extracted from `public/js/app.js`) against WebCrypto: key quality, round-trips, IV uniqueness over 20,000 encryptions, and that tampering with the ciphertext, tag, IV, length, name, or using a wrong/near-miss key is always rejected. E2E scenario **S24 (key canary)** drives a complete encrypted upload → share link → QR → recipient unlock → decrypt → download and asserts the key (url-safe, standard base64 and hex forms) appears in no request URL/header/body, no storage and no server log. `SECURITY.md` states what is and is not protected.
 
 ## Keeping CI green
 

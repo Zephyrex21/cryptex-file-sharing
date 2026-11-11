@@ -17,7 +17,8 @@
 // /app, forward transparently so nobody's old link silently breaks.
 (function(){
   const t=new URLSearchParams(window.location.search).get('token');
-  if(t) window.location.replace('/app'+window.location.search);
+  // keep the #fragment too: encrypted links carry their decryption key there, and dropping it would strand the file
+  if(t) window.location.replace('/app'+window.location.search+window.location.hash);
 })();
 
 // ── Nav scroll (renamed to navTo to avoid conflict with window.scrollTo) ──

@@ -338,8 +338,8 @@ Interactive documentation is served at **`/api-docs`** (Swagger UI, generated fr
 
 ```bash
 npm run lint                      # ESLint
-npm test                          # 409 unit and integration-style tests (Vitest)
-cd e2e && npm ci && npm test      # 101 end-to-end checks against the real frontend (jsdom)
+npm test                          # 427 unit and integration-style tests (Vitest)
+cd e2e && npm ci && npm test      # 112 end-to-end checks against the real frontend (jsdom)
 npm run verify                  # everything CI runs (also wired to a pre-push git hook)
 npm run test:node20              # unit tests on Node 20, like CI's oldest job
 ```
